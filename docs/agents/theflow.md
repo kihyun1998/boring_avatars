@@ -54,9 +54,17 @@ enums exist as of #1; **every layer below is still empty of behavior** — each
 arrives with the ticket that fills it. This map is a binding because Step 2
 splits changes against it.
 
-Already present: `lib/src/version.dart` (`BoringAvatarsVersion`, the 17 states)
-and `lib/src/variant.dart` (`BoringAvatarsVariant`, the 11 reachable variants),
-plus the era-based variant resolution that mirrors upstream's `avatar.js`.
+Already present: `lib/src/version.dart` (`BoringAvatarsVersion` — one value per
+*supported* upstream release, `v1_6_1` as of 0.1.0) and `lib/src/variant.dart`
+(`BoringAvatarsVariant` — the six drawn variants plus the two deprecated
+aliases), with alias resolution and the degrade-to-`marble` parser that mirror
+upstream's `avatar.js`.
+
+**Variant resolution does not vary by version** across the whole supported
+range, so it is not parameterised by one — verified by reading `avatar.js` at
+every tag from 1.6.1 to 2.0.2. Valid **as long as that stays true**; a release
+that changes the dispatch roster makes resolution version-dependent and this
+seam has to move.
 
 Public surface is the barrel `lib/boring_avatars.dart`.
 
@@ -290,7 +298,7 @@ when a completeness pass surfaces another.
 | 13 | `eye` | dispatched **only at v1.2.0**; the file survives to v1.5.2 unreachable | assuming it lives as long as its file | a phantom variant in later states |
 | 14 | `geometric` / `abstract` | **two different meanings by era** — distinct variants at v1.2.0; *unreachable* v1.3.0–v1.4.2 (fall through to `marble`); **deprecated aliases** `{geometric→beam, abstract→bauhaus}` from v1.5.3 | one enum value with one meaning | the same name renders three different things |
 | 15 | unknown `variant` | falls back to the era's default — `geometric` at v1.2.0, `marble` from v1.3.0. Never throws | throwing on an unknown value | a crash where upstream degrades |
-| 16 | `<title>` | `1.6.1` emits `<title>{name}</title>` **unconditionally**; `1.7.0`+ gate it on the `title` prop, default off | implementing the prop-gated form everywhere | `v1_6_1`'s SVG bytes are wrong while its pixels are right — a layer-2 failure a pixel test cannot see |
+| 16 | `<title>` | `1.6.1` emits `<title>{name}</title>` **unconditionally and has no `title` prop at all** — there is no way to switch it off; the prop arrives in `1.7.0`, defaulting off | giving `v1_6_1` a `title` parameter, or implementing the prop-gated form everywhere | `v1_6_1`'s SVG bytes are wrong while its pixels are right — a layer-2 failure a pixel test cannot see |
 
 ### Reachable-variant matrix (from `avatar.js` dispatch, not the file tree)
 

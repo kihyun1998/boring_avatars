@@ -1,18 +1,18 @@
 /// An avatar style.
 ///
-/// Every value here is a variant a caller could actually select in at least one
-/// upstream release. Which ones are selectable depends on the
-/// [BoringAvatarsVersion] you ask for — see `reachableVariants`.
+/// Six of these are drawn; the remaining two — [geometric] and [abstractStyle]
+/// — are names upstream kept working after retiring the variants behind them,
+/// and resolve to a drawn one via [resolved].
 ///
-/// `turbulence` is deliberately absent. `avatar-turbulence.js` shipped from
-/// upstream 1.2.0 to 1.5.2 with an unchanging blob, but no version's dispatch
-/// ever referenced it, so no caller could render it and there is no output to
-/// reproduce.
+/// Upstream's own dead ends are absent. `turbulence` shipped a component file
+/// from 1.2.0 to 1.5.2 that no version's dispatch ever referenced, and `eye`,
+/// `dome` and `moholy` had all been dropped before 1.6.1 — the earliest version
+/// this package supports.
 enum BoringAvatarsVariant {
-  /// Blurred organic shapes. The default from upstream 1.3.0 onward.
+  /// Blurred organic shapes. Upstream's default.
   marble('marble'),
 
-  /// A face — the variant `geometric` became an alias for.
+  /// A face.
   beam('beam'),
 
   /// An 8×8 mosaic of coloured tiles.
@@ -24,31 +24,55 @@ enum BoringAvatarsVariant {
   /// Concentric arcs.
   ring('ring'),
 
-  /// Bars, a circle and a rule — the variant `abstract` became an alias for.
+  /// Bars, a circle and a rule.
   bauhaus('bauhaus'),
 
-  /// A distinct variant at upstream 1.2.0, unreachable through 1.4.2, and a
-  /// deprecated alias for [beam] from 1.5.3 onward.
+  /// Deprecated upstream — an alias for [beam].
   geometric('geometric'),
 
-  /// A distinct variant at upstream 1.2.0, unreachable through 1.4.2, and a
-  /// deprecated alias for [bauhaus] from 1.5.3 onward.
+  /// Deprecated upstream — an alias for [bauhaus].
   ///
   /// Named `abstractStyle` because `abstract` is a Dart keyword; the upstream
   /// string is carried by [upstreamName].
-  abstractStyle('abstract'),
-
-  /// Selectable only at upstream 1.2.0. Its file survived to 1.5.2 unreferenced.
-  eye('eye'),
-
-  /// Selectable from upstream 1.3.0 to 1.4.2.
-  dome('dome'),
-
-  /// Selectable from upstream 1.3.0 to 1.4.2.
-  moholy('moholy');
+  abstractStyle('abstract');
 
   const BoringAvatarsVariant(this.upstreamName);
 
   /// The string upstream's `variant` prop takes for this style.
   final String upstreamName;
+
+  /// The variants upstream actually dispatches — everything else is an alias.
+  static const Set<BoringAvatarsVariant> renderable = {
+    pixel,
+    bauhaus,
+    ring,
+    beam,
+    sunset,
+    marble,
+  };
+
+  /// What upstream falls back to when it does not recognise a variant.
+  static const BoringAvatarsVariant fallback = marble;
+
+  /// This variant, or the one it aliases.
+  ///
+  /// Always a member of [renderable].
+  BoringAvatarsVariant get resolved => switch (this) {
+    geometric => beam,
+    abstractStyle => bauhaus,
+    _ => this,
+  };
+
+  /// Resolves an upstream `variant` string the way upstream's `avatar.js` does.
+  ///
+  /// Aliases are checked first, then the dispatched set, and anything else
+  /// degrades to [fallback] — upstream never throws here, so neither does this.
+  /// That order is upstream's, and it matters if a future release ever gives a
+  /// name both meanings.
+  static BoringAvatarsVariant fromUpstreamName(String name) {
+    for (final v in values) {
+      if (v.upstreamName == name) return v.resolved;
+    }
+    return fallback;
+  }
 }
