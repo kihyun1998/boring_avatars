@@ -1,0 +1,5 @@
+docs/
+.github/
+tool/
+test/fixtures/
+CLAUDE.md
