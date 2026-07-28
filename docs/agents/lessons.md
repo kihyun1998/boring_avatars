@@ -65,4 +65,27 @@ _(none yet)_
 
 ## Step 7 — gates, release, downstream
 
-_(none yet)_
+### "0 warnings" shipped a 44 MB build artifact (#1)
+
+`flutter pub publish --dry-run` reported **0 warnings** on an archive of
+**13 MB** — for a package whose entire source is about 20 KB. The gate was green
+and the package was wrong.
+
+Cause: adding a root `.pubignore` **disables pub's git-based file listing
+entirely**. `.gitignore` stops being consulted, so everything it excluded —
+`build/`, `.idea/`, `*.iml`, `.dart_tool/`, `pubspec.lock` — starts shipping. A
+single `flutter test` run had left a 44 MB `.cache.dill.track.dill` under
+`build/`, and it went straight into the archive.
+
+`../flutter_table_plus`'s bindings already record this exact trap. It was read
+during setup, written into this repo's Step 6 surface list, and still walked
+into — because `.pubignore` was authored as an *additive* list of extra
+exclusions rather than as a *replacement* for `.gitignore`.
+
+Fix: `.pubignore` now mirrors `.gitignore` in full, with the reason at the top
+of the file. Archive went 13 MB → **5 KB**.
+
+**The rule this earns:** a gate reporting zero problems is not the same as the
+gate having checked the thing you care about. Read the dry-run's **file tree**
+and its **archive size**, not just its warning count. And a `.pubignore` is a
+replacement, never an addition.

@@ -1,3 +1,33 @@
+# A root .pubignore DISABLES pub's git-based file listing entirely — .gitignore
+# stops being consulted. So everything .gitignore excludes has to be repeated
+# here, or it ships. (A single `flutter test` run leaves a 44 MB .dill under
+# build/, which is exactly how this was caught.)
+
+# --- mirrors .gitignore ---
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+*.iml
+*.ipr
+*.iws
+.idea/
+
+/pubspec.lock
+**/doc/api/
+.dart_tool/
+.flutter-plugins-dependencies
+/build/
+/coverage/
+
+# --- tracked in git, but not published ---
 docs/
 .github/
 tool/
