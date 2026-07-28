@@ -92,24 +92,69 @@ function dumpUtilities(u, corpus) {
   for (const p of corpus.palettes) for (const c of p.value) colours.add(c);
   for (const c of [...colours].sort()) out.getContrast[c] = u.getContrast(c);
 
-  // The remaining helpers are pure functions of a hash, so they are sampled
-  // across every corpus name at the ranges the variants actually use.
+  // The remaining helpers are pure functions of a hash. The ranges below are
+  // the exact union the six components pass at v1.6.1, derived from their call
+  // sites — an earlier list claimed to be that union and was not, omitting 4
+  // (marble's SIZE/20), 7 (beam), and 20–23 (bauhaus's SIZE/2 - (i+17)).
+  //
+  //   bauhaus  getUnit(h*(i+1), 20..23, 1|2)   getUnit(h*(i+1), 360)
+  //   marble   getUnit(h*(i+1), 8, 1|2)        getUnit(h*(i+1), 4)
+  //            getUnit(h*(i+1), 360, 1)
+  //   beam     getUnit(h, 10, 1|2|3)  getUnit(h, 3|5|7|8|360)
+  //
+  // getModulus is not dumped: no component imports it, and this package does
+  // not port it. Dumping it made the fixture disagree with that judgement.
+  const RANGES = [3, 4, 5, 7, 8, 10, 20, 21, 22, 23, 360];
   for (const { id, value } of corpus.names) {
     const n = u.hashCode(value);
-    const row = { getModulus: {}, getDigit: {}, getBoolean: {}, getUnit: {}, getRandomColor: {} };
-    for (const max of [2, 3, 5, 8, 10, 360, 64]) row.getModulus[max] = u.getModulus(n, max);
+    const row = { getDigit: {}, getBoolean: {}, getUnit: {}, getRandomColor: {} };
     for (const ntn of [0, 1, 2, 3, 4]) {
       row.getDigit[ntn] = u.getDigit(n, ntn);
       row.getBoolean[ntn] = u.getBoolean(n, ntn);
     }
-    for (const range of [3, 5, 8, 10, 360]) {
-      row.getUnit[`${range}`] = u.getUnit(n, range);
-      for (const index of [1, 2, 3]) {
-        row.getUnit[`${range},${index}`] = u.getUnit(n, range, index);
+    // bauhaus and marble pass h*(i+1), not h — so the fixture has to carry the
+    // multiples too, or nothing ever puts a value above 2^31 through getUnit
+    // and getDigit.
+    for (const multiple of [1, 2, 3, 4]) {
+      const m = n * multiple;
+      if (multiple > 1) {
+        for (const ntn of [0, 1, 2, 3, 4]) {
+          row.getDigit[`${ntn}@${multiple}`] = u.getDigit(m, ntn);
+          row.getBoolean[`${ntn}@${multiple}`] = u.getBoolean(m, ntn);
+        }
+      }
+      for (const range of RANGES) {
+        const suffix = multiple > 1 ? `@${multiple}` : '';
+        row.getUnit[`${range}${suffix}`] = u.getUnit(m, range);
+        // index 0 is included deliberately. Upstream gates the negation on
+        // `if (index && …)`, and JavaScript treats 0 as falsy — so 0 must
+        // behave like "no index". No caller passes it today, which is exactly
+        // why a port gets it wrong silently unless the fixture covers it.
+        for (const index of [0, 1, 2, 3]) {
+          row.getUnit[`${range},${index}${suffix}`] = u.getUnit(m, range, index);
+        }
       }
     }
+    // The number reaching getRandomColor is never just the hash. Upstream
+    // passes `h` (beam's wrapper), `h + i` (bauhaus, marble, ring, sunset),
+    // `h + 13` (beam's background) and — in pixel — `h % i` for i = 0..63.
+    // That last form includes **i = 0**, where `h % 0` is NaN and the colour
+    // comes back undefined on every render, for every name and palette.
+    const numbers = {
+      'h': n,
+      'h+1': n + 1, 'h+2': n + 2, 'h+3': n + 3, 'h+4': n + 4,
+      'h+13': n + 13,
+      'h%0': n % 0, 'h%1': n % 1, 'h%2': n % 2, 'h%63': n % 63,
+    };
     for (const p of corpus.palettes) {
-      row.getRandomColor[p.id] = u.getRandomColor(n, p.value, p.value.length);
+      for (const [label, num] of Object.entries(numbers)) {
+        // An empty palette — and the `h % 0` NaN — make this undefined, and
+        // JSON.stringify drops undefined-valued keys entirely, which would
+        // make "upstream returned nothing" indistinguishable from "the dump
+        // forgot this case". Coerce to null so the absence is recorded.
+        const key = label === 'h' ? p.id : `${p.id}|${label}`;
+        row.getRandomColor[key] = u.getRandomColor(num, p.value, p.value.length) ?? null;
+      }
     }
     out.derived[id] = row;
   }

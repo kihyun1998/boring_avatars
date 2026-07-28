@@ -60,6 +60,15 @@ Already present: `lib/src/version.dart` (`BoringAvatarsVersion` — one value pe
 aliases), with alias resolution and the degrade-to-`marble` parser that mirror
 upstream's `avatar.js`.
 
+`lib/src/js/` holds the sacred surface: `utilities.dart` (upstream's six
+reachable utilities) and `js_number.dart` (the JS arithmetic and string
+semantics Dart does not share — `jsMod`, `toSigned32`, `jsNum`,
+`jsParseIntHex`, `jsSubstr`). **`getModulus` and `getAngle` are deliberately not
+ported** — upstream exports both and no component imports either, and
+`getModulus` is not called by the other utilities either. Same judgement that
+closed the `turbulence` variant: unreachable upstream code has no output to
+reproduce.
+
 **Variant resolution does not vary by version** across the whole supported
 range, so it is not parameterised by one — verified by reading `avatar.js` at
 every tag from 1.6.1 to 2.0.2. Valid **as long as that stays true**; a release
@@ -284,9 +293,10 @@ when a completeness pass surfaces another.
 | # | Where | JS behavior | Naive Dart | Consequence |
 |---|---|---|---|---|
 | 1 | `hashCode`'s `hash = hash & hash` | `ToInt32` — truncates to **signed 32-bit every iteration**. Not a no-op: `<<5` truncates, but the following `- hash` and `+ character` run in float64 and escape 32 bits again | Dart `int` is 64-bit; no truncation | **The hash itself diverges** on longer names |
-| 2 | `%` | remainder, keeps the dividend's sign: `-7 % 5 == -2` | Dart `%` is always non-negative: `3` | sign flip. Use `remainder()` via a `jsMod` helper |
-| 3 | `getUnit`'s `if(index && …)` | `index === 0` is **falsy** → branch skipped | `if (index != null)` enters at 0 | wrong negation |
-| 4 | `getDigit`'s `number / Math.pow(10, ntn)` | **float64 division** | `~/` gives a different value | digit extraction fails |
+| 2 | `%` | remainder, keeps the dividend's sign: `-7 % 5 == -2` | Dart `%` is always non-negative: `3` | sign flip — but **inert at v1.6.1**, the same way #4 is. `hashCode` is `Math.abs`'d and every caller passes it or a positive multiple, so swapping `jsMod` for Dart `%` breaks no fixture assertion; only the helper's own unit test pins it. Keep `remainder()` so the port is already right the day a negative appears |
+| 2b | `%` with a **zero divisor** | `NaN`, and everything downstream of it becomes `undefined` | Dart **throws** | reachable twice over: an empty palette (`range == 0`) *and* `pixel`'s `hash % i` at `i == 0`. `jsMod` deliberately rejects zero; callers that can see one use `jsModOrNull`, which returns `null` — the Dart shape of `NaN` |
+| 3 | `getUnit`'s `if(index && …)` | `index === 0` is **falsy** → branch skipped. Measured: `getUnit(645088871, 10, 0)` and `getUnit(645088871, 10)` both give `1` | `if (index != null)` enters at 0 | wrong negation. **No caller passes 0 today**, so the fixture had to be widened to index `0` deliberately — until it was, a mutation removing the guard passed the whole suite |
+| 4 | `getDigit`'s `number / Math.pow(10, ntn)` | **float64 division** | `~/` gives a different value | **for non-negative input, nothing.** Writing `n = q·10^k + r`, the float quotient is `q + f` with `0 ≤ f < 1`, so `floor((q + f) % 10) == q % 10` always — verified over 11.2M reachable pairs. They diverge only on **negative** input (`getDigit(-15, 1)` is `-2` float, `-1` integer — measured). Valid **as long as `getDigit` only ever receives `hashCode` output and multiples of it**. Keep the float division: it is what upstream writes, and `js_primitives_test.dart` pins the negative cases so a `~/` mutation *is* caught |
 | 5 | `charCodeAt` / `name.length` | UTF-16 **code units** | `runes` iterates code points | hash diverges on non-BMP input |
 | 6 | `getNumber`'s `Array.from(name)` (states 1–9 only) | iterates **code points**, then `charCodeAt(0)` of each — the *opposite* of #5 | using `codeUnits` here | wrong sum on non-BMP. **The two eras iterate differently — do not share a helper** |
 | 7 | Number → string in SVG | `4` → `"4"` (shortest round-trip) | `4.0` → `"4.0"` | layer-2 byte mismatch. Needs a `jsNum()` formatter |
@@ -298,6 +308,7 @@ when a completeness pass surfaces another.
 | 13 | `eye` | dispatched **only at v1.2.0**; the file survives to v1.5.2 unreachable | assuming it lives as long as its file | a phantom variant in later states |
 | 14 | `geometric` / `abstract` | **two different meanings by era** — distinct variants at v1.2.0; *unreachable* v1.3.0–v1.4.2 (fall through to `marble`); **deprecated aliases** `{geometric→beam, abstract→bauhaus}` from v1.5.3 | one enum value with one meaning | the same name renders three different things |
 | 15 | unknown `variant` | falls back to the era's default — `geometric` at v1.2.0, `marble` from v1.3.0. Never throws | throwing on an unknown value | a crash where upstream degrades |
+| 17 | **`pixel`'s first tile is never filled** | `avatar-pixel.js` builds its 64 colours with `getRandomColor(numFromName % i, …)` from `i == 0`. `hash % 0` is `NaN`, so `colors[NaN]` is `undefined` and the first `<rect>` ships **with no `fill` attribute at all** | filling tile 0 from the palette | wrong on **100% of pixel renders**, every name, every palette — including the defaults. Distinct from #8: that is a degenerate *palette*, this is a degenerate *loop index*, and it needs no unusual input to fire. Committed fixture `svg.json` → `pixel\|upstream-default\|upstream-default` shows it |
 | 16 | `<title>` | `1.6.1` emits `<title>{name}</title>` **unconditionally and has no `title` prop at all** — there is no way to switch it off; the prop arrives in `1.7.0`, defaulting off | giving `v1_6_1` a `title` parameter, or implementing the prop-gated form everywhere | `v1_6_1`'s SVG bytes are wrong while its pixels are right — a layer-2 failure a pixel test cannot see |
 
 ### Reachable-variant matrix (from `avatar.js` dispatch, not the file tree)
