@@ -31,5 +31,12 @@ migrate_working_dir/
 docs/
 .github/
 tool/
+
+# Parity fixtures are test data measured in hundreds of KB per supported
+# upstream version — they have no business in a consumer's archive. The test
+# that reads them has to go with them, or the published package would carry a
+# suite that cannot pass. Self-contained tests still ship.
 test/fixtures/
+test/fixtures_test.dart
+
 CLAUDE.md
