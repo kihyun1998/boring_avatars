@@ -20,11 +20,15 @@ produces — the same numbers, the same SVG, the same pixels.
 1. **The reference is the specification.** Not a cross-check, not an
    inspiration. A derivation that disagrees with upstream is wrong by
    definition.
-2. **The whole history is reachable.** Upstream's 28 tags collapse to 17
-   distinct algorithm states; every one is selectable at runtime. npm needs a
-   downgrade to render a v1.4.0 avatar — this package needs a parameter.
-3. **Additive forever.** A new upstream state is a new selector value, never an
-   edit to a shipped one.
+2. **Every supported upstream version is selectable at runtime.** Scope is
+   `1.6.1` onward — where upstream replaced `getNumber` with `hashCode` — which
+   is 99.6% of what npm actually installs. npm needs a downgrade to render a
+   1.7.0 avatar; this package needs a parameter.
+3. **Additive forever, one release per upstream version.** A release declares
+   support for one upstream version and is cut as soon as that is verified. A
+   new version is a new selector value, never an edit to a shipped one — and
+   every release re-proves that the already-supported versions still render
+   byte-identically.
 4. **Deterministic everywhere.** The same input yields the same bytes on every
    platform, GPU, Flutter version and rendering backend.
 

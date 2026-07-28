@@ -197,6 +197,76 @@ a cost. Avoiding that cost is part of why the boundary sits at git tags.
 answer, not a bug report.** Moving the boundary is a scope change and goes back
 to the user.
 
+### Scope boundary — the ladder starts at v1.6.1, not v1.2.0
+
+**Decided by the user on 2026-07-28**, superseding the earlier "walk the whole
+history from v1.2.0" call. A product judgement, theirs to reverse. What they
+were shown: weekly npm download share per state, and the cost of the second hash
+era.
+
+`v1.6.1` is where `getNumber` is replaced by `hashCode`. Cutting there is a cut
+along an **algorithm boundary**, not along a popularity threshold — the coverage
+number is a consequence, not the criterion.
+
+| Starting at | Coverage of weekly npm downloads | Hash functions | Reachable variants | Tag states |
+|---|---|---|---|---|
+| v1.2.0 | 99.79% | 2 | 11 | 17 |
+| **v1.6.1** | **99.64%** | **1** | **6** | **8** |
+
+The nine states below v1.6.1 total **0.14%** — roughly 360 downloads a week
+across all of them, of which `v1_6_0` alone is 19. Supporting them would pull in
+`getNumber`, whose `Array.from` iterates **code points** where `hashCode`'s
+`charCodeAt` iterates **code units** — the two eras walk a string in opposite
+directions, so they can share no helper (hidden-state #6). It would also add a
+second `getContrast` return format (`'black'`/`'white'` vs hex).
+
+**They are not deferred, they are out of scope.** No placeholder issue exists and
+none should be opened: a feature at 0.14% that nobody has requested is a note
+here, not a tracker entry. Re-entering scope is a fresh decision by the user.
+
+### The eight states in scope — and the two that actually differ
+
+| State | Tags | `pixel` colour index |
+|---|---|---|
+| `v1_6_1` | 1.6.1, 1.6.2, 1.6.3 | `numFromName % i` |
+| `v1_7_0` | 1.7.0 | `numFromName % i` |
+| `v1_8_0` | 1.8.0, 1.9.0, 1.10.0 | `numFromName % i` |
+| `v1_10_1` | 1.10.1 | `numFromName % (i + 1)` |
+| `v1_10_2` | 1.10.2 | `numFromName % (i + 1)` |
+| `v1_11_0` | 1.11.0 | `numFromName % (i + 1)` |
+| `v1_11_1` | 1.11.1, 1.11.2 | `numFromName % (i + 1)` |
+| `v2_0_0` | 2.0.0 – 2.0.4 | `numFromName % (i + 1)` |
+
+**The state count differs per layer — do not collapse them into one number.**
+
+| Layer | Distinct states | What separates them |
+|---|---|---|
+| **1 — values** | **2** | `pixel`'s colour index: `% i` vs `% (i + 1)` |
+| **2 — SVG bytes** | **3** | the above, **plus `<title>`**: `1.6.1` emits `<title>{name}</title>` unconditionally; `1.7.0`+ gate it on the `title` prop (default off) |
+| **3 — pixels** | **2** | as layer 1 — `<title>` draws nothing |
+
+Established by **rendering the real upstream package**, not by reading it: six
+versions installed side by side and rendered through `renderToStaticMarkup` with
+the same name and palette. Of 36 version × variant combinations, **33 are
+byte-identical to 2.0.4** once generated ids are normalised; the three that
+differ are all `pixel`.
+
+**This corrected an earlier claim.** Diffing `generateData` bodies said `v1.6.1`
+and `v1.7.0` were identical for all six variants — and for *values* they are. The
+render showed all six differing, because the diff never looked at the markup
+around the generator. Reading the code is not observing what it does; the probe
+found the counterexample on its first run.
+
+Everything else in the range is React plumbing that leaves no mark on the
+drawing — `useId()` mask ids (1.8.0), prop spreading (1.11.0), destructuring
+defaults with identical values (1.11.1), the `prefix__filter0_f` →
+`filter_${maskID}` rename in `marble` (1.10.2), and the TypeScript rewrite
+(2.0.0).
+
+So the eight selector values map to **two render paths and three byte paths**.
+Keep all eight — someone pinned to 1.8.0 must be able to name it — but do not
+build eight implementations.
+
 ### Hidden-state list
 
 Read this **before** writing any data-layer code. These are the JS/SVG semantics
@@ -220,6 +290,7 @@ when a completeness pass surfaces another.
 | 13 | `eye` | dispatched **only at v1.2.0**; the file survives to v1.5.2 unreachable | assuming it lives as long as its file | a phantom variant in later states |
 | 14 | `geometric` / `abstract` | **two different meanings by era** — distinct variants at v1.2.0; *unreachable* v1.3.0–v1.4.2 (fall through to `marble`); **deprecated aliases** `{geometric→beam, abstract→bauhaus}` from v1.5.3 | one enum value with one meaning | the same name renders three different things |
 | 15 | unknown `variant` | falls back to the era's default — `geometric` at v1.2.0, `marble` from v1.3.0. Never throws | throwing on an unknown value | a crash where upstream degrades |
+| 16 | `<title>` | `1.6.1` emits `<title>{name}</title>` **unconditionally**; `1.7.0`+ gate it on the `title` prop, default off | implementing the prop-gated form everywhere | `v1_6_1`'s SVG bytes are wrong while its pixels are right — a layer-2 failure a pixel test cannot see |
 
 ### Reachable-variant matrix (from `avatar.js` dispatch, not the file tree)
 
@@ -415,6 +486,50 @@ noise. Of 28 tags, only ~16 are real work.
 This is a **deliberate exception to the house "no CI" convention**: it is a
 watcher, not a gate, so it cannot gate-block and its failure never blocks a
 merge.
+
+### Release plan — one release per upstream version
+
+**A release declares support for one upstream `boring-avatars` version, and is
+cut as soon as that support is verified.** Not "when enough has accumulated" —
+the version is the unit.
+
+**Decided by the user on 2026-07-28**, after an earlier plan that batched all
+versions into a single 1.0.0 was rejected. A product judgement, theirs to
+reverse. The rejected alternative and why it was wrong are recorded below,
+because the reasoning behind it will otherwise be re-proposed.
+
+| Release | Declares support for | The work that earns it |
+|---|---|---|
+| `0.1.0` | 1.6.1 – 1.6.3 | everything: harness, primitives, scene, the full rasterizer, all six variants |
+| `0.2.0` | 1.7.0 | the `<title>` gate (hidden-state #16) |
+| `0.3.0` | 1.8.0 – 1.10.0 | `useId` id normalisation; fixtures from the **git tag**, since npm shipped no code |
+| `0.4.0` | 1.10.1 | `pixel`'s second colour-index path — the only release in scope where the drawing changes |
+| `0.5.0` | 1.10.2 | verification only (the filter-id rename leaves no mark) |
+| `0.6.0` | 1.11.0 | verification only |
+| `0.7.0` | 1.11.1 – 1.11.2 | verification only |
+| `1.0.0` | 2.0.0 – 2.0.4 | + Chrome parity calibration, then the public API is fixed |
+
+**"Supporting a version" is a verification claim, not necessarily new rendering
+code.** Several releases above add no rasterizer work at all — they add that
+version's fixtures, prove the existing renderer reproduces it, and say so in the
+README and CHANGELOG. That is the deliverable. The earlier plan collapsed these
+releases on the grounds that "1.7.0 needs no new code", which optimised
+implementation cost while the product is *verified version coverage* — the wrong
+axis.
+
+Two rules hold across every release:
+
+- **Every release re-proves the additive invariant.** Each one asserts that the
+  goldens of *already-supported* versions are unchanged. A user pinned to
+  `v1_8_0` must not have their avatars move because `0.4.0` touched `pixel`.
+- **Per-version fixtures are what surface upstream's quiet changes.** Generating
+  a fixture set per version is how the `<title>` divergence gets caught at a
+  release boundary instead of by a user diffing against npm. A plan that renders
+  once and claims eight versions has no such boundary.
+
+`flutter pub publish` is run by the **user**, never the agent — it cannot be
+undone. Confirm the result with
+`curl -s https://pub.dev/api/packages/boring_avatars` rather than assuming it.
 
 ### Downstream loop
 
