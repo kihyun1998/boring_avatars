@@ -49,10 +49,14 @@ grade — or carry it to the batch.
 
 ## Crate / module map
 
-Single Flutter package, single-context. **Nothing below exists yet** — the repo
-currently holds only the `flutter create` scaffold (`lib/boring_avatars.dart`
-with a `Calculator` class). This map is the *planned* structure implied by the
-three-layer boundary; it is a binding because Step 2 splits changes against it.
+Single Flutter package, single-context. The layer directories and the public
+enums exist as of #1; **every layer below is still empty of behavior** — each
+arrives with the ticket that fills it. This map is a binding because Step 2
+splits changes against it.
+
+Already present: `lib/src/version.dart` (`BoringAvatarsVersion`, the 17 states)
+and `lib/src/variant.dart` (`BoringAvatarsVariant`, the 11 reachable variants),
+plus the era-based variant resolution that mirrors upstream's `avatar.js`.
 
 Public surface is the barrel `lib/boring_avatars.dart`.
 
@@ -113,17 +117,20 @@ The target is the **full upstream history from v1.2.0**, walked in order.
 and the alternative of targeting only the frozen v1.6.1+ range. A product call —
 theirs to reverse, not reopened by a later efficiency argument.
 
-28 tags collapse to **16 distinct algorithm states**. Port one state per slice;
+28 tags collapse to **17 distinct algorithm states**. Port one state per slice;
 tags that share a state are one slice, not several.
+
+*(Corrected from 16 while working #1: row 15 below held two states, not one —
+v1.11.0's components differ from v1.11.1's. Verified by blob SHA.)*
 
 | # | Tags | Hash | Variant set |
 |---|---|---|---|
-| 1 | v1.2.0 | `getNumber` | abstract, beam, eye, geometric, marble, turbulence |
-| 2 | v1.3.0–v1.3.1 | `getNumber` | beam, dome, eye, marble, moholy, ring, turbulence |
+| 1 | v1.2.0 | `getNumber` | geometric (default), abstract, beam, eye, marble |
+| 2 | v1.3.0–v1.3.1 | `getNumber` | marble (default), dome, moholy, beam, ring |
 | 3 | v1.4.0 | `getNumber` | + bauhaus, pixel, sunset (9) |
 | 4 | v1.4.1 | `getNumber` | 9 |
 | 5 | v1.4.2 | `getNumber` | 9 |
-| 6 | v1.5.3–v1.5.5 | `getNumber` | dome/eye/turbulence dropped → the modern 6 |
+| 6 | v1.5.3–v1.5.5 | `getNumber` | `dome` dropped → the modern 6; `geometric`/`abstract` become aliases |
 | 7 | v1.5.6 | `getNumber` | 6 ⚠️ reverted at v1.6.0 |
 | 8 | v1.5.7–v1.5.8 | `getNumber` | 6 ⚠️ reverted at v1.6.0 |
 | 9 | v1.6.0 | `getNumber` | **byte-identical to v1.5.3** |
@@ -132,11 +139,22 @@ tags that share a state are one slice, not several.
 | 12 | v1.8.0–v1.10.0 | `hashCode` | 6 |
 | 13 | v1.10.1 | `hashCode` | pixel only |
 | 14 | v1.10.2 | `hashCode` | marble only |
-| 15 | v1.11.0, then v1.11.1–v1.11.2 | `hashCode` | 6 (two steps) |
-| 16 | v2.0.0–v2.0.2 | `hashCode` (TS rewrite) | 6 |
+| 15 | v1.11.0 | `hashCode` | 6 |
+| 16 | v1.11.1–v1.11.2 | `hashCode` | 6 — `defaultProps` → destructuring defaults, **same values**, no output change |
+| 17 | v2.0.0–v2.0.2 (+ 2.0.3/2.0.4 on `master`) | `hashCode` (TS rewrite) | 6 |
 
-Twelve distinct variants total — six current, six deleted (`abstract`,
-`geometric`, `eye`, `turbulence`, `dome`, `moholy`).
+**Eleven** reachable variants — six current (`marble`, `beam`, `pixel`,
+`sunset`, `ring`, `bauhaus`) and five historical (`geometric`, `abstract`,
+`eye`, `dome`, `moholy`). `turbulence` ships a file but is **never dispatched**
+— see hidden-state #12 and the reachable-variant matrix.
+
+**States 16→17 and within 17, cleared concerns:** `v2.0.0` vs `v2.0.1`
+`index.tsx` is byte-identical (only `types.ts` moved, which has no runtime
+effect); `2.0.4` adds `size = '40px'` as a *default*. That last one is **consumer
+policy under this project's boundary rule**, not part of the version state — the
+caller always supplies size here. Valid **as long as `size` stays consumer-owned**;
+if the package ever renders at an implicit default, 2.0.3/2.0.4 becomes its own
+state.
 
 **States 7–9 are the trap.** v1.5.6/v1.5.7/v1.5.8 changed all six components and
 v1.6.0 restored v1.5.3's blobs exactly — upstream reverted them. Port them as
@@ -198,6 +216,22 @@ when a completeness pass surfaces another.
 | 9 | SVG `rx` on `<rect>` | clamped to `width/2` | Flutter `RRect` scales radii instead | wrong corner shape |
 | 10 | SVG arc with radii too small (`a1,0.75 … 10,0` in beam's mouth) | spec **scales both radii up** until the ellipse fits (F.6.6) | `arcToPoint` does not correct | wrong or throwing path |
 | 11 | `<filter>` with no `x/y/width/height` (marble) | region defaults to **-10%/-10%/120%/120%** of the bbox; the blur is clipped there | unclipped blur | halo beyond the reference |
+| 12 | **A variant file existing ≠ the variant being reachable.** `avatar.js`'s dispatch is the authority, not the file listing | `avatar-turbulence.js` ships from v1.2.0 to v1.5.2 with an unchanging blob and is **never dispatched in any version** | porting it from the file tree | the project's heaviest rasterizer feature built for something no user could select |
+| 13 | `eye` | dispatched **only at v1.2.0**; the file survives to v1.5.2 unreachable | assuming it lives as long as its file | a phantom variant in later states |
+| 14 | `geometric` / `abstract` | **two different meanings by era** — distinct variants at v1.2.0; *unreachable* v1.3.0–v1.4.2 (fall through to `marble`); **deprecated aliases** `{geometric→beam, abstract→bauhaus}` from v1.5.3 | one enum value with one meaning | the same name renders three different things |
+| 15 | unknown `variant` | falls back to the era's default — `geometric` at v1.2.0, `marble` from v1.3.0. Never throws | throwing on an unknown value | a crash where upstream degrades |
+
+### Reachable-variant matrix (from `avatar.js` dispatch, not the file tree)
+
+| State / tags | Reachable variants | Default | Aliases |
+|---|---|---|---|
+| v1.2.0 | geometric, abstract, beam, eye, marble | `geometric` | — |
+| v1.3.0–v1.3.1 | marble, dome, moholy, beam, ring | `marble` | — |
+| v1.4.0–v1.4.2 | marble, pixel, bauhaus, ring, beam, sunset, dome | `marble` | — |
+| v1.5.3 → v2.0.x | pixel, bauhaus, ring, beam, sunset, marble | `marble` | geometric→beam, abstract→bauhaus |
+
+**Eleven** variants are reachable across the whole history. `turbulence` is
+reachable in **zero** states.
 
 ### Upstream divergence ledger
 

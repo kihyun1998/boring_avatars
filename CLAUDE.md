@@ -20,7 +20,7 @@ produces — the same numbers, the same SVG, the same pixels.
 1. **The reference is the specification.** Not a cross-check, not an
    inspiration. A derivation that disagrees with upstream is wrong by
    definition.
-2. **The whole history is reachable.** Upstream's 28 tags collapse to 16
+2. **The whole history is reachable.** Upstream's 28 tags collapse to 17
    distinct algorithm states; every one is selectable at runtime. npm needs a
    downgrade to render a v1.4.0 avatar — this package needs a parameter.
 3. **Additive forever.** A new upstream state is a new selector value, never an
