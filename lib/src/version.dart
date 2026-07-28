@@ -7,8 +7,16 @@
 /// frozen once shipped — selecting one always yields the same avatar regardless
 /// of which version of this package you are on.
 ///
-/// Several upstream releases share a value when they draw identically; each
-/// value lists every release it reproduces in [upstreamVersions].
+/// **Upstream releases share a value when a caller gets the same thing out of
+/// them** — not when their source happens to match. Several of upstream's
+/// releases changed only how the component was written, and one changed the
+/// source not at all across three releases; those collapse. Each value lists
+/// every release it reproduces in [upstreamVersions].
+///
+/// One upstream release is deliberately absent: `1.11.0` writes its own props
+/// onto the `<svg>` element (`colors="…" name="…"`), which no other release
+/// does. Reproducing it would mean reproducing that. Upstream fixed it in
+/// `1.11.1`, which is covered.
 ///
 /// These track upstream's **git tags**, not its npm versions — the two
 /// disagree. npm `1.2.1`, for instance, republished 0.1.4-era code.

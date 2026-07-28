@@ -148,18 +148,22 @@ cd boring-avatars && git sparse-checkout set src/lib && git fetch --tags
 Do **not** use `--depth 1` here — unlike the other `.refs` trees, this one is
 walked by tag across its whole history (below), so the tags must be present.
 
-### The upstream version ladder — the port order
+### The upstream version ladder — historical, and no longer the port order
 
-The target is the **full upstream history from v1.2.0**, walked in order.
-**Decided by the user on 2026-07-28**, shown the collapsed-state analysis below
-and the alternative of targeting only the frozen v1.6.1+ range. A product call —
-theirs to reverse, not reopened by a later efficiency argument.
+**This table is source archaeology, not the plan.** It records what the 28 git
+tags contain, which is how the scope boundary at v1.6.1 was decided. The **port
+order is in "The states in scope" below**, which groups by *output* — decided by
+the user on 2026-07-29 and collapsing the eight in-scope selectors to three.
 
-28 tags collapse to **17 distinct algorithm states**. Port one state per slice;
-tags that share a state are one slice, not several.
+Read this table when you need to know what a tag holds. Do not read a row as a
+release: rows 11–17 map to only **two** of the three shipped selectors, and row
+15 (v1.11.0) ships in none of them.
+
+28 tags collapse to **17 distinct source states**.
 
 *(Corrected from 16 while working #1: row 15 below held two states, not one —
-v1.11.0's components differ from v1.11.1's. Verified by blob SHA.)*
+v1.11.0's components differ from v1.11.1's. Verified by blob SHA. And source
+identity turned out to be the wrong grouping criterion entirely — see below.)*
 
 | # | Tags | Hash | Variant set |
 |---|---|---|---|
@@ -180,6 +184,11 @@ v1.11.0's components differ from v1.11.1's. Verified by blob SHA.)*
 | 15 | v1.11.0 | `hashCode` | 6 |
 | 16 | v1.11.1–v1.11.2 | `hashCode` | 6 — `defaultProps` → destructuring defaults, **same values**, no output change |
 | 17 | v2.0.0–v2.0.2 (+ 2.0.3/2.0.4 on `master`) | `hashCode` (TS rewrite) | 6 |
+
+**Row 15 is the one this table gets wrong on its own terms.** It reads as an
+ordinary state; rendering it shows v1.11.0 leaks its props onto the `<svg>`
+element (hidden-state #37). A blob diff cannot see that, which is the reason the
+grouping criterion moved from source to output.
 
 **Eleven** reachable variants — six current (`marble`, `beam`, `pixel`,
 `sunset`, `ring`, `bauhaus`) and five historical (`geometric`, `abstract`,
@@ -264,38 +273,82 @@ second `getContrast` return format (`'black'`/`'white'` vs hex).
 none should be opened: a feature at 0.14% that nobody has requested is a note
 here, not a tracker entry. Re-entering scope is a fresh decision by the user.
 
-### The eight states in scope — and the two that actually differ
+### The states in scope — grouped by output, not by source
 
-| State | Tags | `pixel` colour index |
+**Decided by the user on 2026-07-29**, superseding "one selector per distinct
+source tree". A product judgement, theirs to reverse. What they were shown: the
+four measurements below, and the fact that grouping by source gives 8 selectors
+where grouping by output gives 3.
+
+> **"꼭 버전마다 하나씩 만드는건 아니고 사용자 입장에서 결과물이 같으면 묶어서
+> 하는거임. 문법은 상관없어. 결과물이 중요."**
+
+The criterion is now: **two upstream versions share a selector when a caller
+gets the same thing out of them.** Source identity is neither necessary nor
+sufficient — `1.11.1` and `1.11.2` have different source trees and identical
+output, while `1.11.0` shares `1.11.1`'s intent and differs in what it emits.
+
+| Selector | npm versions | What separates it from the one above |
 |---|---|---|
-| `v1_6_1` | 1.6.1, 1.6.2, 1.6.3 | `numFromName % i` |
-| `v1_7_0` | 1.7.0 | `numFromName % i` |
-| `v1_8_0` | 1.8.0, 1.9.0, 1.10.0 | `numFromName % i` |
-| `v1_10_1` | 1.10.1 | `numFromName % (i + 1)` |
-| `v1_10_2` | 1.10.2 | `numFromName % (i + 1)` |
-| `v1_11_0` | 1.11.0 | `numFromName % (i + 1)` |
-| `v1_11_1` | 1.11.1, 1.11.2 | `numFromName % (i + 1)` |
-| `v2_0_0` | 2.0.0 – 2.0.4 | `numFromName % (i + 1)` |
+| `v1_6_1` | 1.6.1, 1.6.2, 1.6.3 | — |
+| `v1_7_0` | 1.7.0, 1.8.0, 1.9.0, 1.10.0 | `<title>` becomes optional. **The drawing is identical** |
+| `v1_10_1` | 1.10.1, 1.10.2, 1.11.1, 1.11.2, 2.0.0 – 2.0.4 | **`pixel`'s drawing changes** — `% i` → `% (i + 1)` |
+| — | ~~1.11.0~~ | **skipped, see below** |
 
-**The state count differs per layer — do not collapse them into one number.**
+**Measured, not read.** Thirteen npm versions installed side by side and
+rendered through `renderToStaticMarkup` — six variants × four names each —
+then grouped by the rendered string under four progressively looser readings:
 
-| Layer | Distinct states | What separates them |
-|---|---|---|
-| **1 — values** | **2** | `pixel`'s colour index: `% i` vs `% (i + 1)` |
-| **2 — SVG bytes** | **3** | the above, **plus `<title>`**: `1.6.1` emits `<title>{name}</title>` unconditionally; `1.7.0`+ gate it on the `title` prop (default off) |
-| **3 — pixels** | **2** | as layer 1 — `<title>` draws nothing |
+| What is compared | Groups |
+|---|---|
+| the raw bytes | 6 |
+| internal ids normalised (`id`, `url(#…)`, `mask`, `filter`) | 4 |
+| ids normalised **and** `<title>` set aside | 3 |
+| ids normalised, `title` forced on | 3 |
 
-Established by **rendering the real upstream package**, not by reading it: six
-versions installed side by side and rendered through `renderToStaticMarkup` with
-the same name and palette. Of 36 version × variant combinations, **33 are
-byte-identical to 2.0.4** once generated ids are normalised; the three that
-differ are all `pixel`.
+And the `v1_7_0` → `v1_10_1` boundary is one variant wide: rendering both eras
+over six names, `pixel` differs on **6 of 6** and `marble`, `beam`, `sunset`,
+`ring`, `bauhaus` are byte-identical on all of them.
 
-**This corrected an earlier claim.** Diffing `generateData` bodies said `v1.6.1`
-and `v1.7.0` were identical for all six variants — and for *values* they are. The
-render showed all six differing, because the diff never looked at the markup
-around the generator. Reading the code is not observing what it does; the probe
-found the counterexample on its first run.
+**`1.11.0` is skipped — it is a broken release.** It spreads its own props onto
+the `<svg>` element, so the markup carries junk attributes no other version
+emits:
+
+```
+<svg … width="80" height="80" colors="#92A1C6,#146A7C,#F0AB3D,#C271B4,#C20D90"
+     name="Clara Barton" …>
+```
+
+Measured on all six variants. Upstream fixed it in `1.11.1` by destructuring the
+props it consumes. Under the output criterion it is a distinct state and would
+otherwise need its own selector — supporting it would mean **reproducing the
+junk attributes**, since a selector promises what that version emits.
+**Decided by the user on 2026-07-29** to skip it: `v1_10_1` covers `1.11.1`
+onward, and a caller pinned to `1.11.0` is told it is unsupported rather than
+given a neighbouring version's output. If that ruling is reversed, the state is
+`v1_10_1` plus the leaked attributes and nothing else.
+
+**`1.8.0` and `1.9.0` need no selector of their own** — they are inside
+`v1_7_0`. Independently, **their npm tarballs contain no JavaScript at all**
+(`main` points at `build/index.js`, which is absent — verified by installing
+them), so no user has ever run them.
+
+**Generated ids are not a grouping boundary, and they are not our problem at
+`v1_6_1`.** From 1.8.0 upstream names its mask with React's `useId()`, whose
+value depends on the element's position in the render tree — the *same* avatar
+comes out `:R0:` alone, `:R3:` as the third child, `:R2:` after a `<span>`.
+Measured. What that changes is **two characters of an internal reference**; the
+shapes, coordinates and fills are byte-identical across all of them, so the same
+name always yields the same avatar on every page. At `v1_6_1` the question does
+not arise: every id is a literal, and the one that must not collide already
+carries the name (`gradient_paint0_linear_ClaraBarton`) while the one that does
+collide is a mask identical for every avatar of that variant.
+
+**A correction this replaces.** An earlier note here claimed the state count
+differs per layer (2 values / 3 bytes / 2 pixels) and that all eight selectors
+should be kept "so someone pinned to 1.8.0 can name it". Keeping a selector that
+produces byte-identical output to its neighbour buys a name and costs a release;
+the user ruled that the name is not worth it.
 
 Everything else in the range is React plumbing that leaves no mark on the
 drawing — `useId()` mask ids (1.8.0), prop spreading (1.11.0), destructuring
@@ -351,6 +404,7 @@ when a completeness pass surfaces another.
 | 33 | **A mask applies to the composited group, not to each shape** | SVG composites a `<g mask="…">`'s children, *then* scales the result's alpha by the mask | folding the mask into every shape's own coverage | the mask is applied once per shape. Two opaque shapes stacked on a pixel a mask half-covers come out at **192** where one of them gives 128 — 64 levels of alpha against a bar of one. Inert for `pixel` and `ring`, whose mask-edge pixels are reached by at most one shape; **live for `marble`, `bauhaus` and `beam`**, which each lay a background rect under a shape crossing the mask edge. Fixed in #37; the fix moved 8 pixels of `pixel`'s goldens, all fully transparent, all straight-RGB-only (#29) |
 | 34 | **`z` ends a subpath; what follows starts a new one** | `M0 0h10v10H0zh10v10` is two subpaths from the same origin | treating `z` as only a "return to start" and leaving the contour open | the two weld into one polygon — measured 75 units where SVG gives 100. Inert at v1.6.1: across the 18 distinct `d` strings in all 600 renders, `z` is always the **last** command, so no fixture could catch it. Valid **as long as that stays true** — a multi-subpath `d` in a later upstream version makes it live |
 | 35 | **A `<mask>` carries a clip region, units, and an id that is referenced** | `maskUnits` decides whether `x/y/width/height` are user units or bbox fractions; the region clips the mask shape; `mask="url(#id)"` has to name a mask that exists | reading only the child shape | three silent wrong pictures: a region that cuts its own shape renders uncut, `objectBoundingBox` reinterprets every number, and a dangling reference renders masked where a browser renders unmasked (SVG 2) or not at all (SVG 1.1). All inert at v1.6.1 — one mask, `userSpaceOnUse`, region equal to the shape — and all three now throw |
+| 37 | **`1.11.0` spreads its own props onto the `<svg>` element** | `<svg … colors="#92A1C6,#146A7C,…" name="Clara Barton">` — the destructuring keeps `colors` and `name` in `...otherProps`, so React writes them as DOM attributes | assuming a "prop spreading" changelog entry leaves the output alone | a whole upstream release whose markup differs from every neighbour on **all six variants**. It is the reason `1.11.0` is skipped rather than folded into `v1_10_1`; fixed upstream in `1.11.1`. Found by grouping rendered output, which a source diff had classified as inert |
 | 36 | **The `largeArc` flag is dead-valued across the entire corpus** | every arc upstream writes has a chord equal to its (corrected) diameter, so F.6.5's centre offset is exactly zero and `sign = largeArc != sweep` multiplies a zero | assuming a passing suite exercises the endpoint→centre conversion | the hardest branch of the arc code is unreachable from any real input — two mutants on the sign rule survived the whole suite. Not a defect and not fixable by upstream data; the case is **constructed** in `raster_path_test.dart` (chord 20 on radius 15, minor segment vs major), with Chrome confirming which of the four shapes each flag pair draws |
 
 ### Reachable-variant matrix (from `avatar.js` dispatch, not the file tree)
@@ -616,27 +670,50 @@ This is a **deliberate exception to the house "no CI" convention**: it is a
 watcher, not a gate, so it cannot gate-block and its failure never blocks a
 merge.
 
-### Release plan — one release per upstream version
+### Release plan — one release per **output state**
 
-**A release declares support for one upstream `boring-avatars` version, and is
-cut as soon as that support is verified.** Not "when enough has accumulated" —
-the version is the unit.
+**A release declares support for every upstream version that produces the same
+thing, and is cut as soon as that support is verified.** The unit is the output
+state, not the version number.
 
-**Decided by the user on 2026-07-28**, after an earlier plan that batched all
-versions into a single 1.0.0 was rejected. A product judgement, theirs to
-reverse. The rejected alternative and why it was wrong are recorded below,
-because the reasoning behind it will otherwise be re-proposed.
+**Decided by the user on 2026-07-29**, replacing "one release per upstream
+version" (2026-07-28), which itself replaced "batch everything into 1.0.0".
+Both earlier plans are recorded so their reasoning is not re-proposed.
 
 | Release | Declares support for | The work that earns it |
 |---|---|---|
-| `0.1.0` | 1.6.1 – 1.6.3 | everything: harness, primitives, scene, the full rasterizer, all six variants |
-| `0.2.0` | 1.7.0 | the `<title>` gate (hidden-state #16) |
-| `0.3.0` | 1.8.0 – 1.10.0 | `useId` id normalisation; fixtures from the **git tag**, since npm shipped no code |
-| `0.4.0` | 1.10.1 | `pixel`'s second colour-index path — the only release in scope where the drawing changes |
-| `0.5.0` | 1.10.2 | verification only (the filter-id rename leaves no mark) |
-| `0.6.0` | 1.11.0 | verification only |
-| `0.7.0` | 1.11.1 – 1.11.2 | verification only |
-| `1.0.0` | 2.0.0 – 2.0.4 | + Chrome parity calibration, then the public API is fixed |
+| `0.1.0` | 1.6.1, 1.6.2, 1.6.3 | everything: harness, primitives, scene, all six variants, the public SVG surface |
+| `0.2.0` | 1.7.0, 1.8.0, 1.9.0, 1.10.0 | the `<title>` gate (hidden-state #16) — **one change** |
+| `0.3.0` | 1.10.1, 1.10.2, 1.11.1, 1.11.2, 2.0.0 – 2.0.4 | `pixel`'s second colour-index path — **one change**, and the only one in scope where the drawing moves |
+
+**Why this collapsed from eight releases to three.** The previous plan gave
+`1.8.0`, `1.10.2`, `1.11.0` and `1.11.1` their own releases whose stated work was
+"verification only" — they existed so a caller could *name* their pinned version,
+not because anything rendered differently. The user ruled that a name that buys
+no different output does not earn a release. Five releases' worth of README,
+CHANGELOG, fixture generation and publish ceremony disappear with them.
+
+**What was kept from the earlier plan.** The two rules below are unchanged and
+matter more now, not less, because each release covers more versions:
+
+- **Every release re-proves the additive invariant.** A user pinned to `v1_6_1`
+  must not have their avatars move because `0.3.0` touched `pixel`.
+- **Per-version fixtures are still generated for every covered version**, not one
+  per release. Collapsing the *releases* does not license collapsing the
+  *evidence* — the `<title>` divergence was found precisely because 1.6.1 and
+  1.7.0 were rendered separately, and a plan that rendered one and claimed four
+  would have missed it.
+
+**`1.11.0` is not in the table, and that is deliberate** — see "The states in
+scope" above. It emits junk attributes no other version does.
+
+**`0.1.0` ships SVG only.** Decided by the user on 2026-07-29: the public surface
+is a function returning the SVG string, which is what upstream itself produces
+and is a complete product on its own. The widget and its device-pixel
+rasterisation (#58, #59) follow in a later release rather than blocking the first
+one. A Flutter caller therefore needs a third-party SVG renderer for `0.1.0`, and
+the package's determinism guarantee applies to the raster path only — say so in
+the README rather than leaving it implied.
 
 **"Supporting a version" is a verification claim, not necessarily new rendering
 code.** Several releases above add no rasterizer work at all — they add that
