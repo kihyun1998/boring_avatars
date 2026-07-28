@@ -32,11 +32,16 @@ docs/
 .github/
 tool/
 
-# Parity fixtures are test data measured in hundreds of KB per supported
-# upstream version — they have no business in a consumer's archive. The test
-# that reads them has to go with them, or the published package would carry a
-# suite that cannot pass. Self-contained tests still ship.
-test/fixtures/
-test/fixtures_test.dart
+# The whole suite is excluded, not a growing list of files.
+#
+# Most of these tests read something: parity fixtures (hundreds of KB per
+# supported upstream version) or golden images (25 KB each). None of that data
+# belongs in a consumer's archive, and a test shipped without the data it reads
+# is a suite that cannot pass. Excluding the pair file-by-file worked twice and
+# then grew again on the third ticket, so the rule replaces the list.
+#
+# Nothing is lost: pub.dev does not run package tests, and the suite is one
+# `git clone` away.
+test/
 
 CLAUDE.md
