@@ -49,7 +49,37 @@ _(none yet)_
 
 ## Step 3 — TDD and the test-trust gate
 
-_(none yet)_
+### A tripwire that cannot trip reads as coverage (#34)
+
+A test guarding "we deliberately did not port `getModulus` and `getAngle`" was
+written as `expect(const <String>['jsHashCode', …], hasLength(6))` — a literal
+asserting its own length. Adding either function would have left it green. It
+looked like a decision under guard and guarded nothing.
+
+Replaced with one that reads `utilities.dart` and asserts the declarations are
+absent (and that the six real ones are present, so it fails on a moved or
+emptied file rather than passing on a missing string).
+
+**The rule this earns:** a test whose subject never appears in its own
+assertions is not testing that subject. Mutate the thing it claims to protect
+and watch it go red, or delete it.
+
+### A mutation surviving means one of two opposite things (#34)
+
+Seven mutations were run against the primitives; five went red. The two
+survivors had *opposite* causes and needed opposite responses:
+
+- **`getUnit`'s `index == 0` guard** — a real hole. No fixture entry used index
+  `0`, because no upstream caller does. Fixed by widening the fixture to
+  measure index `0` from upstream; the mutation now kills 10 assertions.
+- **`getDigit`'s float division** — not a hole. Integer division is provably
+  indistinguishable for non-negative input, so there was nothing to cover. The
+  honest response was to prove the equivalence, record the validity condition,
+  and pin the negative-input divergence with measured upstream values.
+
+Treating the second like the first would have produced a test for an input no
+caller can produce. Treating the first like the second would have left a real
+divergence undefended.
 
 ## Step 4 — real round-trip proof
 
@@ -85,7 +115,26 @@ than dying, so upstream's crash is itself a reproducible fixture.
 
 ## Step 6 — surface sweep
 
-_(none yet)_
+### The hidden-state list is a hypothesis, and gets things wrong (#34)
+
+Three entries were corrected by the work that consumed them, not by a later
+audit:
+
+- **#4** claimed a `~/` mutation "survives the whole suite". True when written;
+  false an hour later, because the same change added the negative-input test
+  that kills it. A claim about the *suite* rots whenever the suite moves.
+- **#2** was stated as a live hazard. It is inert at v1.6.1 for exactly the
+  reason #4 is — every reachable dividend is non-negative — and said nothing
+  about it, so the two neighbouring entries described the same situation in
+  opposite tones.
+- **#8** described the empty palette reaching `colors[NaN]` and missed that
+  `pixel` reaches the same `NaN` through a completely different route, its loop
+  index. That one fires on **every** render rather than on an edge input, and a
+  port following the list alone would have shipped it wrong.
+
+**The rule this earns:** entries age against the code and against the tests.
+Re-read the ones a change touches *as part of that change* — including the
+sentences that were true when written.
 
 ## Step 7 — gates, release, downstream
 
