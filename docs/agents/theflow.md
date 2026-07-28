@@ -60,6 +60,11 @@ Already present: `lib/src/version.dart` (`BoringAvatarsVersion` — one value pe
 aliases), with alias resolution and the degrade-to-`marble` parser that mirror
 upstream's `avatar.js`.
 
+`lib/src/scene/` holds the backend-neutral drawing description and
+`lib/src/svg/` serialises it. The scene carries its attributes **ordered** —
+see hidden-state #18 — so the SVG emitter can reproduce upstream's bytes while
+the rasterizer reads the same nodes by name.
+
 `lib/src/js/` holds the sacred surface: `utilities.dart` (upstream's six
 reachable utilities) and `js_number.dart` (the JS arithmetic and string
 semantics Dart does not share — `jsMod`, `toSigned32`, `jsNum`,
@@ -308,6 +313,8 @@ when a completeness pass surfaces another.
 | 13 | `eye` | dispatched **only at v1.2.0**; the file survives to v1.5.2 unreachable | assuming it lives as long as its file | a phantom variant in later states |
 | 14 | `geometric` / `abstract` | **two different meanings by era** — distinct variants at v1.2.0; *unreachable* v1.3.0–v1.4.2 (fall through to `marble`); **deprecated aliases** `{geometric→beam, abstract→bauhaus}` from v1.5.3 | one enum value with one meaning | the same name renders three different things |
 | 15 | unknown `variant` | falls back to the era's default — `geometric` at v1.2.0, `marble` from v1.3.0. Never throws | throwing on an unknown value | a crash where upstream degrades |
+| 18 | **Attribute order is per call site, not per element** | React emits props in the order the JSX author wrote them, so one element takes several orders: `circle` is `cx cy r fill` in `ring` and `cx cy fill r transform` in `bauhaus`; `rect` and `path` each take five or more | giving the emitter a canonical order per element | every render whose order differs — silently, since a browser does not care about attribute order. The scene node therefore carries **ordered** attributes and the rasterizer reads them by name |
+| 19 | React's serialisation details | no self-closing tags (`<rect …></rect>`, never `<rect/>` — zero `/>` in 480 renders); no whitespace between elements; `'` escapes to **`&#x27;`** not `&apos;`; tabs, newlines and non-ASCII pass through; element names keep camel case (`linearGradient`) while some attributes hyphenate (`mask-type`, `stop-color`) and others do not (`maskUnits`, `stdDeviation`) | any of the plausible alternatives | byte-level layer-2 failure that renders identically on screen. The hyphenation split is **a list, not a rule** — callers supply the emitted spelling |
 | 17 | **`pixel`'s first tile is never filled** | `avatar-pixel.js` builds its 64 colours with `getRandomColor(numFromName % i, …)` from `i == 0`. `hash % 0` is `NaN`, so `colors[NaN]` is `undefined` and the first `<rect>` ships **with no `fill` attribute at all** | filling tile 0 from the palette | wrong on **100% of pixel renders**, every name, every palette — including the defaults. Distinct from #8: that is a degenerate *palette*, this is a degenerate *loop index*, and it needs no unusual input to fire. Committed fixture `svg.json` → `pixel\|upstream-default\|upstream-default` shows it |
 | 16 | `<title>` | `1.6.1` emits `<title>{name}</title>` **unconditionally and has no `title` prop at all** — there is no way to switch it off; the prop arrives in `1.7.0`, defaulting off | giving `v1_6_1` a `title` parameter, or implementing the prop-gated form everywhere | `v1_6_1`'s SVG bytes are wrong while its pixels are right — a layer-2 failure a pixel test cannot see |
 
