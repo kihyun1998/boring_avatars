@@ -83,9 +83,75 @@ divergence undefended.
 
 ## Step 4 — real round-trip proof
 
-_(none yet)_
+### A byte gate catches what a picture never shows (#36)
+
+`pixel` emits its 64 tiles in a scattered DOM order — `x = 0, 20, 40, 60, 10,
+30, 50, 70` across the top row, then column by column — and the tile at each
+position takes a colour index that follows that order, not the grid.
+
+Rewriting the table in reading order was run as a mutation. **The rendered
+image is identical**: every tile still lands where it belongs with the colour it
+had, because the coordinates travel with the index. Only the *serialisation*
+moves. It broke 24 assertions — all of them layer-2 byte comparisons against
+upstream's real output.
+
+Nothing at layer 1 or layer 3 could have seen it. A pixel-only gate would have
+shipped it.
+
+**The rule this earns:** where the port reproduces a *document* and not only a
+drawing, the document is part of the contract. Order, whitespace and attribute
+presence are behaviour, and only a byte comparison against real output tests
+them.
+
+### A golden that agrees with itself proves nothing (#36)
+
+The first golden was generated from the same code the test would run, so the
+comparison was guaranteed to pass — it locks against *regression* and says
+nothing about *correctness*.
+
+What makes it evidence is the assertions written beside it: which tile covers
+the centre pixel, that the four corners are cut by the circular mask, that some
+pixels carry partial alpha at all, that `rx: 160` on an 80-wide rect clamps to
+40. Those are checkable without any golden. The golden then freezes that
+verified state.
+
+Also added: a check that the three goldens are not the *same* image — a
+generator bug writing one render three times would otherwise satisfy every other
+assertion.
 
 ## Step 5 — adversarial completeness pass
+
+### A suite can be green for a mechanism it never runs (#36)
+
+Five mutations were run against the rasterizer and all five went red, so the
+layer looked defended. A refuting lens then found **four wrong rasterizers that
+passed the entire suite** — including one with the exact rect-coverage
+calculation *deleted outright*.
+
+Every one was invisible for the same reason, and it was not weak testing. It was
+that `pixel` is an 8×8 grid of integer-aligned tiles under a **square** mask:
+
+| Deleted mechanism | Why `pixel` cannot see it |
+|---|---|
+| exact rect coverage (`rowOverlap × colOverlap`) | a tile edge at a multiple of 10 makes that factor exactly 1 |
+| `min(width/2, height/2)` in the `rx` clamp | on a square mask, `width/2` alone agrees |
+| "only draw what is under the masked group" | nothing in `pixel` sits outside it |
+| the `mask-type` guard | nothing ever declares a type but `alpha` |
+
+The tracer bullet was chosen *because* it is the simplest shape — and the same
+simplicity is what makes it a poor witness for the general machinery it
+installs. The mutations that went red were the ones `pixel` exercises; the ones
+that survived were the ones the next five variants exercise.
+
+**The rule this earns:** when a slice installs machinery wider than the slice
+itself, mutation-test the machinery against inputs the slice does not produce.
+The five tests added here — a sub-pixel rect, a non-square mask, a shape outside
+the mask group, a foreign `mask-type` — are all things `pixel` never creates.
+
+A footnote on the run itself: one mutation appeared to survive re-testing and
+had not actually been applied — a `perl` substitution that silently matched
+nothing. A mutation whose application is not verified is not a mutation. The
+re-runs now print the applied-edit count before the suite.
 
 ### The same edge case behaves differently per variant (#33)
 
