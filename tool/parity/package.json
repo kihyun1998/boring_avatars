@@ -1,0 +1,15 @@
+{
+  "name": "boring-avatars-parity-harness",
+  "private": true,
+  "type": "module",
+  "description": "Generates parity fixtures from the real upstream boring-avatars. A tool, not a gate — flutter test never runs this.",
+  "scripts": {
+    "dump": "node dump.mjs"
+  },
+  "dependencies": {
+    "prop-types": "^15.8.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "upstream-1.6.1": "npm:boring-avatars@1.6.1"
+  }
+}

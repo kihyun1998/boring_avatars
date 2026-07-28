@@ -57,7 +57,31 @@ _(none yet)_
 
 ## Step 5 — adversarial completeness pass
 
-_(none yet)_
+### The same edge case behaves differently per variant (#33)
+
+Building the parity harness, the completeness check was "does the corpus cover
+every input the hidden-state list names?" It did not: **`colors: []`** — entry #8
+— was missing. Adding it looked like a one-line fix.
+
+Rendering it revealed the entry itself was wrong. #8 said "JS degrades where
+Dart throws". Measured across all six variants × 20 names at v1.6.1:
+
+- `marble`, `pixel`, `ring`, `sunset`, `bauhaus` — the `undefined` colour goes
+  straight into a `fill`, React drops the attribute, the render succeeds;
+- **`beam` throws.** It hands the same `undefined` to `getContrast`, which calls
+  `.slice` on it.
+
+So the port faces *both* failure modes on one input: crashing where upstream
+degrades, and succeeding where upstream crashes. A rule written as "empty
+palette degrades" would have been half wrong in a way the other half hides.
+
+**The rule this earns:** a hidden-state entry describes a *mechanism*, and the
+mechanism can reach different call sites with different tolerances. Before
+trusting an entry, run it against every variant that touches it — the entry is a
+hypothesis until it has been measured across its whole surface.
+
+The harness now records a throw as data (`{"__throws": "TypeError"}`) rather
+than dying, so upstream's crash is itself a reproducible fixture.
 
 ## Step 6 — surface sweep
 
