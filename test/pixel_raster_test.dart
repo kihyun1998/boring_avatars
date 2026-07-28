@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:boring_avatars/src/raster/path.dart';
 import 'package:boring_avatars/src/raster/raster.dart';
 import 'package:boring_avatars/src/raster/scene_raster.dart';
 import 'package:boring_avatars/src/scene/scene.dart';
@@ -85,16 +86,16 @@ void main() {
       // Tile 0 has no fill (hidden-state #17). It sits at x 0–10, y 0–10,
       // which the circle excludes anyway — so this asserts the *mechanism*:
       // a rect with a null fill contributes no coverage at all.
-      final withFill = rasterizeMaskedRects(
+      final withFill = rasterizeMaskedShapes(
         width: 4,
         height: 4,
-        rects: const [RasterRect(0, 0, 4, 4, '#FF0000')],
+        shapes: const [RasterRect(0, 0, 4, 4, '#FF0000')],
         mask: RoundedRectMask(x: 0, y: 0, width: 4, height: 4, rx: 0),
       );
-      final withoutFill = rasterizeMaskedRects(
+      final withoutFill = rasterizeMaskedShapes(
         width: 4,
         height: 4,
-        rects: const [RasterRect(0, 0, 4, 4, null)],
+        shapes: const [RasterRect(0, 0, 4, 4, null)],
         mask: RoundedRectMask(x: 0, y: 0, width: 4, height: 4, rx: 0),
       );
       expect(withFill.bytes.any((b) => b != 0), isTrue);
@@ -139,7 +140,16 @@ void main() {
           children: [
             const SvgNode(
               SvgElement.mask,
-              attributes: [SvgAttribute('width', 4), SvgAttribute('height', 4)],
+              // The id matters: the group below references it, and since #37
+              // an unmatched reference throws. Without it every assertion in
+              // this group would pass on that throw instead of on the one it
+              // names — which is how a mutation removing a *different* guard
+              // stayed green.
+              attributes: [
+                SvgAttribute('id', 'm'),
+                SvgAttribute('width', 4),
+                SvgAttribute('height', 4),
+              ],
               children: [
                 SvgNode(
                   SvgElement.rect,
@@ -196,20 +206,34 @@ void main() {
       );
     });
 
-    test('the shapes the other five variants use are refused', () {
-      for (final element in [
-        SvgElement.path,
-        SvgElement.circle,
-        SvgElement.line,
+    test('the shapes no variant has needed yet are refused', () {
+      // `path` and `circle` became drawable with `ring`; `line` is still
+      // nobody's, and arrives with `bauhaus`. Narrowing this list is how the
+      // seam records what has actually been implemented.
+      expectRejected(
+        wrap(const [
+          SvgNode(
+            SvgElement.line,
+            attributes: [SvgAttribute('fill', '#FF0000')],
+          ),
+        ]),
+      );
+    });
+
+    test('a drawable element missing its geometry is refused, not crashed', () {
+      // The seam's contract is a *named* failure. A `!` on a missing attribute
+      // would throw a null-check TypeError instead, which says nothing about
+      // which element was malformed — the failure mode this group exists to
+      // rule out, one level down.
+      for (final node in const [
+        SvgNode(SvgElement.path, attributes: [SvgAttribute('fill', '#F00000')]),
+        SvgNode(
+          SvgElement.circle,
+          attributes: [SvgAttribute('fill', '#F00000')],
+        ),
+        SvgNode(SvgElement.rect, attributes: [SvgAttribute('width', 2)]),
       ]) {
-        expectRejected(
-          wrap([
-            SvgNode(
-              element,
-              attributes: const [SvgAttribute('fill', '#FF0000')],
-            ),
-          ]),
-        );
+        expectRejected(wrap([node]));
       }
     });
 
@@ -281,11 +305,11 @@ void main() {
     test('rect coverage is exact, not rounded to the mask', () {
       // Deleting `rowOverlap * colOverlap` entirely used to pass everything,
       // because a tile edge at a multiple of 10 makes that factor exactly 1.
-      final img = rasterizeMaskedRects(
+      final img = rasterizeMaskedShapes(
         width: 2,
         height: 1,
         // Covers 30% of pixel 0 and none of pixel 1.
-        rects: const [RasterRect(0, 0, 0.3, 1, '#FF0000')],
+        shapes: const [RasterRect(0, 0, 0.3, 1, '#FF0000')],
         mask: RoundedRectMask(x: 0, y: 0, width: 2, height: 1, rx: 0),
       );
       expect(img.bytes.sublist(0, 4), [
@@ -298,10 +322,10 @@ void main() {
     });
 
     test('a sub-pixel rect covers proportionally in both axes', () {
-      final img = rasterizeMaskedRects(
+      final img = rasterizeMaskedShapes(
         width: 1,
         height: 1,
-        rects: const [RasterRect(0.25, 0.5, 0.5, 0.5, '#FFFFFF')],
+        shapes: const [RasterRect(0.25, 0.5, 0.5, 0.5, '#FFFFFF')],
         mask: RoundedRectMask(x: 0, y: 0, width: 1, height: 1, rx: 0),
       );
       // 0.5 wide x 0.5 tall = 0.25 coverage -> alpha 64.
@@ -317,10 +341,12 @@ void main() {
       expect(tall.radius, 10, reason: 'width/2 is the binding constraint');
     });
 
-    test('only shapes under the masked group are drawn', () {
-      // A rect that is a sibling of the <g>, not a child, is not content.
-      // Collecting everything gave the same answer for pixel, where nothing
-      // sits outside.
+    test('a shape outside the masked group is refused, not dropped', () {
+      // **This assertion was inverted in #37.** It used to require that such a
+      // rect be silently ignored — but a browser *draws* it, unmasked, so
+      // dropping it produces a picture the reference does not. Nothing in the
+      // six draws outside the mask group, so both readings agreed on every
+      // real scene and only one of them agreed with SVG.
       final scene = SvgNode(
         SvgElement.svg,
         attributes: const [SvgAttribute('viewBox', '0 0 2 2')],
@@ -355,10 +381,9 @@ void main() {
           ),
         ],
       );
-      final img = rasterizeScene(scene, width: 2, height: 2);
       expect(
-        img.bytes.every((b) => b == 0),
-        isTrue,
+        () => rasterizeScene(scene, width: 2, height: 2),
+        throwsA(isA<UnsupportedSceneError>()),
         reason: 'the only rect sits outside the mask group',
       );
     });
@@ -396,10 +421,10 @@ void main() {
       );
     });
 
-    test('the mask integrator lands well inside the calibration bar', () {
-      // The bar is one level out of 255 on an antialiased pixel. A 16x16
-      // supersampler measured 4/255 against a fine reference; this integrator
-      // is exact in x and only discretises y.
+    test('the mask integrator totals the right area', () {
+      // πr² is an outside opinion, and this is what it can say: the *average*
+      // coverage is right. It is not a per-pixel bound — errors of opposite
+      // sign cancel in a sum — so the next test carries that half.
       const r = 40.0;
       final mask = RoundedRectMask(x: 0, y: 0, width: 80, height: 80, rx: 160);
       var area = 0.0;
@@ -414,6 +439,46 @@ void main() {
         lessThan(0.02),
         reason: 'total disc area err ${(area - exact).abs()}',
       );
+    });
+
+    test('and every individual pixel agrees with the other integrator', () {
+      // The calibration bar is per pixel, so a per-pixel bound is what it
+      // needs. `RoundedRectMask` solves the shape's edge in closed form over 64
+      // slices; `polygonCoverage` walks flattened edge crossings over 256. Two
+      // different algorithms on the same shape — so this is a cross-check, not
+      // the self-check that comparing against our own supersampler would be.
+      for (final size in [80, 90]) {
+        final mask = RoundedRectMask(
+          x: 0,
+          y: 0,
+          width: size.toDouble(),
+          height: size.toDouble(),
+          rx: size * 2,
+        );
+        final polygon = polygonCoverage(
+          width: size,
+          height: size,
+          polygon: RasterPolygon([
+            flattenCircle(size / 2, size / 2, size / 2),
+          ], '#000000'),
+        );
+        var worst = 0.0;
+        var worstAt = '';
+        for (var y = 0; y < size; y++) {
+          for (var x = 0; x < size; x++) {
+            final d = (mask.coverageAt(x, y) - polygon[y * size + x]).abs();
+            if (d > worst) {
+              worst = d;
+              worstAt = '($x, $y)';
+            }
+          }
+        }
+        expect(
+          worst * 255,
+          lessThan(1.0),
+          reason: 'worst per-pixel disagreement at $worstAt, mask $size',
+        );
+      }
     });
   });
 

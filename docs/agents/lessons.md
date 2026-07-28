@@ -81,7 +81,72 @@ Treating the second like the first would have produced a test for an input no
 caller can produce. Treating the first like the second would have left a real
 divergence undefended.
 
+### A mutation can survive because the *inputs* are degenerate (#37)
+
+Two of twelve mutants survived the whole suite, for the same reason and neither
+of them a test-quality problem in the ordinary sense.
+
+- Swapping `cy` for `cx` where the rasterizer reads a `<circle>` changed
+  nothing. `ring`'s only circle is at (45, 45). So is `bauhaus`'s. **No variant
+  in the six could ever catch a transposed coordinate.**
+- Removing the clamp on F.6.5's centre square root changed nothing. All six of
+  `ring`'s arcs have *horizontal* chords, and a horizontal chord makes the
+  radicand exactly zero in float64 — never the −1e-16 the clamp exists for.
+
+Both are the #34 rule ("a mutation surviving means one of two opposite things")
+in its second form: the mechanism was unreachable *from this variant's inputs*.
+The tempting reading — "unreachable, so delete it" — is wrong for the second
+one: a parameter search found `r = 1/7` with an angled chord where `lambda`
+computes as exactly `1.0`, F.6.6 therefore does not fire, and the unclamped
+`sqrt` returns `NaN` that kills the whole render. The guard was right; only the
+evidence was missing.
+
+**The rule this earns:** when a mutant survives, ask whether the *variant* can
+reach the mechanism before asking whether the test is weak. If it cannot,
+construct the input rather than deleting the code or shrugging — and if you
+cannot construct one, say so with the search you ran.
+
+### A substitution that matches nothing reads as a surviving mutation (#34, #36, #37)
+
+Third occurrence. The mutation runner captured a `perl` error message into the
+variable it was going to print as an edit count, so every failed substitution
+printed `SURVIVED <-- gap` — the exact opposite of the truth, in the report
+whose whole job is to say which mechanisms are unguarded.
+
+**The rule this earns:** print the match count, and **parse it strictly**. A
+count that can be a error string is not a count. The runner is now a Node script
+doing literal `split`/`join`, which cannot mistake a pattern for a regex, and it
+prints `NO MATCH — the mutation never applied` as its own outcome rather than
+folding it into either verdict.
+
 ## Step 4 — real round-trip proof
+
+### A bar can be recorded, believed, and never run (#33 → #37)
+
+The layer-3 calibration bar — "interior 0, antialiased edges ≤1/255 against a
+real Chrome render" — was written into the bindings in #33 and treated as
+satisfied ever since. #37 built the harness and ran it for the first time.
+
+It fails. Not only for `ring` (worst edge 66–101/255) but for **`pixel`**, which
+merged in #36 (71/255). Nobody had lied; the bar had simply never been executed,
+and four tickets of work read as though it had.
+
+The failure is also not ours. Measured against areas that need no browser:
+Chrome's `<circle r=40>` is 32 px² short of πr² — **0.13 px inside the true
+circle** — and its `<path>` half-disc of r=38 is 17 px² short. Ours are within
+0.02. Chrome antialiases straight edges to about 0.003 px and *approximates
+curves*, so a ≤1/255 bar against it cannot be met by anything except a matching
+approximation.
+
+Two separate things went wrong and they are worth separating. The bar was never
+run; and the bar, as written, was unmeetable in principle for half the shapes in
+the package. Only the first is a process failure.
+
+**The rule this earns:** a bar that has never produced a number is a plan, not a
+gate — record *when it was last executed and what it measured*, not just its
+threshold. And before believing a reference, measure the reference: the outside
+opinion that needed no negotiation here was πr², not Chrome.
+
 
 ### A byte gate catches what a picture never shows (#36)
 
@@ -119,7 +184,50 @@ Also added: a check that the three goldens are not the *same* image — a
 generator bug writing one render three times would otherwise satisfy every other
 assertion.
 
+### A new guard can make a whole group pass for the wrong reason (#37)
+
+`pixel_raster_test.dart`'s scene helper built a `<mask>` with no `id` and a
+`<g mask="url(#m)">` pointing at it. That was harmless until #37 added a check
+that the reference names a mask that exists — after which **every assertion in
+that group was satisfied by the reference throwing**, not by the thing each test
+names. A mutation removing an unrelated guard stayed green, which is how it was
+found.
+
+The lesson is not "write better fixtures". It is that tightening a seam
+*retroactively changes what every existing test proves*, and a test suite going
+from green to green is exactly the transition nothing reports.
+
+**The rule this earns:** after adding a guard that fires early, re-run the
+mutation set — not just the suite. A test that was passing for the right reason
+yesterday can be passing for the new guard's reason today, and only a mutant
+distinguishes the two.
+
 ## Step 5 — adversarial completeness pass
+
+### Two lenses on the same material disagreed usefully (#37)
+
+Both lenses read `ring`, the rasterizer and the reference. The gap-hunting one
+found a `<g transform>` walking through unchecked and a `url(#…)` fill drawing
+nothing; the refuting one found those *and* three the first missed — the mask
+being applied per shape rather than to the composited group, a subpath after `z`
+being welded onto the previous contour, and the `largeArc` flag being
+dead-valued across the entire corpus.
+
+More useful than the extra findings: the refuting lens measured that the
+*existing* proofs were weaker than claimed. All nine of `ring`'s band samples
+sat on the column `x = 45`, so a centre disc rasterised 3% small and a 0.3 px
+global shift both passed every one of them — "verified independently of any
+golden" was false in the direction that mattered. It also measured that
+`largeArc` and F.6.5's centre offset are unreachable from any real input,
+which no amount of corpus coverage would have revealed.
+
+Both were briefed on both corpora, so each finding arrived with a direction
+already attached rather than as an errand.
+
+**The rule this earns:** on a sacred surface, the second lens's job is not more
+findings — it is to measure what the first pass's evidence actually covers.
+Ask it to break the *proof*, not the code.
+
 
 ### A suite can be green for a mechanism it never runs (#36)
 

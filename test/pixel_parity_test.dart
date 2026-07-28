@@ -58,6 +58,29 @@ void main() {
       final covered = renders.keys.where((k) => k.startsWith('pixel|')).length;
       expect(covered, names.length * palettes.length);
     });
+
+    test('the mask id and its reference are upstream\'s literals', () {
+      // Added in #37 — the normalisation erased both on either side, so the
+      // byte comparison never checked them. See the same test in
+      // `ring_parity_test.dart` for the reasoning.
+      final identifiers =
+          (svgFixture['maskIdentifiers'] as Map<String, dynamic>)['pixel']
+              as Map<String, dynamic>;
+      final svg = emitSvg(
+        buildPixelScene(
+          name: 'Clara Barton',
+          colors: const ['#FF0000'],
+          size: matrixSize,
+        ),
+      );
+      for (final id in (identifiers['ids'] as List).cast<String>()) {
+        expect(svg, contains('<mask id="$id"'), reason: 'mask id');
+      }
+      for (final ref in (identifiers['references'] as List).cast<String>()) {
+        expect(svg, contains('mask="url(#$ref)"'), reason: 'mask reference');
+      }
+      expect(identifiers['references'], identifiers['ids']);
+    });
   });
 
   group('the two traps this variant carries', () {
@@ -104,6 +127,39 @@ void main() {
   });
 
   group('square drops the attribute rather than defaulting it', () {
+    // Added in #37: this variant shipped in #36 with `square` asserted only
+    // against itself, because the fixture matrix had no square renders. It
+    // does now.
+    final squareRenders = svgFixture['squareRenders'] as Map<String, dynamic>;
+
+    test('every square render matches upstream byte for byte', () {
+      final keys = squareRenders.keys.where((k) => k.startsWith('pixel|'));
+      expect(
+        keys,
+        isNotEmpty,
+        reason: 'the fixture has no pixel square renders',
+      );
+      for (final key in keys) {
+        final parts = key.split('|');
+        final name = names.firstWhere((n) => n['id'] == parts[1]);
+        final palette = palettes.firstWhere((p) => p['id'] == parts[2]);
+        expect(
+          normalise(
+            emitSvg(
+              buildPixelScene(
+                name: name['value'] as String,
+                colors: (palette['value'] as List).cast<String>(),
+                size: matrixSize,
+                square: true,
+              ),
+            ),
+          ),
+          squareRenders[key],
+          reason: key,
+        );
+      }
+    });
+
     test('rx is absent when square is true, present when it is not', () {
       String svgFor({required bool square}) => emitSvg(
         buildPixelScene(
