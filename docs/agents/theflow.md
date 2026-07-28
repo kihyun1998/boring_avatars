@@ -290,7 +290,7 @@ when a completeness pass surfaces another.
 | 5 | `charCodeAt` / `name.length` | UTF-16 **code units** | `runes` iterates code points | hash diverges on non-BMP input |
 | 6 | `getNumber`'s `Array.from(name)` (states 1–9 only) | iterates **code points**, then `charCodeAt(0)` of each — the *opposite* of #5 | using `codeUnits` here | wrong sum on non-BMP. **The two eras iterate differently — do not share a helper** |
 | 7 | Number → string in SVG | `4` → `"4"` (shortest round-trip) | `4.0` → `"4.0"` | layer-2 byte mismatch. Needs a `jsNum()` formatter |
-| 8 | `colors: []` | `% 0` → `NaN` → `undefined` | `% 0` **throws** | crash where JS degrades |
+| 8 | `colors: []` | `% 0` → `NaN` → `colors[NaN]` → `undefined`. **Then it splits by variant:** five variants put that straight into a `fill`, and React drops the attribute; **`beam` throws**, because it hands the same `undefined` to `getContrast`, which calls `.slice` on it | `% 0` **throws** everywhere | crash where JS degrades — *and* silent success where JS crashes. "Empty palette degrades" is true per variant, not in general (measured at v1.6.1, all six variants × 20 names) |
 | 9 | SVG `rx` on `<rect>` | clamped to `width/2` | Flutter `RRect` scales radii instead | wrong corner shape |
 | 10 | SVG arc with radii too small (`a1,0.75 … 10,0` in beam's mouth) | spec **scales both radii up** until the ellipse fits (F.6.6) | `arcToPoint` does not correct | wrong or throwing path |
 | 11 | `<filter>` with no `x/y/width/height` (marble) | region defaults to **-10%/-10%/120%/120%** of the bbox; the blur is clipped there | unclipped blur | halo beyond the reference |
@@ -366,8 +366,9 @@ that cannot be seen from here. Re-read them at first publish, not before.
 
 | Layer | Real proof | Bar |
 |---|---|---|
-| **1 data** | Node harness runs the **real upstream package at the tag** over N names × the state's variant set; the dumped values become a committed JSON fixture; Dart asserts against it | **Exact. No tolerance.** |
-| **2 scene** | our emitted SVG string vs the string React actually renders at that tag | **Byte-identical**, excluding `useId()` mask ids (states 12+), which are runtime-random upstream and carry no behavior |
+| **1 data — utilities** | `tool/parity` imports `utilities.js` **straight from the pinned reference tree** and calls the real functions; the values become `test/fixtures/<version>/utilities.json` | **Exact. No tolerance.** |
+| **1 data — per-variant values** | **Not directly observable.** No component exports its generator — `generateData` / `generateColors` are module-private in all six — so per-variant values are proved *transitively* through layer 2, where every value that reaches the drawing appears as an attribute | via layer 2 |
+| **2 scene** | our emitted SVG vs `test/fixtures/<version>/svg.json`, rendered from the **real npm package** through `react-dom/server` | **Byte-identical**, excluding generated ids (`useId`, `prefix__…`), which are internal references. **`<title>` is not excluded** — see hidden-state #16 |
 | **3 raster — regression** | our rasterizer vs **golden PNGs committed to this repo** | **0 diff, no exceptions.** Runs every `flutter test` |
 | **3 raster — parity calibration** | our rasterizer vs a **real Chrome render** | interior/background **0**; antialiased edge pixels **≤1/255**. Run **manually** when the rasterizer changes, not per commit |
 | **widget** | widget test asserting the produced `ui.Image` bytes, observed at the screen | as layer 3 |
@@ -383,6 +384,16 @@ proves upstream parity and is run deliberately.
 - **A fixture that regenerates itself is not a proof.** The harness writes
   fixtures; the test only reads them. If a run can rewrite the expectation it
   just failed against, the gate is tautological.
+- **The two fixtures come from two different sources and can disagree.**
+  `utilities.json` is imported from the git tag; `svg.json` is rendered from the
+  npm package — and npm `1.8.0`/`1.9.0` shipped no JavaScript at all, so their
+  fixtures must come from the tag. `test/fixtures_test.dart` cross-checks the
+  two against each other (marble's background fill against `colors[hash %
+  range]`) rather than assuming they match.
+- **A measurement can point at the wrong element.** The first `<rect>` in a
+  marble render is the *mask's* rect, not the background — reading it made 71 of
+  80 cross-checks look like failures until the probe was corrected. When a check
+  fails wholesale, suspect the check.
 - **Antialiasing coverage cannot be self-checked.** Comparing our rasterizer to
   our own supersampled reference measures our own arithmetic twice. Only the
   Chrome render is an outside opinion.

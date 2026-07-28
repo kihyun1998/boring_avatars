@@ -1,0 +1,47 @@
+{
+  "_comment": "The single source of inputs for parity fixtures. Read by tool/parity when generating and by the Dart tests when asserting, so the two can never drift. Adding an entry invalidates every fixture — regenerate them all.",
+  "names": [
+    { "id": "upstream-default", "value": "Clara Barton" },
+    { "id": "short-ascii", "value": "Alice" },
+    { "id": "single-char", "value": "a" },
+    { "id": "empty", "value": "" },
+    { "id": "digits", "value": "12345" },
+    { "id": "internal-spaces", "value": "x y z" },
+    { "id": "edge-spaces", "value": "  padded  " },
+    { "id": "accented", "value": "Ünïcödé Nâmé" },
+    { "id": "hangul", "value": "박기현" },
+    { "id": "cjk", "value": "山田太郎" },
+    { "id": "emoji-single", "value": "🎨" },
+    { "id": "emoji-zwj", "value": "👨‍💻" },
+    { "id": "emoji-mixed", "value": "Ana 🎨 Silva" },
+    { "id": "punctuation", "value": "O'Brien-Smith, Jr." },
+    { "id": "newline", "value": "line\nbreak" },
+    { "id": "tab", "value": "tab\there" },
+    { "id": "long-64", "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+    { "id": "long-200-mixed", "value": "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. Pack my box wit" },
+    { "id": "high-codeunits", "value": "￿￾�" },
+    { "id": "repeated-hash-stress", "value": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz" }
+  ],
+  "palettes": [
+    {
+      "id": "upstream-default",
+      "value": ["#92A1C6", "#146A7C", "#F0AB3D", "#C271B4", "#C20D90"]
+    },
+    { "id": "single", "value": ["#FF0000"] },
+    { "id": "empty", "value": [] },
+    { "id": "pair", "value": ["#000000", "#FFFFFF"] },
+    {
+      "id": "seven",
+      "value": [
+        "#1A1A1A",
+        "#2E4057",
+        "#048BA8",
+        "#99C24D",
+        "#F18F01",
+        "#A62B1F",
+        "#EDEAD0"
+      ]
+    }
+  ],
+  "sizes": [40, 80]
+}
