@@ -61,11 +61,20 @@ aliases), with alias resolution and the degrade-to-`marble` parser that mirror
 upstream's `avatar.js`.
 
 `lib/src/variants/` holds each variant's scene builder (**sacred**) and
-`lib/src/raster/` the deterministic software rasterizer. As of #36 both hold
-`pixel` only: `raster.dart` draws axis-aligned rectangles through a rounded-rect
-mask, and `scene_raster.dart` bridges scene to pixels by reading nodes **by
-attribute name**. Curves, strokes, gradients and filters arrive with the
-variants that need them.
+`lib/src/raster/` the deterministic software rasterizer. As of #37 they hold
+`pixel` and `ring`. `raster.dart` fills two kinds of shape through a
+rounded-rect mask — axis-aligned rectangles in closed form, and polygons by a
+scanline integrator under the **nonzero** winding rule — `path.dart` turns SVG
+path data and circles into those polygons at a stated flattening tolerance, and
+`scene_raster.dart` bridges scene to pixels by reading nodes **by attribute
+name**. Strokes, gradients and filters arrive with the variants that need them,
+and everything unimplemented throws.
+
+**Rects keep their own closed-form integrator on purpose.** The polygon path
+quantises the vertical direction, and a horizontal edge is exactly where that is
+worst; a box-overlap product has nothing to approximate. The two are tied
+together by a test rather than left to drift — `raster_path_test.dart` renders
+the same fractional rectangle both ways.
 
 `lib/src/scene/` holds the backend-neutral drawing description and
 `lib/src/svg/` serialises it. The scene carries its attributes **ordered** —
@@ -92,7 +101,7 @@ Public surface is the barrel `lib/boring_avatars.dart`.
 | Module (`lib/src/`) | Layer | Role |
 |---|---|---|
 | `js/` | **1 data** | JS-semantics primitives — `hashCode`, `getNumber`, `jsMod`, `toSigned32`, `getDigit`, `getBoolean`, `getUnit`, `getRandomColor`, `getContrast`. **Sacred.** |
-| `variants/<name>/v<ver>.dart` | **1 data** | per-variant, per-upstream-state value generation. **Sacred.** |
+| `variants/<name>.dart` | **1 data** + **2 scene** | per-variant value generation and its scene. Flat while one upstream state is supported; a second state that *draws differently* is what would split it. **Sacred.** |
 | `scene/` | **2 scene** | resolved drawing description — paths, transforms, fills, gradients, filters. Backend-neutral. |
 | `svg/` | **2 scene** | scene → SVG string (the byte-parity surface) |
 | `raster/` | **3 raster** | deterministic software rasterizer — scanline coverage AA, path flattening, 3-box blur, blend modes, gradients, filter-region clipping |
@@ -179,11 +188,13 @@ v1.11.0's components differ from v1.11.1's. Verified by blob SHA.)*
 
 **States 16→17 and within 17, cleared concerns:** `v2.0.0` vs `v2.0.1`
 `index.tsx` is byte-identical (only `types.ts` moved, which has no runtime
-effect); `2.0.4` adds `size = '40px'` as a *default*. That last one is **consumer
-policy under this project's boundary rule**, not part of the version state — the
-caller always supplies size here. Valid **as long as `size` stays consumer-owned**;
-if the package ever renders at an implicit default, 2.0.3/2.0.4 becomes its own
-state.
+effect); `2.0.4` **changes** the default `size` from `40` to `'40px'`. Not adds —
+`avatar.js` already destructures `size = 40` at v1.6.1 (corrected in #37; the
+earlier wording implied there was no default before 2.0.4). What moves is the
+value and its unit. Either way it is **consumer policy under this project's
+boundary rule**, not part of the version state — the caller always supplies size
+here. Valid **as long as `size` stays consumer-owned**; if the package ever
+renders at an implicit default, 2.0.3/2.0.4 becomes its own state.
 
 **States 7–9 are the trap.** v1.5.6/v1.5.7/v1.5.8 changed all six components and
 v1.6.0 restored v1.5.3's blobs exactly — upstream reverted them. Port them as
@@ -323,12 +334,24 @@ when a completeness pass surfaces another.
 | 20 | **The two backends disagree on a malformed colour** | the palette is consumer policy and upstream validates none of it, so `#F00`, `red`, `rgb(…)`, `#RRGGBBAA` all reach the port. The SVG emitter passes them through and a browser draws them; the rasterizer parses `#RRGGBB` only | letting the rasterizer guess, or letting it silently skip | the same input yields a correct SVG and a blank raster — the two-backend divergence the scene seam exists to prevent. Today the rasterizer returns `null` and draws nothing; a sign is rejected outright, since `int.tryParse('+12345', radix: 16)` succeeds and would turn punctuation into a plausible colour |
 | 21 | SVG `rx` / `ry` clamping | clamped **independently** — `rx` to width/2 and `ry` to height/2 — so a non-square rect gets **elliptical** corners | one circular radius | wrong corner shape. Inert while every mask is square (all six variants); `beam`'s eye rects are `1.5 × 2` with `rx=1`, which wants rx 0.75 / ry 1 — an ellipse. Valid **as long as only square masks reach the rasterizer** |
 | 22 | `mask-type` | `pixel` declares `mask-type="alpha"`; **the other five declare nothing**, which in SVG means a *luminance* mask | treating every mask as alpha | wrong everywhere the mask shape is not white. Inert today — all six fill the mask `#FFFFFF`, where luminance and alpha both come to 1 — and the rasterizer now **throws** rather than assuming, so the day one is not white it fails loudly |
-| 24 | **Abutting shapes vs stacked shapes** | two half-covering rects meeting inside one pixel should fill it — an exact rasteriser gives alpha 255 | source-over compositing, which gives **192** | source-over is right for shapes *stacked* on each other and wrong for shapes *abutting* each other. Inert for `pixel` — its tile edges are integer-aligned and `_checkViewBox` refuses any target that is not 1:1 — but `marble`, `bauhaus` and `beam` both stack and abut. Valid **as long as every drawn edge falls on a pixel boundary** |
-| 23 | Rounding when shapes overlap | — | rounding each channel to an int per blend | drift. `pixel`'s tiles never overlap so it is inert there, but marble, bauhaus and beam stack two to four shapes. Channels are accumulated in floating point and rounded once, on write |
+| 24 | **Abutting shapes vs stacked shapes** | two half-covering rects meeting inside one pixel should fill it — an exact rasteriser gives alpha 255 | source-over compositing, which gives **192** | source-over is right for shapes *stacked* on each other and wrong for shapes *abutting* each other. Inert for `pixel` — its tile edges are integer-aligned and `_checkViewBox` refuses any target that is not 1:1 — and inert for `ring`, which abuts along `y=45` in four places but at the enforced 90×90 target that is a pixel boundary. Live for `marble`, `bauhaus` and `beam`, which both stack and abut. Valid **as long as every drawn edge falls on a pixel boundary** |
+| 23 | Rounding when shapes overlap | a browser draws each shape of a plain display list onto an **8-bit** surface, so it rounds once per shape too | assuming either model without measuring | **corrected in #37 — the row used to claim the opposite of what the code does.** `blend()` reads back the byte the previous shape wrote, so k stacked shapes round k times, and that is what matches the reference. Measured drift against a single float accumulation, over 1.2M stacks of 2–9 opaque shapes: **2/255 premultiplied** (16/255 straight at negligible alpha — #29, not a real difference). `pixel`'s tiles never overlap; `ring` stacks nine; marble, bauhaus and beam stack two to four. Valid **as long as no group opacity or filter introduces an offscreen layer** — `marble` has one, and the seam throws on it |
 | 18 | **Attribute order is per call site, not per element** | React emits props in the order the JSX author wrote them, so one element takes several orders: `circle` is `cx cy r fill` in `ring` and `cx cy fill r transform` in `bauhaus`; `rect` and `path` each take five or more | giving the emitter a canonical order per element | every render whose order differs — silently, since a browser does not care about attribute order. The scene node therefore carries **ordered** attributes and the rasterizer reads them by name |
 | 19 | React's serialisation details | no self-closing tags (`<rect …></rect>`, never `<rect/>` — zero `/>` in 480 renders); no whitespace between elements; `'` escapes to **`&#x27;`** not `&apos;`; tabs, newlines and non-ASCII pass through; element names keep camel case (`linearGradient`) while some attributes hyphenate (`mask-type`, `stop-color`) and others do not (`maskUnits`, `stdDeviation`) | any of the plausible alternatives | byte-level layer-2 failure that renders identically on screen. The hyphenation split is **a list, not a rule** — callers supply the emitted spelling |
 | 17 | **`pixel`'s first tile is never filled** | `avatar-pixel.js` builds its 64 colours with `getRandomColor(numFromName % i, …)` from `i == 0`. `hash % 0` is `NaN`, so `colors[NaN]` is `undefined` and the first `<rect>` ships **with no `fill` attribute at all** | filling tile 0 from the palette | wrong on **100% of pixel renders**, every name, every palette — including the defaults. Distinct from #8: that is a degenerate *palette*, this is a degenerate *loop index*, and it needs no unusual input to fire. Committed fixture `svg.json` → `pixel\|upstream-default\|upstream-default` shows it |
 | 16 | `<title>` | `1.6.1` emits `<title>{name}</title>` **unconditionally and has no `title` prop at all** — there is no way to switch it off; the prop arrives in `1.7.0`, defaulting off | giving `v1_6_1` a `title` parameter, or implementing the prop-gated form everywhere | `v1_6_1`'s SVG bytes are wrong while its pixels are right — a layer-2 failure a pixel test cannot see |
+| 25 | **SVG arc flags are single characters and may be packed against the number after them** | `ring` writes `a32 32 0 10-64 0`, where `10` is *two flags* — large-arc 1, sweep 0 — and `-64` is the endpoint | a tokeniser that scans numbers uniformly reads ten, then takes `-64` as the sweep flag | a plausible wrong picture that throws nothing. Upstream writes this form in four of `ring`'s six arcs, so it is not hypothetical. Pinned by `raster_path_test.dart` — two `d` strings differing in one byte must come out mirrored |
+| 26 | **The drawing space is per variant, and is not the display size** | `ring`'s viewBox is **90**; the other five are 80. `size` still only reaches `width`/`height` | assuming one canvas constant for the package | the rasterizer refuses a target that does not match the viewBox, so this surfaces as a throw rather than a squashed avatar — but the *goldens* have to be generated at 90, and a per-package `size` in the golden tool silently produces the wrong reference |
+| 27 | **Chrome's own curves are inset from true circular geometry**, by an amount that depends on the radius | measured directly: `<circle r=20>` loses 1.69 px² of area (0.0135 px inward), `r=23` loses 11.95 (0.083 px), `r=40` loses 32.03 (0.127 px); an `<path>` half-disc of r=38 loses 17.32 (0.145 px). An integer-edged `<rect>` is **exact** and a fractional one is within 0.003 px | treating a Chrome render as ground truth for curve geometry | the recorded ≤1/255 calibration bar is **unmeetable for any curved edge** — not because our coverage is wrong but because Chrome's is. Ours reproduces the same shapes to 0.02 px². **Pending the user's ruling** — see Step 4 |
+| 28 | **F.6.5's centre square root goes negative when a chord rounds past the diameter** | for an *angled* chord equal to the diameter, `lambda` can compute as exactly `1.0` — so F.6.6's correction does not fire — while `(rx²ry² − …)/…` lands at `-1.3e-16`. Measured at `r = 1/7` | `sqrt` of the raw value | every vertex becomes `NaN` and the render dies in `ceil()`. Inert for `ring`, whose chords are all **horizontal** (the radicand is then exactly zero every time) — which is why a mutation removing the clamp survived the whole suite until a case was searched for. Valid **as long as arcs stay axis-aligned**; `beam` and `marble` are the ones to re-check |
+| 29 | **Straight-alpha RGB is meaningless where alpha is small** | both our buffer and a PNG store *straight* alpha, so a pixel we cover 3/255 carries the full undiluted colour while Chrome's uncovered pixel carries zero | comparing the two backends channel by channel as stored | a 3/255 disagreement reads as a delta of **240** and a calibration run fails on a difference nobody could see. Compare **premultiplied** — `tool/calibrate/compare.dart` does. The same trap bites any comparison of our own arithmetic against itself: row #23's drift measures 16 straight and 2 premultiplied |
+| 30 | **A container's attributes change the picture as much as a shape's** | `beam` wraps its whole face in `<g transform="translate(4.5 4.5) rotate(-9 18 18)">`; `<svg>`, `<g>`, `<defs>` and `<mask>` all carry attributes | validating only the elements you know how to *draw*, and walking through containers unchecked | the face renders 4.5 units off and unrotated with **nothing thrown** — the exact failure `UnsupportedSceneError` exists to prevent, one level up from where it was being checked. Found by the #37 completeness pass; every element on the walk now carries an allow-list |
+| 31 | **An unreadable `fill` is not the same as an absent one** | upstream omits `fill` to mean "no paint" (#17), and writes `fill="url(#…)"` to mean a gradient | letting both fall through to "the colour did not parse, so draw nothing" | **every `sunset` render rasterised to a blank square**, silently, and a golden made from one would have frozen the blank as correct. A `url(...)` fill now throws. Distinct from #20, which is the *caller's* palette and keeps its recorded behaviour — this one is upstream's own output |
+| 32 | **Content outside the masked group is drawn by a browser, not dropped** | `<g mask>` masks its children; a sibling shape renders **unmasked** | silently collecting only what sits under the mask group | a picture the reference does not produce, with no error. Inert across all six variants — every drawn element is inside `<g mask="url(#…)">` — but the seam now throws rather than dropping. **This inverted an assertion #36 had pinned the other way**; both readings agreed on every real scene and only one agreed with SVG |
+| 33 | **A mask applies to the composited group, not to each shape** | SVG composites a `<g mask="…">`'s children, *then* scales the result's alpha by the mask | folding the mask into every shape's own coverage | the mask is applied once per shape. Two opaque shapes stacked on a pixel a mask half-covers come out at **192** where one of them gives 128 — 64 levels of alpha against a bar of one. Inert for `pixel` and `ring`, whose mask-edge pixels are reached by at most one shape; **live for `marble`, `bauhaus` and `beam`**, which each lay a background rect under a shape crossing the mask edge. Fixed in #37; the fix moved 8 pixels of `pixel`'s goldens, all fully transparent, all straight-RGB-only (#29) |
+| 34 | **`z` ends a subpath; what follows starts a new one** | `M0 0h10v10H0zh10v10` is two subpaths from the same origin | treating `z` as only a "return to start" and leaving the contour open | the two weld into one polygon — measured 75 units where SVG gives 100. Inert at v1.6.1: across the 18 distinct `d` strings in all 600 renders, `z` is always the **last** command, so no fixture could catch it. Valid **as long as that stays true** — a multi-subpath `d` in a later upstream version makes it live |
+| 35 | **A `<mask>` carries a clip region, units, and an id that is referenced** | `maskUnits` decides whether `x/y/width/height` are user units or bbox fractions; the region clips the mask shape; `mask="url(#id)"` has to name a mask that exists | reading only the child shape | three silent wrong pictures: a region that cuts its own shape renders uncut, `objectBoundingBox` reinterprets every number, and a dangling reference renders masked where a browser renders unmasked (SVG 2) or not at all (SVG 1.1). All inert at v1.6.1 — one mask, `userSpaceOnUse`, region equal to the shape — and all three now throw |
+| 36 | **The `largeArc` flag is dead-valued across the entire corpus** | every arc upstream writes has a chord equal to its (corrected) diameter, so F.6.5's centre offset is exactly zero and `sign = largeArc != sweep` multiplies a zero | assuming a passing suite exercises the endpoint→centre conversion | the hardest branch of the arc code is unreachable from any real input — two mutants on the sign rule survived the whole suite. Not a defect and not fixable by upstream data; the case is **constructed** in `raster_path_test.dart` (chord 20 on radius 15, minor segment vs major), with Chrome confirming which of the four shapes each flag pair draws |
 
 ### Reachable-variant matrix (from `avatar.js` dispatch, not the file tree)
 
@@ -399,6 +422,24 @@ that cannot be seen from here. Re-read them at first publish, not before.
 | **1 data — utilities** | `tool/parity` imports `utilities.js` **straight from the pinned reference tree** and calls the real functions; the values become `test/fixtures/<version>/utilities.json` | **Exact. No tolerance.** |
 | **1 data — per-variant values** | **Not directly observable.** No component exports its generator — `generateData` / `generateColors` are module-private in all six — so per-variant values are proved *transitively* through layer 2, where every value that reaches the drawing appears as an attribute | via layer 2 |
 | **2 scene** | our emitted SVG vs `test/fixtures/<version>/svg.json`, rendered from the **real npm package** through `react-dom/server` | **Byte-identical**, excluding generated ids (`useId`, `prefix__…`), which are internal references. **`<title>` is not excluded** — see hidden-state #16 |
+
+**What the normalisation excludes is excluded on *both* sides.** `id="…"`,
+`url(#…)` and `mask="…"` are erased from our output and from the fixture, so
+"byte-identical" says nothing about any of them — mutating `mask__ring` to
+`mask__pixel`, or a group's reference to a dangling one, left the whole suite
+green. That exclusion is right for the ids `useId` generates from 1.8.0, and
+buys nothing at 1.6.1 where every id is a **literal in the JSX**. Since #37 the
+harness also records them *unnormalised* (`maskIdentifiers`), and the parity
+tests assert the literals directly. A normalisation is a hole in the gate; it
+needs its own assertion beside it.
+
+**Every consumer-facing prop needs its own renders, or it is inference.** The
+matrix runs at one `size` and one `square`, which is right — but a prop the
+matrix never varies is a prop nobody has compared to upstream. `size` has
+carried a `sizePassthrough` section since #33 for exactly this reason; `square`
+did not until **#37**, and until then `pixel` had shipped with `square`
+asserted only against itself *and a golden committed for it*. `svg.json` now
+carries `squareRenders` — six variants × two names × five palettes.
 | **3 raster — regression** | our rasterizer vs **golden images committed to this repo** (raw RGBA under `test/goldens/`, not PNG — no encoder in the loop, so a decoder change cannot move a golden) | **0 diff, no exceptions.** Runs every `flutter test` |
 | **3 raster — parity calibration** | our rasterizer vs a **real Chrome render** | interior/background **0**; antialiased edge pixels **≤1/255**. Run **manually** when the rasterizer changes, not per commit |
 | **widget** | widget test asserting the produced `ui.Image` bytes, observed at the screen | as layer 3 |
@@ -408,6 +449,35 @@ fails when *Chrome* updates while our code is untouched — and theflow forbids
 lowering a threshold to clear a red build, so it would deadlock. The committed
 golden is fully deterministic and stays 0-diff forever; the Chrome comparison
 proves upstream parity and is run deliberately.
+
+**The calibration harness is `tool/calibrate/`.** `compare.dart` emits the SVG
+our own emitter produces, `render.mjs` drives headless Chrome over it and
+decodes the PNG, then `compare.dart` reports the diff. Feeding Chrome *our*
+document is deliberate: a harness that rebuilt the SVG independently could pass
+while the two backends disagreed about what to draw.
+
+**⚠ The ≤1/255 edge bar has never been met, and #37 is the first run of it.**
+Recorded in #33 and executed for the first time in #37 — including on `pixel`,
+which was merged in #36 without it. Measured, comparing premultiplied
+(hidden-state #29):
+
+| Case | Interior mismatches | Worst edge delta |
+|---|---|---|
+| `pixel-clara-default` | **0** | 71/255 |
+| `ring-clara-default` | **0** | 66/255 |
+| `ring-alice-pair` | **0** | 101/255 |
+| `ring-clara-square` | **0** | 66/255 |
+
+**Interior 0 is the part that matters and it holds**: every solid region matches
+Chrome exactly, which is what proves the arc sweep directions, the paint order
+and the nine-slot colour map. The edge deltas are all on curves, all in one
+direction, and hidden-state #27 measures why: **Chrome's circles are up to
+0.13 px small and ours are not**. Matching the bar would mean reproducing a
+browser's Bézier approximation error.
+
+**This is a decision for the user, not the agent** — it changes a recorded bar,
+and theflow forbids moving a threshold to clear a red run. Until it is ruled on,
+the bar stands as written and this note is the honest record that it fails.
 
 **Traps:**
 
@@ -426,7 +496,14 @@ proves upstream parity and is run deliberately.
   fails wholesale, suspect the check.
 - **Antialiasing coverage cannot be self-checked.** Comparing our rasterizer to
   our own supersampled reference measures our own arithmetic twice. Only the
-  Chrome render is an outside opinion.
+  Chrome render is an outside opinion — **but it is not the only one, and for
+  curves it is the weaker one.** The area of a disc is πr² whoever computes it,
+  so summing coverage over a flattened circle is an outside opinion that needs
+  no browser and no tolerance negotiation. `raster_path_test.dart` uses it, and
+  it is what established that Chrome is the less accurate of the two (#27).
+- **A straight-alpha comparison misreads itself.** See hidden-state #29: the
+  same pixel differs by 3 or by 240 depending on which representation you
+  subtract in. Premultiply first.
 - **A green data-layer test says nothing about pixels**, and vice versa. Each
   seam needs its own fixture; passing layer 1 while layer 2 drifts produces a
   correct-numbers, wrong-picture avatar.
@@ -518,6 +595,9 @@ command's, so `flutter test | tail -1 && commit` always commits.
 pinned to the tag being ported**. It generates the layer-1 JSON fixtures and the
 layer-2 SVG strings into `test/fixtures/<state>/`.
 
+`tool/calibrate/` is the layer-3 equivalent — it drives real Chrome and reports
+the pixel diff. Same shape, same rule: a tool, run deliberately. See Step 4.
+
 The harness is a **tool, not a gate**: `flutter test` reads the committed
 fixtures and never runs Node. That keeps the gate hermetic (no network, no npm
 state) and makes a parity change appear as a **reviewable `git diff` of the
@@ -593,7 +673,22 @@ implied.
 
 ## War-story index
 
-Empty — this repo has no incidents yet. Per-incident evidence goes in
-[`lessons.md`](lessons.md), indexed by step. The hidden-state list above is
-*pre-incident* enumeration, not evidence; move a row's story into `lessons.md`
-the first time it actually catches a defect, and cite the issue number.
+Per-incident evidence lives in [`lessons.md`](lessons.md), indexed by step. The
+hidden-state list above is *pre-incident* enumeration, not evidence; move a
+row's story into `lessons.md` the first time it actually catches a defect, and
+cite the issue number.
+
+Twelve entries as of #37. The ones that have caught something more than once:
+
+| Rule | Caught in |
+|---|---|
+| A file existing is not the feature existing | #1 → closed #8 |
+| A tripwire that cannot trip reads as coverage | #34 |
+| A mutation surviving means one of two opposite things | #34, #37 |
+| A substitution that matches nothing reads as a surviving mutation | #34, #36, #37 |
+| A byte gate catches what a picture never shows | #36 |
+| A golden that agrees with itself proves nothing | #36 |
+| A bar can be recorded, believed, and never run | #33 → #37 |
+| A suite can be green for a mechanism it never runs | #36 |
+| The hidden-state list is a hypothesis, and gets things wrong | #34 |
+| "0 warnings" shipped a 44 MB build artifact | #1 |

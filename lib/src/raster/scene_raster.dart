@@ -4,38 +4,55 @@
 /// which is what lets the SVG emitter depend on attribute *order* without that
 /// ordering leaking down here. This file is where that claim is cashed.
 ///
-/// It handles what `pixel` needs — a rounded-rect mask over axis-aligned
-/// rectangles. Curves, strokes, gradients and filters arrive with the variants
-/// that use them, and **everything else throws**. That is the point of
-/// [UnsupportedSceneError]: an unhandled `<path>` rendering as blank, or a
-/// `transform` being ignored so a rect lands square and unrotated, is a
-/// plausible *wrong picture* — and a golden would freeze it. A loud failure at
-/// the seam is the only thing that stops the next variant from shipping a
-/// silently incorrect image.
+/// It handles what `pixel` and `ring` need — a rounded-rect mask over
+/// axis-aligned rectangles, filled paths and circles. Strokes, gradients and
+/// filters arrive with the variants that use them, and **everything else
+/// throws**. That is the point of [UnsupportedSceneError]: an unhandled
+/// `<line>` rendering as blank, or a `transform` being ignored so a rect lands
+/// square and unrotated, is a plausible *wrong picture* — and a golden would
+/// freeze it. A loud failure at the seam is the only thing that stops the next
+/// variant from shipping a silently incorrect image.
 library;
 
 import '../scene/scene.dart';
+import 'path.dart';
 import 'raster.dart';
 
-/// Thrown when a scene needs a capability this rasterizer does not have yet.
-class UnsupportedSceneError extends Error {
-  UnsupportedSceneError(this.message);
-  final String message;
+export 'raster.dart' show UnsupportedSceneError;
 
-  @override
-  String toString() => 'UnsupportedSceneError: $message';
-}
+/// The attributes each drawn element understands.
+///
+/// Anything else changes the picture, so meeting one is a failure rather than
+/// something to skip. `stroke`, `transform` and `fill-rule` are absent from
+/// every list on purpose — they are capabilities, not decorations.
+const _drawableAttributes = <SvgElement, Set<String>>{
+  SvgElement.rect: {'x', 'y', 'width', 'height', 'fill'},
+  SvgElement.path: {'d', 'fill'},
+  SvgElement.circle: {'cx', 'cy', 'r', 'fill'},
+};
 
-/// Attributes the rect path understands. Anything else on a drawn rect changes
-/// the picture, so meeting one is a failure rather than something to skip.
-const _supportedRectAttributes = {'x', 'y', 'width', 'height', 'fill'};
+/// The attributes each **container** understands.
+///
+/// A container carries no geometry of its own, which is exactly why it was
+/// tempting to walk through it unchecked — and why doing so was wrong. `beam`
+/// wraps its whole face in `<g transform="translate(4.5 4.5) rotate(-9 18 18)">`
+/// and an unchecked container renders that face 4.5 units off and unrotated,
+/// with nothing thrown. Same failure this file's doc opens with, one level up.
+const _containerAttributes = <SvgElement, Set<String>>{
+  SvgElement.svg: {'viewBox', 'fill', 'role', 'xmlns', 'width', 'height'},
+  SvgElement.g: {'mask'},
+  SvgElement.title: {},
+};
 
-/// Elements that carry no geometry and can be walked through or ignored.
-const _structuralElements = {
-  SvgElement.svg,
-  SvgElement.g,
-  SvgElement.title,
-  SvgElement.defs,
+/// The `<mask>` element and its shape, which [_readMask] reads instead.
+const _maskAttributes = {
+  'id',
+  'mask-type',
+  'maskUnits',
+  'x',
+  'y',
+  'width',
+  'height',
 };
 
 /// Rasterises [root] at [width] × [height] device pixels.
@@ -50,14 +67,23 @@ RasterImage rasterizeScene(
 }) {
   _checkViewBox(root, width, height);
 
-  final mask = _readMask(root);
-  final rects = <RasterRect>[];
-  _collectRects(root, rects, insideMask: false);
+  final maskNode = _firstOfKind(root, SvgElement.mask);
+  if (maskNode == null) {
+    throw UnsupportedSceneError('the scene has no <mask>');
+  }
+  final mask = _readMask(maskNode);
+  final shapes = <RasterShape>[];
+  _collectShapes(
+    root,
+    shapes,
+    insideMask: false,
+    maskId: maskNode.attribute('id') as String?,
+  );
 
-  return rasterizeMaskedRects(
+  return rasterizeMaskedShapes(
     width: width,
     height: height,
-    rects: rects,
+    shapes: shapes,
     mask: mask,
   );
 }
@@ -86,19 +112,31 @@ void _checkViewBox(SvgNode root, int width, int height) {
 ///
 /// Everything is looked up by name — `x`, `y`, `width`, `height`, `rx` — so a
 /// call site that writes them in a different order rasterises identically.
-RoundedRectMask _readMask(SvgNode root) {
-  final maskNode = _firstOfKind(root, SvgElement.mask);
-  if (maskNode == null) {
-    throw UnsupportedSceneError('the scene has no <mask>');
-  }
-
+RoundedRectMask _readMask(SvgNode maskNode) {
   // `pixel` declares mask-type="alpha"; the other five declare nothing, which
   // in SVG means a *luminance* mask. Every mask shape in the six is filled
   // #FFFFFF, where luminance and alpha both come to 1 — so the distinction is
   // inert today. It is checked rather than assumed: see hidden-state #22.
+  for (final a in maskNode.attributes) {
+    if (!_maskAttributes.contains(a.name)) {
+      throw UnsupportedSceneError(
+        '<mask ${a.name}="…"> is not implemented and would change the picture '
+        'if ignored',
+      );
+    }
+  }
+
   final maskType = maskNode.attribute('mask-type');
   if (maskType != null && maskType != 'alpha') {
     throw UnsupportedSceneError('mask-type "$maskType" is not implemented');
+  }
+
+  // `maskUnits` decides whether the region numbers below are user units or
+  // fractions of the bounding box. All six declare `userSpaceOnUse`, and the
+  // other value would silently reinterpret every one of them.
+  final maskUnits = maskNode.attribute('maskUnits');
+  if (maskUnits != null && maskUnits != 'userSpaceOnUse') {
+    throw UnsupportedSceneError('maskUnits "$maskUnits" is not implemented');
   }
 
   final shapes = maskNode.children
@@ -120,7 +158,7 @@ RoundedRectMask _readMask(SvgNode root) {
     );
   }
 
-  return RoundedRectMask(
+  final shape = RoundedRectMask(
     x: _num(rect.attribute('x')) ?? 0,
     y: _num(rect.attribute('y')) ?? 0,
     width: _num(rect.attribute('width'))!,
@@ -129,49 +167,168 @@ RoundedRectMask _readMask(SvgNode root) {
     // expresses `square: true` by omitting the attribute entirely.
     rx: _num(rect.attribute('rx')) ?? 0,
   );
-}
 
-/// Collects the rects that are actually drawn — the ones under the masked
-/// group, not the one that defines the mask.
-void _collectRects(
-  SvgNode node,
-  List<RasterRect> out, {
-  required bool insideMask,
-}) {
-  if (node.element == SvgElement.mask) return; // the mask shape, not content
-
-  if (insideMask) {
-    if (node.element != SvgElement.rect &&
-        !_structuralElements.contains(node.element)) {
+  // `<mask>` carries its own clip region, and anything the shape puts outside
+  // it is cut. Reading the shape and ignoring the region works only while the
+  // two agree, which they do in all six — so it is checked rather than assumed.
+  final regionX = _num(maskNode.attribute('x')) ?? 0;
+  final regionY = _num(maskNode.attribute('y')) ?? 0;
+  final regionW = _num(maskNode.attribute('width'));
+  final regionH = _num(maskNode.attribute('height'));
+  if (regionW != null && regionH != null) {
+    final clips =
+        regionX > shape.x ||
+        regionY > shape.y ||
+        regionX + regionW < shape.x + shape.width ||
+        regionY + regionH < shape.y + shape.height;
+    if (clips) {
       throw UnsupportedSceneError(
-        '<${node.element.tag}> is not implemented; only <rect> is drawn so far',
+        'the <mask> region ($regionX $regionY $regionW $regionH) cuts its own '
+        'shape; clipping the mask is not implemented',
       );
-    }
-    if (node.element == SvgElement.rect) {
-      for (final a in node.attributes) {
-        if (!_supportedRectAttributes.contains(a.name)) {
-          throw UnsupportedSceneError(
-            '<rect ${a.name}="…"> is not implemented and would change the '
-            'picture if ignored',
-          );
-        }
-      }
-      out.add(
-        RasterRect(
-          _num(node.attribute('x')) ?? 0,
-          _num(node.attribute('y')) ?? 0,
-          _num(node.attribute('width'))!,
-          _num(node.attribute('height'))!,
-          node.attribute('fill') as String?,
-        ),
-      );
-      return;
     }
   }
 
-  final within = insideMask || node.attribute('mask') != null;
+  return shape;
+}
+
+/// Collects the shapes that are actually drawn — the ones under the masked
+/// group, not the one that defines the mask.
+///
+/// Shapes come out in document order, which is paint order.
+///
+/// **Every element on the walk is checked, containers included.** An element
+/// this rasterizer cannot fully honour is a failure wherever it sits: the point
+/// is not that shapes are hard and containers are easy, it is that anything
+/// ignored becomes a picture nobody was asked about.
+void _collectShapes(
+  SvgNode node,
+  List<RasterShape> out, {
+  required bool insideMask,
+  required String? maskId,
+}) {
+  // `<mask>` is read by _readMask and `<defs>` holds paint servers and filters
+  // that are referenced, never drawn in place. Both are skipped by definition,
+  // and both are validated where they are *used* — an unsupported `fill` or
+  // `filter` on a drawn element throws below.
+  if (node.element == SvgElement.mask || node.element == SvgElement.defs) {
+    return;
+  }
+
+  final drawable = _drawableAttributes[node.element];
+  final container = _containerAttributes[node.element];
+  if (drawable == null && container == null) {
+    throw UnsupportedSceneError(
+      '<${node.element.tag}> is not implemented; only '
+      '${_drawableAttributes.keys.map((e) => "<${e.tag}>").join(", ")} '
+      'are drawn so far',
+    );
+  }
+
+  for (final a in node.attributes) {
+    if (!(drawable ?? container!).contains(a.name)) {
+      throw UnsupportedSceneError(
+        '<${node.element.tag} ${a.name}="…"> is not implemented and would '
+        'change the picture if ignored',
+      );
+    }
+  }
+
+  if (drawable != null) {
+    if (!insideMask) {
+      // Every drawn element in the six sits under `<g mask="url(#…)">`. One
+      // that does not would be dropped here without a word, which is the same
+      // silent-wrong-picture failure as ignoring an attribute.
+      throw UnsupportedSceneError(
+        '<${node.element.tag}> is drawn outside a masked group; only masked '
+        'content is rasterised',
+      );
+    }
+    out.add(_shapeOf(node));
+    return;
+  }
+
+  // A `mask="url(#…)"` that names something else is not a masked group. SVG 1.1
+  // says a broken reference renders nothing; SVG 2 says render unmasked. Either
+  // way, treating it as *our* mask draws a picture no browser produces — so the
+  // reference is matched rather than merely noticed.
+  final reference = node.attribute('mask') as String?;
+  if (reference != null && reference != 'url(#$maskId)') {
+    throw UnsupportedSceneError(
+      '<${node.element.tag} mask="$reference"> does not reference the scene\'s '
+      'only mask, "$maskId"',
+    );
+  }
+
+  final within = insideMask || reference != null;
   for (final child in node.children) {
-    _collectRects(child, out, insideMask: within);
+    _collectShapes(child, out, insideMask: within, maskId: maskId);
+  }
+}
+
+/// Turns one drawn element into a shape, reading its attributes **by name**.
+RasterShape _shapeOf(SvgNode node) {
+  final fill = node.attribute('fill') as String?;
+
+  // A `url(#…)` fill is a paint server — a gradient or a pattern — and this
+  // rasterizer draws neither. Letting it fall through to `parseHexColour`
+  // returning null would treat it as "upstream omitted the fill" and draw
+  // nothing: `sunset` fills every shape that way, so its whole avatar would
+  // rasterise to a transparent square and a golden would freeze the blank.
+  //
+  // Distinct from an unreadable *colour* (`red`, `#F00`), which arrives from
+  // the caller's palette and keeps its recorded behaviour — hidden-state #20.
+  // This one is upstream's own output, not the consumer's.
+  if (fill != null && fill.startsWith('url(')) {
+    throw UnsupportedSceneError(
+      '<${node.element.tag} fill="$fill"> references a paint server; '
+      'gradients and patterns are not implemented',
+    );
+  }
+
+  /// A geometry attribute the element cannot be drawn without.
+  ///
+  /// Missing means the scene is malformed, and a malformed scene has to fail
+  /// the same loud way an unimplemented one does. A `!` here would surface as
+  /// a null-check `_TypeError` — a crash that says nothing about which element
+  /// was wrong, in a seam whose entire purpose is to say exactly that.
+  double required(String name) {
+    final value = _num(node.attribute(name));
+    if (value == null) {
+      throw UnsupportedSceneError(
+        '<${node.element.tag}> has no readable `$name`',
+      );
+    }
+    return value;
+  }
+
+  switch (node.element) {
+    case SvgElement.rect:
+      return RasterRect(
+        _num(node.attribute('x')) ?? 0,
+        _num(node.attribute('y')) ?? 0,
+        required('width'),
+        required('height'),
+        fill,
+      );
+    case SvgElement.path:
+      final d = node.attribute('d');
+      if (d is! String) {
+        throw UnsupportedSceneError('<path> has no readable `d`');
+      }
+      return RasterPolygon(parsePath(d), fill);
+    case SvgElement.circle:
+      return RasterPolygon([
+        flattenCircle(
+          _num(node.attribute('cx')) ?? 0,
+          _num(node.attribute('cy')) ?? 0,
+          required('r'),
+        ),
+      ], fill);
+    default:
+      throw UnsupportedSceneError(
+        '<${node.element.tag}> has no shape conversion',
+      );
   }
 }
 

@@ -206,6 +206,62 @@ async function dumpSvg(pkg, corpus) {
     }
   }
 
+  /**
+   * `square: true` — the prop that *removes* the mask's corner radius.
+   *
+   * The full matrix runs at `square: false` only, so until #37 nothing in this
+   * fixture had ever seen the other value: the port's `square` handling was
+   * asserted for self-consistency ("rx is absent when true") and a golden was
+   * committed for it, but neither had been compared to upstream. That is the
+   * "golden that agrees with itself" trap with an extra step.
+   *
+   * Two names and every palette per variant, rather than the full matrix.
+   * `square` reaches exactly one attribute and cannot interact with the hash —
+   * which is the claim these renders test rather than assume, since a second
+   * name and the degenerate palettes would expose it if it did.
+   */
+  const squareNames = ['upstream-default', 'emoji-zwj'];
+  const squareRenders = {};
+  for (const variant of VARIANTS) {
+    for (const name of corpus.names.filter((n) => squareNames.includes(n.id))) {
+      for (const palette of corpus.palettes) {
+        squareRenders[`${variant}|${name.id}|${palette.id}`] = render({
+          variant,
+          name: name.value,
+          colors: palette.value,
+          size: MATRIX_SIZE,
+          square: true,
+        });
+      }
+    }
+  }
+
+  /**
+   * The **raw** id each variant gives its mask, and the raw reference to it.
+   *
+   * `normalise` erases both, on our side and the fixture's — so "byte for byte"
+   * silently excluded them, and mutating `mask__ring` to `mask__pixel` or the
+   * group's `url(#…)` to a dangling reference left the whole suite green. That
+   * exclusion is right for the *generated* ids of 1.8.0 onward, and buys
+   * nothing at 1.6.1 where every id is a literal in the JSX. Recorded
+   * unnormalised so the literals can be asserted.
+   */
+  const maskIdentifiers = {};
+  for (const variant of VARIANTS) {
+    const raw = renderToStaticMarkup(
+      React.createElement(Avatar, {
+        variant,
+        name: corpus.names[0].value,
+        colors: corpus.palettes[0].value,
+        size: MATRIX_SIZE,
+      }),
+    );
+    maskIdentifiers[variant] = {
+      ids: [...raw.matchAll(/<mask id="([^"]*)"/g)].map((m) => m[1]),
+      references: [...raw.matchAll(/ mask="url\(#([^)]*)\)"/g)].map((m) => m[1]),
+    };
+  }
+
   const sizePassthrough = {};
   for (const size of corpus.sizes) {
     sizePassthrough[`${size}`] = render({
@@ -216,7 +272,13 @@ async function dumpSvg(pkg, corpus) {
     });
   }
 
-  return { matrixSize: MATRIX_SIZE, renders, sizePassthrough };
+  return {
+    matrixSize: MATRIX_SIZE,
+    renders,
+    squareRenders,
+    maskIdentifiers,
+    sizePassthrough,
+  };
 }
 
 const version = process.argv[2];
