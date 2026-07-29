@@ -163,6 +163,56 @@ PathContour flattenCircle(
 PathContour rectangleContour(double x, double y, double width, double height) =>
     PathContour([x, y, x + width, y, x + width, y + height, x, y + height]);
 
+/// The outline of a stroked straight segment, with **butt** caps.
+///
+/// SVG 1.1 §11.4 gives `stroke-linecap` an initial value of `butt`, and no
+/// element in the six variants declares another one — `beam`'s stroked path
+/// does declare `stroke-linecap`, and it arrives with `beam`. Butt caps mean
+/// the stroke stops exactly at the endpoints, so the outline is the rectangle
+/// swept by a segment of width [width] centred on the line: no extension, no
+/// round end.
+///
+/// Returns `null` where the specification says nothing is stroked, rather than
+/// a degenerate contour:
+///
+/// * **a zero-length segment** — §11.4: "Any zero length subpath shall not be
+///   stroked if the `stroke-linecap` property has a value of `butt`". Guarding
+///   it is not only spec compliance: normalising a zero vector would put `NaN`
+///   in every vertex, and `NaN` propagates silently into the scanline
+///   integrator.
+/// * **a zero or negative width** — §11.4: "A zero value causes no stroke to be
+///   painted."
+PathContour? strokeSegmentContour(
+  double x1,
+  double y1,
+  double x2,
+  double y2,
+  double width,
+) {
+  if (width <= 0) return null;
+  final dx = x2 - x1;
+  final dy = y2 - y1;
+  final length = math.sqrt(dx * dx + dy * dy);
+  if (length == 0) return null;
+
+  // The offset to each side: the unit normal times half the stroke width.
+  //
+  // **Which** side is which does not matter, and that is provable rather than
+  // lucky: negating the normal yields the same four points in reverse order, so
+  // the polygon is identical and only its winding flips — and the nonzero rule
+  // fills either way. A mutation flipping it survives the suite, predicted
+  // before it was run. What is *not* symmetric is using the tangent instead, or
+  // taking a full width to each side; both are mutation-tested.
+  final nx = -dy / length * width / 2;
+  final ny = dx / length * width / 2;
+  return PathContour([
+    x1 + nx, y1 + ny, //
+    x2 + nx, y2 + ny,
+    x2 - nx, y2 - ny,
+    x1 - nx, y1 - ny,
+  ]);
+}
+
 /// How many chords approximate an arc of [radius] sweeping [sweep] radians
 /// without any of them falling more than [flatness] inside it.
 ///

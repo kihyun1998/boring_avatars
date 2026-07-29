@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:boring_avatars/src/raster/scene_raster.dart';
 import 'package:boring_avatars/src/scene/scene.dart';
+import 'package:boring_avatars/src/variants/bauhaus.dart';
 import 'package:boring_avatars/src/variants/pixel.dart';
 import 'package:boring_avatars/src/variants/ring.dart';
 import 'package:boring_avatars/src/variants/sunset.dart';
@@ -67,6 +68,34 @@ final cases = <String, (SvgNode, int)>{
       square: true,
     ),
     90,
+  ),
+  // `bauhaus`: the two names separate `isSquare`'s branches — `Clara Barton`
+  // is true and rotates 191°, `Alice` is false and rotates 88° — and the empty
+  // name hashes to 0, so every transform is the identity and every edge lands
+  // on a pixel boundary. There is deliberately **no empty-palette golden**: it
+  // would be a fully transparent image, and freezing a blank as correct is the
+  // failure #40 found in `sunset`. `bauhaus_raster_test.dart` asserts the blank
+  // as behaviour instead.
+  'bauhaus-clara-default': (
+    buildBauhausScene(name: 'Clara Barton', colors: _default, size: 80),
+    80,
+  ),
+  'bauhaus-alice-pair': (
+    buildBauhausScene(name: 'Alice', colors: ['#000000', '#FFFFFF'], size: 80),
+    80,
+  ),
+  'bauhaus-empty-name': (
+    buildBauhausScene(name: '', colors: _default, size: 80),
+    80,
+  ),
+  'bauhaus-clara-square': (
+    buildBauhausScene(
+      name: 'Clara Barton',
+      colors: _default,
+      size: 80,
+      square: true,
+    ),
+    80,
   ),
 };
 
