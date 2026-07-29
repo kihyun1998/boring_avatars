@@ -202,6 +202,40 @@ mutation set — not just the suite. A test that was passing for the right reaso
 yesterday can be passing for the new guard's reason today, and only a mutant
 distinguishes the two.
 
+### A true observation is not therefore a useful gate (#37)
+
+The layer-3 bar against Chrome fails, and the reason is Chrome's, not ours
+(hidden-state #27). The obvious next move — and the one proposed — was to
+replace it with a gate built from what the failure actually looks like: every
+differing pixel is an antialiased boundary pixel, interior mismatches are zero,
+and the total ink differs by under 1%. All three were measured and all three
+held.
+
+The proposal was refuted by rendering deliberately broken variants through it:
+
+| what was broken | interior | boundary-only | ink | the proposed gate |
+|---|---|---|---|---|
+| every path shifted 0.3 px | 0 | 0 | 0.18% | **passes** |
+| centre disc 3% small | 0 | 0 | 0.24% | **passes** |
+| mask applied per shape | 0 | 0 | −0.45% | **passes** |
+| flattening 64× coarser | 0 | 0 | 0.24% | **passes** |
+| sweep flags swapped | 486 | 1134 | 0.24% | caught |
+
+One of five. The observation was true and stayed true for a shape moved
+sideways, which is precisely the defect it was supposed to catch — translate a
+shape and its interior is untouched and only its edges move.
+
+`flutter test` kills all five, and always did. The Chrome comparison was never
+what was holding the line; the in-repo geometry assertions (πr², centroid,
+measured radius) and the goldens were.
+
+**The rule this earns:** before proposing a check as a gate, run the wrong
+pictures through it. A property that holds for the correct output tells you
+nothing until you know it *fails* for the incorrect one — and "it only differs
+at the edges" is the description of a half-pixel error as much as of a
+resolution artefact. This is the #34 rule again, applied to a gate that was
+being designed rather than one already written.
+
 ## Step 5 — adversarial completeness pass
 
 ### Two lenses on the same material disagreed usefully (#37)

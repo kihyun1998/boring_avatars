@@ -293,9 +293,19 @@ and only there.** Three selectors, `v1_6_1` / `v1_7_0` / `v1_10_1`, one per
 release. This section holds the evidence for that grouping; the mapping itself
 has one home so a new upstream release is one edit and not three.
 
-**Measured, not read.** Thirteen npm versions installed side by side and
-rendered through `renderToStaticMarkup` — six variants × four names each —
-then grouped by the rendered string under four progressively looser readings:
+**Measured, not read — and the measurement is re-runnable.** `tool/versions/`
+installs every in-scope npm release side by side and groups them by what they
+render:
+
+```bash
+cd tool/versions && npm install && npm run group
+```
+
+Fifteen versions × six variants × four names, grouped under four progressively
+looser readings of "the same result", plus a report of *which variant* each
+group boundary turns on. Keeping it is the same rule as `tool/parity`: the
+release plan is a claim about measurement, and a claim whose evidence cannot be
+re-run is one nobody can check.
 
 | What is compared | Groups |
 |---|---|
