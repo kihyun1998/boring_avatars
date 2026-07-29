@@ -288,12 +288,10 @@ gets the same thing out of them.** Source identity is neither necessary nor
 sufficient — `1.11.1` and `1.11.2` have different source trees and identical
 output, while `1.11.0` shares `1.11.1`'s intent and differs in what it emits.
 
-| Selector | npm versions | What separates it from the one above |
-|---|---|---|
-| `v1_6_1` | 1.6.1, 1.6.2, 1.6.3 | — |
-| `v1_7_0` | 1.7.0, 1.8.0, 1.9.0, 1.10.0 | `<title>` becomes optional. **The drawing is identical** |
-| `v1_10_1` | 1.10.1, 1.10.2, 1.11.1, 1.11.2, 2.0.0 – 2.0.4 | **`pixel`'s drawing changes** — `% i` → `% (i + 1)` |
-| — | ~~1.11.0~~ | **skipped, see below** |
+**Which selector covers which upstream versions is in `CLAUDE.md`, principle 3,
+and only there.** Three selectors, `v1_6_1` / `v1_7_0` / `v1_10_1`, one per
+release. This section holds the evidence for that grouping; the mapping itself
+has one home so a new upstream release is one edit and not three.
 
 **Measured, not read.** Thirteen npm versions installed side by side and
 rendered through `renderToStaticMarkup` — six variants × four names each —
@@ -680,11 +678,14 @@ state, not the version number.
 version" (2026-07-28), which itself replaced "batch everything into 1.0.0".
 Both earlier plans are recorded so their reasoning is not re-proposed.
 
-| Release | Declares support for | The work that earns it |
-|---|---|---|
-| `0.1.0` | 1.6.1, 1.6.2, 1.6.3 | everything: harness, primitives, scene, all six variants, the public SVG surface |
-| `0.2.0` | 1.7.0, 1.8.0, 1.9.0, 1.10.0 | the `<title>` gate (hidden-state #16) — **one change** |
-| `0.3.0` | 1.10.1, 1.10.2, 1.11.1, 1.11.2, 2.0.0 – 2.0.4 | `pixel`'s second colour-index path — **one change**, and the only one in scope where the drawing moves |
+**What each release declares support for is in `CLAUDE.md`, principle 3, and
+only there.** Below is what each one has to *do* — the mapping is not repeated.
+
+| Release | The work that earns it |
+|---|---|
+| `0.1.0` | everything: harness, primitives, scene, all six variants, the public SVG surface |
+| `0.2.0` | the `<title>` gate (hidden-state #16) — **one change** |
+| `0.3.0` | `pixel`'s second colour-index path — **one change**, and the only one in scope where the drawing moves |
 
 **Why this collapsed from eight releases to three.** The previous plan gave
 `1.8.0`, `1.10.2`, `1.11.0` and `1.11.1` their own releases whose stated work was

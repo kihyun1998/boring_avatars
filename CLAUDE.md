@@ -34,16 +34,22 @@ produces — the same numbers, the same SVG, the same pixels.
    shipped one — and every release re-proves that the already-supported states
    still render byte-identically.
 
-   | Release | Covers | The one thing that changes |
-   |---|---|---|
-   | `0.1.0` | 1.6.1, 1.6.2, 1.6.3 | — (everything is built here) |
-   | `0.2.0` | 1.7.0, 1.8.0, 1.9.0, 1.10.0 | `<title>` becomes optional |
-   | `0.3.0` | 1.10.1 – 2.0.4 except 1.11.0 | `pixel`'s colour index |
+   **This table is the single source for the mapping.** Release, selector and
+   covered versions are one fact in three vocabularies; `docs/agents/theflow.md`
+   points here rather than restating it, so there is one place to edit when a
+   new upstream release lands.
+
+   | Release | Selector | Covers | The one thing that changes |
+   |---|---|---|---|
+   | `0.1.0` | `v1_6_1` | 1.6.1, 1.6.2, 1.6.3 | — (everything is built here) |
+   | `0.2.0` | `v1_7_0` | 1.7.0, 1.8.0, 1.9.0, 1.10.0 | `<title>` becomes optional |
+   | `0.3.0` | `v1_10_1` | 1.10.1, 1.10.2, 1.11.1, 1.11.2, 2.0.0 – 2.0.4 | `pixel`'s colour index |
 
    **Collapsing the releases does not collapse the evidence** — fixtures are
-   still generated per upstream version. The full reasoning, the measurements
-   behind it, and the two superseded plans are in `docs/agents/theflow.md`
-   ("The states in scope", "Release plan").
+   still generated per upstream version. The measurements behind the grouping,
+   the reason `1.11.0` is excluded, the work each release earns, and the two
+   superseded plans are in `docs/agents/theflow.md` ("The states in scope",
+   "Release plan").
 4. **Deterministic everywhere.** The same input yields the same bytes on every
    platform, GPU, Flutter version and rendering backend.
 
