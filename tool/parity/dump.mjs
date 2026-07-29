@@ -262,6 +262,38 @@ async function dumpSvg(pkg, corpus) {
     };
   }
 
+  /**
+   * Every `id` and `url(#…)` a variant emits, unnormalised, **per name**.
+   *
+   * `maskIdentifiers` above covers the mask, whose id is a per-variant literal.
+   * `sunset` is the case that needs more: its gradient ids are derived from the
+   * *name* — `'gradient_paint0_linear_' + props.name.replace(/\s/g, '')` — and
+   * `normalise` erases them on both sides, so the byte comparison cannot see
+   * them at all. A port that skipped the whitespace strip, or used a different
+   * whitespace class, would pass the entire parity sweep.
+   *
+   * Every name in the corpus, because that is the input the derivation reads.
+   */
+  const derivedIdentifiers = {};
+  for (const variant of VARIANTS) {
+    const perName = {};
+    for (const name of corpus.names) {
+      const raw = renderToStaticMarkup(
+        React.createElement(Avatar, {
+          variant,
+          name: name.value,
+          colors: corpus.palettes[0].value,
+          size: MATRIX_SIZE,
+        }),
+      );
+      perName[name.id] = {
+        ids: [...raw.matchAll(/ id="([^"]*)"/g)].map((m) => m[1]),
+        references: [...raw.matchAll(/url\(#([^)]*)\)/g)].map((m) => m[1]),
+      };
+    }
+    derivedIdentifiers[variant] = perName;
+  }
+
   const sizePassthrough = {};
   for (const size of corpus.sizes) {
     sizePassthrough[`${size}`] = render({
@@ -277,6 +309,7 @@ async function dumpSvg(pkg, corpus) {
     renders,
     squareRenders,
     maskIdentifiers,
+    derivedIdentifiers,
     sizePassthrough,
   };
 }

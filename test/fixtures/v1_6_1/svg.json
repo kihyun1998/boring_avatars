@@ -1,4 +1,1118 @@
 {
+  "derivedIdentifiers": {
+    "bauhaus": {
+      "accented": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "cjk": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "digits": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "edge-spaces": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "emoji-mixed": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "emoji-single": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "emoji-zwj": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "empty": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "hangul": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "high-codeunits": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "internal-spaces": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "long-200-mixed": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "long-64": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "newline": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "punctuation": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "repeated-hash-stress": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "short-ascii": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "single-char": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "tab": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      },
+      "upstream-default": {
+        "ids": [
+          "mask__bauhaus"
+        ],
+        "references": [
+          "mask__bauhaus"
+        ]
+      }
+    },
+    "beam": {
+      "accented": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "cjk": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "digits": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "edge-spaces": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "emoji-mixed": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "emoji-single": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "emoji-zwj": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "empty": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "hangul": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "high-codeunits": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "internal-spaces": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "long-200-mixed": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "long-64": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "newline": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "punctuation": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "repeated-hash-stress": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "short-ascii": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "single-char": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "tab": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      },
+      "upstream-default": {
+        "ids": [
+          "mask__beam"
+        ],
+        "references": [
+          "mask__beam"
+        ]
+      }
+    },
+    "marble": {
+      "accented": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "cjk": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "digits": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "edge-spaces": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "emoji-mixed": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "emoji-single": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "emoji-zwj": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "empty": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "hangul": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "high-codeunits": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "internal-spaces": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "long-200-mixed": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "long-64": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "newline": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "punctuation": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "repeated-hash-stress": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "short-ascii": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "single-char": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "tab": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      },
+      "upstream-default": {
+        "ids": [
+          "mask__marble",
+          "prefix__filter0_f"
+        ],
+        "references": [
+          "mask__marble",
+          "prefix__filter0_f",
+          "prefix__filter0_f"
+        ]
+      }
+    },
+    "pixel": {
+      "accented": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "cjk": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "digits": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "edge-spaces": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "emoji-mixed": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "emoji-single": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "emoji-zwj": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "empty": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "hangul": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "high-codeunits": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "internal-spaces": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "long-200-mixed": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "long-64": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "newline": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "punctuation": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "repeated-hash-stress": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "short-ascii": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "single-char": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "tab": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      },
+      "upstream-default": {
+        "ids": [
+          "mask__pixel"
+        ],
+        "references": [
+          "mask__pixel"
+        ]
+      }
+    },
+    "ring": {
+      "accented": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "cjk": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "digits": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "edge-spaces": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "emoji-mixed": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "emoji-single": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "emoji-zwj": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "empty": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "hangul": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "high-codeunits": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "internal-spaces": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "long-200-mixed": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "long-64": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "newline": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "punctuation": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "repeated-hash-stress": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "short-ascii": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "single-char": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "tab": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      },
+      "upstream-default": {
+        "ids": [
+          "mask__ring"
+        ],
+        "references": [
+          "mask__ring"
+        ]
+      }
+    },
+    "sunset": {
+      "accented": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_ÜnïcödéNâmé",
+          "gradient_paint1_linear_ÜnïcödéNâmé"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_ÜnïcödéNâmé",
+          "gradient_paint1_linear_ÜnïcödéNâmé"
+        ]
+      },
+      "cjk": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_山田太郎",
+          "gradient_paint1_linear_山田太郎"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_山田太郎",
+          "gradient_paint1_linear_山田太郎"
+        ]
+      },
+      "digits": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_12345",
+          "gradient_paint1_linear_12345"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_12345",
+          "gradient_paint1_linear_12345"
+        ]
+      },
+      "edge-spaces": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_padded",
+          "gradient_paint1_linear_padded"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_padded",
+          "gradient_paint1_linear_padded"
+        ]
+      },
+      "emoji-mixed": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_Ana🎨Silva",
+          "gradient_paint1_linear_Ana🎨Silva"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_Ana🎨Silva",
+          "gradient_paint1_linear_Ana🎨Silva"
+        ]
+      },
+      "emoji-single": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_🎨",
+          "gradient_paint1_linear_🎨"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_🎨",
+          "gradient_paint1_linear_🎨"
+        ]
+      },
+      "emoji-zwj": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_👨‍💻",
+          "gradient_paint1_linear_👨‍💻"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_👨‍💻",
+          "gradient_paint1_linear_👨‍💻"
+        ]
+      },
+      "empty": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_",
+          "gradient_paint1_linear_"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_",
+          "gradient_paint1_linear_"
+        ]
+      },
+      "hangul": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_박기현",
+          "gradient_paint1_linear_박기현"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_박기현",
+          "gradient_paint1_linear_박기현"
+        ]
+      },
+      "high-codeunits": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_￿￾�",
+          "gradient_paint1_linear_￿￾�"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_￿￾�",
+          "gradient_paint1_linear_￿￾�"
+        ]
+      },
+      "internal-spaces": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_xyz",
+          "gradient_paint1_linear_xyz"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_xyz",
+          "gradient_paint1_linear_xyz"
+        ]
+      },
+      "long-200-mixed": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_Thequickbrownfoxjumpsoverthelazydog.Thequickbrownfoxjumpsoverthelazydog.Thequickbrownfoxjumpsoverthelazydog.Thequickbrownfoxjumpsoverthelazydog.Packmyboxwit",
+          "gradient_paint1_linear_Thequickbrownfoxjumpsoverthelazydog.Thequickbrownfoxjumpsoverthelazydog.Thequickbrownfoxjumpsoverthelazydog.Thequickbrownfoxjumpsoverthelazydog.Packmyboxwit"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_Thequickbrownfoxjumpsoverthelazydog.Thequickbrownfoxjumpsoverthelazydog.Thequickbrownfoxjumpsoverthelazydog.Thequickbrownfoxjumpsoverthelazydog.Packmyboxwit",
+          "gradient_paint1_linear_Thequickbrownfoxjumpsoverthelazydog.Thequickbrownfoxjumpsoverthelazydog.Thequickbrownfoxjumpsoverthelazydog.Thequickbrownfoxjumpsoverthelazydog.Packmyboxwit"
+        ]
+      },
+      "long-64": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "gradient_paint1_linear_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "gradient_paint1_linear_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      },
+      "newline": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_linebreak",
+          "gradient_paint1_linear_linebreak"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_linebreak",
+          "gradient_paint1_linear_linebreak"
+        ]
+      },
+      "punctuation": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_O&#x27;Brien-Smith,Jr.",
+          "gradient_paint1_linear_O&#x27;Brien-Smith,Jr."
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_O&#x27;Brien-Smith,Jr.",
+          "gradient_paint1_linear_O&#x27;Brien-Smith,Jr."
+        ]
+      },
+      "repeated-hash-stress": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+          "gradient_paint1_linear_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+          "gradient_paint1_linear_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+        ]
+      },
+      "short-ascii": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_Alice",
+          "gradient_paint1_linear_Alice"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_Alice",
+          "gradient_paint1_linear_Alice"
+        ]
+      },
+      "single-char": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_a",
+          "gradient_paint1_linear_a"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_a",
+          "gradient_paint1_linear_a"
+        ]
+      },
+      "tab": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_tabhere",
+          "gradient_paint1_linear_tabhere"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_tabhere",
+          "gradient_paint1_linear_tabhere"
+        ]
+      },
+      "upstream-default": {
+        "ids": [
+          "mask__sunset",
+          "gradient_paint0_linear_ClaraBarton",
+          "gradient_paint1_linear_ClaraBarton"
+        ],
+        "references": [
+          "mask__sunset",
+          "gradient_paint0_linear_ClaraBarton",
+          "gradient_paint1_linear_ClaraBarton"
+        ]
+      }
+    }
+  },
   "maskIdentifiers": {
     "bauhaus": {
       "ids": [

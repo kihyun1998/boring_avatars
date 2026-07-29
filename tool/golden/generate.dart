@@ -9,6 +9,7 @@ import 'package:boring_avatars/src/raster/scene_raster.dart';
 import 'package:boring_avatars/src/scene/scene.dart';
 import 'package:boring_avatars/src/variants/pixel.dart';
 import 'package:boring_avatars/src/variants/ring.dart';
+import 'package:boring_avatars/src/variants/sunset.dart';
 
 const _default = ['#92A1C6', '#146A7C', '#F0AB3D', '#C271B4', '#C20D90'];
 
@@ -36,6 +37,27 @@ final cases = <String, (SvgNode, int)>{
   'ring-alice-pair': (
     buildRingScene(name: 'Alice', colors: ['#000000', '#FFFFFF'], size: 90),
     90,
+  ),
+  'sunset-clara-default': (
+    buildSunsetScene(name: 'Clara Barton', colors: _default, size: 80),
+    80,
+  ),
+  'sunset-empty-palette': (
+    buildSunsetScene(name: 'Clara Barton', colors: const [], size: 80),
+    80,
+  ),
+  'sunset-hangul': (
+    buildSunsetScene(name: '박기현', colors: _default, size: 80),
+    80,
+  ),
+  'sunset-clara-square': (
+    buildSunsetScene(
+      name: 'Clara Barton',
+      colors: _default,
+      size: 80,
+      square: true,
+    ),
+    80,
   ),
   'ring-clara-square': (
     buildRingScene(

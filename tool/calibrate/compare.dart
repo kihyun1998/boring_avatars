@@ -17,6 +17,7 @@ import 'package:boring_avatars/src/scene/scene.dart';
 import 'package:boring_avatars/src/svg/emitter.dart';
 import 'package:boring_avatars/src/variants/pixel.dart';
 import 'package:boring_avatars/src/variants/ring.dart';
+import 'package:boring_avatars/src/variants/sunset.dart';
 
 const _default = ['#92A1C6', '#146A7C', '#F0AB3D', '#C271B4', '#C20D90'];
 
@@ -32,6 +33,14 @@ final _cases = <String, (SvgNode, int)>{
   'ring-alice-pair': (
     buildRingScene(name: 'Alice', colors: ['#000000', '#FFFFFF'], size: 90),
     90,
+  ),
+  'sunset-clara-default': (
+    buildSunsetScene(name: 'Clara Barton', colors: _default, size: 80),
+    80,
+  ),
+  'sunset-empty-palette': (
+    buildSunsetScene(name: 'Clara Barton', colors: const [], size: 80),
+    80,
   ),
   'ring-clara-square': (
     buildRingScene(
@@ -142,6 +151,18 @@ void main(List<String> args) {
 }
 
 /// Whether (x, y) sits on a coverage boundary in the reference.
+///
+/// **This classifier is defeated by a gradient.** It asks whether the pixel's
+/// 3×3 neighbourhood is uniform, which is a good proxy for "antialiasing
+/// happens here" on a flat-filled shape and useless on `sunset`, where every
+/// pixel differs from the one above it by design. Every gradient pixel is
+/// therefore counted as an edge, and "interior mismatches 0" says nothing at
+/// all for that variant.
+///
+/// Measured separately for `sunset`, excluding the mask rim: all 4548 gradient
+/// pixels are within **1/255** of Chrome — 58.6% exact, 41.4% off by one, which
+/// is Chrome's gradient dither. The bar is met there; what fails is the mask's
+/// curve, which is hidden-state #27 and the same failure `pixel` has.
 bool _isEdge(List<int> bytes, int size, int x, int y) {
   int at(int px, int py, int c) => bytes[(py * size + px) * 4 + c];
   for (var dy = -1; dy <= 1; dy++) {
