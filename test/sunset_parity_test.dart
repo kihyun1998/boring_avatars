@@ -25,6 +25,38 @@ void main() {
   final renders = svgFixture['renders'] as Map<String, dynamic>;
   final matrixSize = svgFixture['matrixSize'] as int;
 
+  /// An attribute value as it exists **after XML parsing**, which is the form a
+  /// browser matches on. The emitted bytes carry `&#x27;`; the DOM carries `'`.
+  String unescapeXml(String value) => value
+      .replaceAll('&#x27;', "'")
+      .replaceAll('&quot;', '"')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&amp;', '&');
+
+  /// Resolves a reference the way a browser does: undo `%XX`, leave the rest.
+  ///
+  /// `Uri.decodeComponent` is the wrong tool twice over — it rejects strings
+  /// this port never produces but the corpus does contain, and it is stricter
+  /// than the fragment matching a browser actually performs. Written out so it
+  /// undoes exactly what `sunsetUrlReference` does and nothing more.
+  ///
+  /// The literal runs are encoded **as whole substrings**. Doing it character by
+  /// character splits a surrogate pair — the emoji names came back as `��`.
+  String decodeReference(String reference) {
+    final bytes = <int>[];
+    var literalStart = 0;
+    for (var i = 0; i < reference.length; i++) {
+      if (reference[i] != '%' || i + 2 >= reference.length) continue;
+      bytes.addAll(utf8.encode(reference.substring(literalStart, i)));
+      bytes.add(int.parse(reference.substring(i + 1, i + 3), radix: 16));
+      i += 2;
+      literalStart = i + 1;
+    }
+    bytes.addAll(utf8.encode(reference.substring(literalStart)));
+    return utf8.decode(bytes, allowMalformed: true);
+  }
+
   String normalise(String svg) => svg
       .replaceAll(RegExp('id="[^"]*"'), 'id="_"')
       .replaceAll(RegExp(r'url\(#[^)]*\)'), 'url(#_)')
@@ -63,35 +95,69 @@ void main() {
     final derived = svgFixture['derivedIdentifiers'] as Map<String, dynamic>;
     final sunset = derived['sunset'] as Map<String, dynamic>;
 
+    /// The names whose reference upstream writes in a form a browser cannot
+    /// read, and where this port therefore diverges **on purpose**.
+    ///
+    /// Ruled by the user on 2026-07-29 and recorded in the divergence ledger.
+    /// Listed by name rather than detected, so the set can only grow by someone
+    /// editing this line — a repair that started firing on a name nobody
+    /// intended would fail here rather than pass quietly.
+    const repaired = {'punctuation'};
+
     for (final n in names) {
-      test('${n['id']} — ids and references match upstream exactly', () {
-        final expected = sunset[n['id']] as Map<String, dynamic>;
-        final svg = emitSvg(
-          buildSunsetScene(
-            name: n['value'] as String,
-            colors: (palettes.first['value'] as List).cast<String>(),
-            size: matrixSize,
-          ),
-        );
-        final ids = RegExp(
-          ' id="([^"]*)"',
-        ).allMatches(svg).map((m) => m.group(1)).toList();
-        final references = RegExp(
-          r'url\(#([^)]*)\)',
-        ).allMatches(svg).map((m) => m.group(1)).toList();
-        expect(ids, expected['ids'], reason: 'ids for ${n['id']}');
-        expect(
-          references,
-          expected['references'],
-          reason: 'references for ${n['id']}',
-        );
-      });
+      final id = n['id'] as String;
+      test(
+        '$id — ids match upstream, and references diverge only if listed',
+        () {
+          final expected = sunset[id] as Map<String, dynamic>;
+          final svg = emitSvg(
+            buildSunsetScene(
+              name: n['value'] as String,
+              colors: (palettes.first['value'] as List).cast<String>(),
+              size: matrixSize,
+            ),
+          );
+          final ids = RegExp(
+            ' id="([^"]*)"',
+          ).allMatches(svg).map((m) => m.group(1)).toList();
+          final references = RegExp(
+            r'url\(#([^)]*)\)',
+          ).allMatches(svg).map((m) => m.group(1)!).toList();
+
+          // **The ids are byte-identical to upstream for every name.** That is
+          // what makes the repair as small as it is: only the reference moves.
+          expect(ids, expected['ids'], reason: 'ids for $id');
+
+          if (!repaired.contains(id)) {
+            expect(references, expected['references'], reason: 'refs for $id');
+            return;
+          }
+
+          // For a repaired name the reference must differ from upstream's — and
+          // differ *only* by percent-decoding back to it, so the repair cannot
+          // quietly become something else.
+          expect(
+            references,
+            isNot(expected['references']),
+            reason: '$id is listed as repaired but nothing was repaired',
+          );
+          expect(
+            references.map((r) => decodeReference(unescapeXml(r))).toList(),
+            (expected['references'] as List)
+                .map((r) => unescapeXml(r as String))
+                .toList(),
+            reason: 'the repair must be exactly a percent-encoding of upstream',
+          );
+        },
+      );
     }
 
-    test('every reference names an id that is actually declared', () {
+    test('every reference resolves to an id that is actually declared', () {
       // A reference that points at nothing makes a browser draw *nothing* —
-      // measured, 0,0,0,0 at every pixel. So a derivation that drifted between
-      // the two sites would blank the avatar without erroring.
+      // measured, 0,0,0,0 at every pixel. This is the assertion the repair
+      // exists to satisfy, so it models both steps a browser takes: parse the
+      // XML — which turns `&#x27;` back into `'` on **both** sides — then
+      // percent-decode the fragment and match it against the id.
       for (final n in names) {
         final svg = emitSvg(
           buildSunsetScene(
@@ -102,11 +168,33 @@ void main() {
         );
         final ids = RegExp(
           ' id="([^"]*)"',
-        ).allMatches(svg).map((m) => m.group(1)!).toSet();
-        for (final match in RegExp(r'url\(#([^)]*)\)').allMatches(svg)) {
-          expect(ids, contains(match.group(1)), reason: '${n['id']}');
+        ).allMatches(svg).map((m) => unescapeXml(m.group(1)!)).toSet();
+        final references = RegExp(r'url\(#([^)]*)\)').allMatches(svg);
+        expect(references, isNotEmpty, reason: '${n['id']}');
+        for (final match in references) {
+          expect(
+            ids,
+            contains(decodeReference(unescapeXml(match.group(1)!))),
+            reason: '${n['id']}',
+          );
         }
       }
+    });
+
+    test('the repair fires only where a browser needs it', () {
+      // Korean and emoji resolve as they stand — measured in Chrome — so a
+      // repair that encoded them would change bytes for nothing.
+      for (final safe in ['ClaraBarton', '박기현', '🎨', 'a-b_c.d~e']) {
+        expect(sunsetUrlReference(safe), safe, reason: safe);
+      }
+      // These end a CSS url token, or start an escape when it is resolved.
+      expect(sunsetUrlReference("O'Brien"), 'O%27Brien');
+      expect(sunsetUrlReference('a"b'), 'a%22b');
+      expect(sunsetUrlReference('f(x)'), 'f%28x%29');
+      expect(sunsetUrlReference(r'a\b'), 'a%5Cb');
+      // `%` itself, or a name already containing `%27` would decode into a
+      // different id than the one declared. Measured: unencoded, blank.
+      expect(sunsetUrlReference('a%27b'), 'a%2527b');
     });
 
     test('whitespace is stripped from the id but not from the title', () {
