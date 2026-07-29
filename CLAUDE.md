@@ -24,11 +24,26 @@ produces — the same numbers, the same SVG, the same pixels.
    `1.6.1` onward — where upstream replaced `getNumber` with `hashCode` — which
    is 99.6% of what npm actually installs. npm needs a downgrade to render a
    1.7.0 avatar; this package needs a parameter.
-3. **Additive forever, one release per upstream version.** A release declares
-   support for one upstream version and is cut as soon as that is verified. A
-   new version is a new selector value, never an edit to a shipped one — and
-   every release re-proves that the already-supported versions still render
-   byte-identically.
+3. **Additive forever, one release per *output state*.** Upstream versions
+   share a selector — and a release — when **a caller gets the same thing out
+   of them**, not when their source happens to match. Measured, not read: the
+   nine in-scope releases from `1.6.1` to `2.0.4` produce **three** distinct
+   results, so there are three releases and not nine. `1.11.0` is excluded
+   outright; it writes its own props onto the `<svg>` element and no other
+   version does. A new state is a new selector value, never an edit to a
+   shipped one — and every release re-proves that the already-supported states
+   still render byte-identically.
+
+   | Release | Covers | The one thing that changes |
+   |---|---|---|
+   | `0.1.0` | 1.6.1, 1.6.2, 1.6.3 | — (everything is built here) |
+   | `0.2.0` | 1.7.0, 1.8.0, 1.9.0, 1.10.0 | `<title>` becomes optional |
+   | `0.3.0` | 1.10.1 – 2.0.4 except 1.11.0 | `pixel`'s colour index |
+
+   **Collapsing the releases does not collapse the evidence** — fixtures are
+   still generated per upstream version. The full reasoning, the measurements
+   behind it, and the two superseded plans are in `docs/agents/theflow.md`
+   ("The states in scope", "Release plan").
 4. **Deterministic everywhere.** The same input yields the same bytes on every
    platform, GPU, Flutter version and rendering backend.
 

@@ -716,22 +716,16 @@ the package's determinism guarantee applies to the raster path only — say so i
 the README rather than leaving it implied.
 
 **"Supporting a version" is a verification claim, not necessarily new rendering
-code.** Several releases above add no rasterizer work at all — they add that
-version's fixtures, prove the existing renderer reproduces it, and say so in the
-README and CHANGELOG. That is the deliverable. The earlier plan collapsed these
-releases on the grounds that "1.7.0 needs no new code", which optimised
-implementation cost while the product is *verified version coverage* — the wrong
-axis.
+code.** `0.2.0` and `0.3.0` each change one thing; the rest of what earns them is
+generating every covered version's fixtures and proving the existing renderer
+reproduces them. That is the deliverable, and it is why they are releases at all.
 
-Two rules hold across every release:
-
-- **Every release re-proves the additive invariant.** Each one asserts that the
-  goldens of *already-supported* versions are unchanged. A user pinned to
-  `v1_8_0` must not have their avatars move because `0.4.0` touched `pixel`.
-- **Per-version fixtures are what surface upstream's quiet changes.** Generating
-  a fixture set per version is how the `<title>` divergence gets caught at a
-  release boundary instead of by a user diffing against npm. A plan that renders
-  once and claims eight versions has no such boundary.
+*(An earlier revision of this section argued the opposite of the current plan —
+that a version needing no new code still earns its own release, because the
+product is verified version coverage. That reasoning stands for the **work**; it
+was rejected for the **release boundary**, since a release the caller cannot
+distinguish from its neighbour is a name rather than a version. Kept here so the
+argument is not re-made from scratch.)*
 
 `flutter pub publish` is run by the **user**, never the agent — it cannot be
 undone. Confirm the result with
