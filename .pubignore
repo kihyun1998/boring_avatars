@@ -27,6 +27,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+node_modules/
+.playwright-mcp/
+
 # --- tracked in git, but not published ---
 docs/
 .github/

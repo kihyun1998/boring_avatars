@@ -601,6 +601,22 @@ it cannot be silently skipped.
 one value. That is the #37 lesson applied: a prop the matrix never varies is a
 prop nobody has compared to upstream.
 
+**It writes a page for human eyes**, `report.html` in the work dir: every case
+as upstream / ours / a live `mix-blend-mode: difference` panel where **black
+means identical**, differences sorted first, with filters. Two things about it
+were only found by *opening it*, and both had the numbers saying 0 while the
+picture said otherwise — the difference stack needs an **opaque black** backdrop
+(over white, two agreeing transparent renders come out white), and each render
+must be flattened onto that backdrop **before** the blend (a blend mode is
+re-interpolated by the source alpha, so every antialiased rim grew a faint
+coloured ring on cards that were byte-identical). A visual gate has to be looked
+at, the same way a numeric one has to be watched failing.
+
+`CROSSCHECK_LIMIT=<n>` caps the run for iterating on the harness. A capped run
+says so in the summary, in the `PASS` line and in the report's own header — a
+tool that quietly checked 20 of 800 and printed "PASS" is the silent-truncation
+failure this project keeps writing rules about.
+
 **A TOOL, not a gate.** `flutter test` never runs it — it needs npm, a browser
 and a network install. Run it when a variant lands or the emitter changes.
 

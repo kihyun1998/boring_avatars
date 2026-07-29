@@ -32,3 +32,8 @@ migrate_working_dir/
 
 # Node — the parity harness (tool/parity) installs upstream packages here
 node_modules/
+
+# Playwright MCP drops snapshots, console logs and screenshots here when a
+# browser is driven from this directory. Transient, and at the repo root, so
+# .pubignore has to exclude it too or it ships.
+.playwright-mcp/
