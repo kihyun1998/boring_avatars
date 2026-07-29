@@ -1,0 +1,16 @@
+{
+  "name": "boring-avatars-crosscheck",
+  "private": true,
+  "type": "module",
+  "description": "Renders upstream's own React output and ours in the SAME browser and compares the pixels. See crosscheck.mjs for why that cancels the browser's own error.",
+  "scripts": {
+    "crosscheck": "node crosscheck.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.49.0",
+    "prop-types": "^15.8.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "upstream-1.6.1": "npm:boring-avatars@1.6.1"
+  }
+}
