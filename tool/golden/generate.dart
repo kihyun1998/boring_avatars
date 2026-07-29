@@ -70,9 +70,12 @@ final cases = <String, (SvgNode, int)>{
     90,
   ),
   // `bauhaus`: the two names separate `isSquare`'s branches — `Clara Barton`
-  // is true and rotates 191°, `Alice` is false and rotates 88° — and the empty
-  // name hashes to 0, so every transform is the identity and every edge lands
-  // on a pixel boundary. There is deliberately **no empty-palette golden**: it
+  // is true, turning its bar 22° and its rule 44°; `Alice` is false, turning
+  // them 176° and 352° — and the empty name hashes to 0, so every transform is
+  // the identity and every edge lands on a pixel boundary. (The angles are the
+  // *drawn* ones. `properties[0].rotate` is 191° and 88°, and element 0
+  // contributes only a colour — a distinction the #39 completeness pass caught
+  // in three comments at once.) There is deliberately **no empty-palette golden**: it
   // would be a fully transparent image, and freezing a blank as correct is the
   // failure #40 found in `sunset`. `bauhaus_raster_test.dart` asserts the blank
   // as behaviour instead.
