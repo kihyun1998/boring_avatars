@@ -9,6 +9,7 @@ import 'package:boring_avatars/src/variants/pixel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/golden.dart';
+import 'support/golden_cases.dart';
 
 /// Layer 3 for `pixel`.
 ///
@@ -500,24 +501,28 @@ void main() {
   });
 
   group('goldens lock the verified state', () {
-    const cases = <String, (String, List<String>)>{
-      'pixel-clara-default': ('Clara Barton', palette),
-      'pixel-alice-pair': ('Alice', ['#000000', '#FFFFFF']),
-      'pixel-empty-name': ('', ['#FF0000']),
-    };
+    // The roster is `test/support/golden_cases.dart`, shared with the generator
+    // and with the directory check in `golden_contract_test.dart`. It used to
+    // be a local list here, which meant this group could compare a scene the
+    // committed bytes were never written from.
+    final cases = goldenCasesFor('pixel');
 
-    for (final entry in cases.entries) {
-      test('${entry.key} is byte-identical', () {
-        final (name, colours) = entry.value;
-        final actual = render(name, colours);
-        final golden = File('test/goldens/${entry.key}.rgba').readAsBytesSync();
+    test('the roster is not empty, and it is pixel\'s', () {
+      expect(cases, hasLength(3));
+    });
+
+    cases.forEach((key, value) {
+      test('$key is byte-identical', () {
+        final (scene, size) = value;
+        final actual = rasterizeScene(scene, width: size, height: size);
+        final golden = File('test/goldens/$key.rgba').readAsBytesSync();
         expectGoldenIdentical(
           RgbaImage(actual.width, actual.height, actual.bytes),
-          RgbaImage(80, 80, golden),
-          reason: entry.key,
+          RgbaImage(size, size, golden),
+          reason: key,
         );
       });
-    }
+    });
 
     test('the goldens are not all the same image', () {
       // A generator bug that wrote one render three times would otherwise pass

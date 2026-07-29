@@ -9,6 +9,7 @@ import 'package:boring_avatars/src/variants/ring.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/golden.dart';
+import 'support/golden_cases.dart';
 
 /// Layer 3 for `ring`.
 ///
@@ -575,15 +576,18 @@ void main() {
   });
 
   group('goldens lock the verified state', () {
-    final cases = <String, RasterImage Function()>{
-      'ring-clara-default': () => render('Clara Barton', palette),
-      'ring-alice-pair': () => render('Alice', const ['#000000', '#FFFFFF']),
-      'ring-clara-square': () => render('Clara Barton', palette, square: true),
-    };
+    // The roster is `test/support/golden_cases.dart`, shared with the generator
+    // and with the directory check in `golden_contract_test.dart`.
+    final cases = goldenCasesFor('ring');
 
-    cases.forEach((key, build) {
+    test('the roster is not empty, and it is ring\'s', () {
+      expect(cases, hasLength(3));
+    });
+
+    cases.forEach((key, value) {
       test('$key is byte-identical', () {
-        final actual = build();
+        final (scene, size) = value;
+        final actual = rasterizeScene(scene, width: size, height: size);
         final golden = File('test/goldens/$key.rgba').readAsBytesSync();
         expectGoldenIdentical(
           RgbaImage(actual.width, actual.height, actual.bytes),

@@ -1,15 +1,22 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/golden.dart';
+import 'support/golden_cases.dart';
 
-/// The rasterizer does not exist yet, so there is no avatar to compare. What
-/// *can* be proved now is that the comparison itself behaves — that the two
-/// bars differ in the way the bindings say they do, and that neither of them
-/// passes on a difference it is supposed to catch.
+/// The golden **mechanism** — the two comparison bars, and the roster.
 ///
-/// A harness nobody has watched fail is not a harness. These use tiny synthetic
-/// images for exactly that reason: the subject under test here is the
-/// comparison, not the drawing.
+/// The bars are proved on tiny synthetic images, because the subject here is
+/// the comparison rather than any drawing: a harness nobody has watched fail is
+/// not a harness. (This file predates the rasterizer, which is why it says so.)
+///
+/// The roster group is the one that ties the three lists together. Each
+/// variant's raster test reads back its own prefix, `tool/golden/generate.dart`
+/// writes a file per entry, and `test/goldens/` holds the results — and until
+/// #39 nothing compared them. Measured then: dropping a stray `.rgba` into the
+/// directory left all 469 tests green, so a golden could be generated,
+/// committed, and read by nobody.
 void main() {
   /// A 4x4 image: a solid 2x2 block of [inner] at the top-left of [outer].
   RgbaImage block(List<int> outer, List<int> inner) {
@@ -94,6 +101,42 @@ void main() {
         () => expectGoldenIdentical(actual, block(white, black)),
         throwsA(isA<TestFailure>()),
       );
+    });
+  });
+
+  group('the roster is the same in all three places', () {
+    /// Every `.rgba` actually sitting in `test/goldens/`.
+    Set<String> onDisk() => Directory('test/goldens')
+        .listSync()
+        .whereType<File>()
+        .map((f) => f.uri.pathSegments.last)
+        .where((n) => n.endsWith('.rgba'))
+        .map((n) => n.substring(0, n.length - '.rgba'.length))
+        .toSet();
+
+    test('the directory holds exactly the declared cases', () {
+      // Both directions matter and they fail for different reasons. A file with
+      // no case is a golden nobody reads — it was generated, reviewed as a diff,
+      // committed, and proves nothing. A case with no file is a test that cannot
+      // run, which the per-variant groups already catch by throwing on the
+      // missing read; this says so in one place and by name.
+      expect(onDisk(), goldenCases.keys.toSet());
+    });
+
+    test('every case is claimed by exactly one variant prefix', () {
+      // `goldenCasesFor` filters by `<variant>-`, so a case whose name does not
+      // begin with a known prefix would be generated and compared by nobody
+      // while still passing the directory check above.
+      const variants = ['pixel', 'ring', 'sunset', 'bauhaus'];
+      final claimed = <String>{
+        for (final v in variants) ...goldenCasesFor(v).keys,
+      };
+      expect(claimed, goldenCases.keys.toSet());
+    });
+
+    test('the roster is not empty, which would make both checks vacuous', () {
+      expect(goldenCases, isNotEmpty);
+      expect(onDisk(), isNotEmpty);
     });
   });
 }
