@@ -540,6 +540,69 @@ that cannot be seen from here. Re-read them at first publish, not before.
 | **1 data — utilities** | `tool/parity` imports `utilities.js` **straight from the pinned reference tree** and calls the real functions; the values become `test/fixtures/<version>/utilities.json` | **Exact. No tolerance.** |
 | **1 data — per-variant values** | **Not directly observable.** No component exports its generator — `generateData` / `generateColors` are module-private in all six — so per-variant values are proved *transitively* through layer 2, where every value that reaches the drawing appears as an attribute | via layer 2 |
 | **2 scene** | our emitted SVG vs `test/fixtures/<version>/svg.json`, rendered from the **real npm package** through `react-dom/server` | **Byte-identical**, excluding generated ids (`useId`, `prefix__…`), which are internal references. **`<title>` is not excluded** — see hidden-state #16 |
+| **2 scene — the picture, not the bytes** | `tool/crosscheck/` renders **upstream's own React output** and ours in the **same browser** and compares the screenshots | **0 differing pixels.** The one bar here with no tolerance to negotiate — see below |
+
+### `tool/crosscheck` — the browser comparison whose bar is zero
+
+**Both documents go through one browser, and that is the whole idea.** The
+browser's own approximation error — circles up to 0.13 px inside true geometry,
+shallow rotated edges up to 30/255 out (hidden-state #27) — applies identically
+to each render and **cancels**. So the bar is **0 differing pixels**, with
+nothing to relax when Chrome updates. It is the only bar in this project a
+browser change cannot break, which is exactly what the layer-3 calibration below
+*is* vulnerable to.
+
+**It exists because no other check renders what upstream actually emits.** The
+byte gate above normalises `id="…"`, `url(#…)` and `mask="…"` away on both
+sides, and `tool/calibrate` hands Chrome **our** document by design. So anything
+inside that hole is invisible to both. Demonstrated rather than argued: pointing
+`ring`'s `<g mask="url(#…)">` at a mask that does not exist leaves every
+per-name byte test **green** (measured — the group's `maskIdentifiers`
+assertion, added in #37, is what catches it there), while this harness reports
+22 468 differing pixels because the mask never applies. That assertion only
+exists because someone anticipated *which* identifier mattered; this catches the
+class without knowing.
+
+**What it cannot see:** anything both documents get wrong the same way. It says
+"upstream and this port draw the same picture", never "the picture is right".
+
+```bash
+dart run tool/crosscheck/emit.dart <work>    # our SVG, unnormalised
+node tool/crosscheck/crosscheck.mjs <work>   # upstream fresh + browser + diff
+```
+
+Upstream is **re-rendered from the npm package**, not read from
+`test/fixtures/`: those entries are stored normalised, and `mask="_"` has lost
+its `url()` wrapper, so a fixture entry handed to a browser renders unmasked.
+`playwright-core` drives the **system Chrome** (`channel: 'chrome'`), so nothing
+downloads a browser and no path is hardcoded.
+
+**Measured, #39 (2026-07-29):**
+
+| | |
+|---|---|
+| checked | **800** — 4 variants × 20 names × 5 palettes × `square` on and off, at size 320 |
+| pixel-identical | **790** |
+| ruled divergences | **10** — `sunset` × `punctuation`, both `square` values, five palettes |
+
+The ten are S-1 in the divergence ledger: upstream paints **0 pixels** for a
+name containing an apostrophe, because its own `url(#…)` reference is not a
+valid CSS url token. The harness lists those names explicitly and fails if the
+difference *disappears* — that would mean the ruled repair stopped firing.
+
+**⚠ `marble` and `beam` are not covered, and the harness says so by name.**
+Upstream dispatches six variants at 1.6.1 and this package has ported four
+(#41, #38), so there is no scene of ours to compare — they are **unmeasured, not
+passing**. `emit.dart` also reads `lib/src/variants/` and refuses to run if a
+variant gains a file without gaining a line in its roster, so the day one lands
+it cannot be silently skipped.
+
+`square` is in the matrix here and **not** in the fixture matrix, which runs at
+one value. That is the #37 lesson applied: a prop the matrix never varies is a
+prop nobody has compared to upstream.
+
+**A TOOL, not a gate.** `flutter test` never runs it — it needs npm, a browser
+and a network install. Run it when a variant lands or the emitter changes.
 
 **Two of the three fixture sections exist because a normalisation hid
 something.** `maskIdentifiers` (#37) and `derivedIdentifiers` (#40) both record
@@ -741,6 +804,13 @@ layer-2 SVG strings into `test/fixtures/<state>/`.
 
 `tool/calibrate/` is the layer-3 equivalent — it drives real Chrome and reports
 the pixel diff. Same shape, same rule: a tool, run deliberately. See Step 4.
+
+`tool/crosscheck/` is the layer-2 *picture* comparison: upstream's own React
+output and ours, through the **same** browser, bar **0 differing pixels**. It is
+the only check that renders what upstream actually emits, and the only bar a
+Chrome update cannot break. Full description and the measured numbers are in
+Step 4. It reports the variants it did **not** cover by name — today `marble`
+and `beam`, which are not ported.
 
 `tool/milestones/sync.mjs` renders the GitHub milestone descriptions from
 `CLAUDE.md`'s release table. **Run it whenever that table changes.** A milestone
