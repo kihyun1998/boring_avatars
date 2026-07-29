@@ -174,7 +174,11 @@ void main() {
       throwsA(isA<UnsupportedSceneError>()),
     );
 
-    test('a transformed rect is refused, not drawn unrotated', () {
+    test('a transform this rasterizer cannot compose is refused', () {
+      // This test used to pin the *absence* of transforms — `translate`/
+      // `rotate` were refused too, and #39 implemented them. What is still a
+      // gap is `scale`, which `beam` and `marble` both use; refusing it is what
+      // stops a shape being drawn at a plausible wrong size.
       expectRejected(
         wrap(const [
           SvgNode(
@@ -182,7 +186,7 @@ void main() {
             attributes: [
               SvgAttribute('width', 2),
               SvgAttribute('height', 2),
-              SvgAttribute('transform', 'translate(2 2) rotate(45 2 2)'),
+              SvgAttribute('transform', 'translate(2 2) scale(2)'),
               SvgAttribute('fill', '#FF0000'),
             ],
           ),
@@ -207,17 +211,21 @@ void main() {
     });
 
     test('the shapes no variant has needed yet are refused', () {
-      // `path` and `circle` became drawable with `ring`; `line` is still
-      // nobody's, and arrives with `bauhaus`. Narrowing this list is how the
-      // seam records what has actually been implemented.
-      expectRejected(
-        wrap(const [
-          SvgNode(
-            SvgElement.line,
-            attributes: [SvgAttribute('fill', '#FF0000')],
-          ),
-        ]),
-      );
+      // `path` and `circle` became drawable with `ring`, `line` with `bauhaus`.
+      // The filter primitives are still nobody's and arrive with `marble`.
+      //
+      // This test used to name `<line fill="…">`, and after #39 it went on
+      // passing **for a different reason** — not because `<line>` is unknown,
+      // but because `fill` is not on its allow-list. Green to green is the one
+      // transition nothing reports, so the subject is now an element that is
+      // genuinely undrawable.
+      for (final element in const [
+        SvgElement.feGaussianBlur,
+        SvgElement.feBlend,
+        SvgElement.filter,
+      ]) {
+        expectRejected(wrap([SvgNode(element)]));
+      }
     });
 
     test('a drawable element missing its geometry is refused, not crashed', () {

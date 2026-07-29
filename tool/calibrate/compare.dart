@@ -15,6 +15,7 @@ import 'dart:io';
 import 'package:boring_avatars/src/raster/scene_raster.dart';
 import 'package:boring_avatars/src/scene/scene.dart';
 import 'package:boring_avatars/src/svg/emitter.dart';
+import 'package:boring_avatars/src/variants/bauhaus.dart';
 import 'package:boring_avatars/src/variants/pixel.dart';
 import 'package:boring_avatars/src/variants/ring.dart';
 import 'package:boring_avatars/src/variants/sunset.dart';
@@ -22,6 +23,24 @@ import 'package:boring_avatars/src/variants/sunset.dart';
 const _default = ['#92A1C6', '#146A7C', '#F0AB3D', '#C271B4', '#C20D90'];
 
 final _cases = <String, (SvgNode, int)>{
+  // `bauhaus` is the first variant with a rotated shape and the first with a
+  // stroke, so the two names below are chosen to separate the branches:
+  // `Clara Barton` has `isSquare` true and rotates by 191°, `Alice` has it
+  // false and rotates by 88°. The empty name hashes to 0, so every transform
+  // is the identity — the case that proves a rotation of zero does not
+  // antialias an edge Chrome draws sharp.
+  'bauhaus-clara-default': (
+    buildBauhausScene(name: 'Clara Barton', colors: _default, size: 80),
+    80,
+  ),
+  'bauhaus-alice-pair': (
+    buildBauhausScene(name: 'Alice', colors: ['#000000', '#FFFFFF'], size: 80),
+    80,
+  ),
+  'bauhaus-empty-name': (
+    buildBauhausScene(name: '', colors: _default, size: 80),
+    80,
+  ),
   'pixel-clara-default': (
     buildPixelScene(name: 'Clara Barton', colors: _default, size: 80),
     80,
