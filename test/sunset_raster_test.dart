@@ -8,6 +8,7 @@ import 'package:boring_avatars/src/variants/sunset.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/golden.dart';
+import 'support/golden_cases.dart';
 
 /// Layer 3 for `sunset`.
 ///
@@ -370,20 +371,18 @@ void main() {
   });
 
   group('goldens lock the verified state', () {
-    final cases = <String, RasterImage Function()>{
-      'sunset-clara-default': () => render('Clara Barton', palette),
-      'sunset-empty-palette': () => render('Clara Barton', const []),
-      // A second name, because `sunset` was rasterised for one only — and the
-      // corpus name that would have caught the url-fragment divergence is not
-      // `Clara Barton`. `pixel` and `ring` each carry a second-name golden.
-      'sunset-hangul': () => render('박기현', palette),
-      'sunset-clara-square': () =>
-          render('Clara Barton', palette, square: true),
-    };
+    // The roster is `test/support/golden_cases.dart`, shared with the generator
+    // and with the directory check in `golden_contract_test.dart`.
+    final cases = goldenCasesFor('sunset');
 
-    cases.forEach((key, build) {
+    test('the roster is not empty, and it is sunset\'s', () {
+      expect(cases, hasLength(4));
+    });
+
+    cases.forEach((key, value) {
       test('$key is byte-identical', () {
-        final actual = build();
+        final (scene, size) = value;
+        final actual = rasterizeScene(scene, width: size, height: size);
         final golden = File('test/goldens/$key.rgba').readAsBytesSync();
         expectGoldenIdentical(
           RgbaImage(actual.width, actual.height, actual.bytes),

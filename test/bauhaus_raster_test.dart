@@ -11,6 +11,7 @@ import 'package:boring_avatars/src/variants/bauhaus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/golden.dart';
+import 'support/golden_cases.dart';
 
 /// Layer-3 for `bauhaus` — the two capabilities it installs, and the variant.
 ///
@@ -613,55 +614,26 @@ void main() {
     // from the code under test can only catch a regression. There is
     // deliberately no empty-palette golden: `bauhaus` renders it fully
     // transparent, and freezing a blank as correct is the failure #40 found.
-    final cases = <String, RasterImage Function()>{
-      'bauhaus-clara-default': () => rasterizeScene(
-        buildBauhausScene(
-          name: 'Clara Barton',
-          colors: const ['#92A1C6', '#146A7C', '#F0AB3D', '#C271B4', '#C20D90'],
-          size: 80,
-        ),
-        width: 80,
-        height: 80,
-      ),
-      'bauhaus-alice-pair': () => rasterizeScene(
-        buildBauhausScene(
-          name: 'Alice',
-          colors: const ['#000000', '#FFFFFF'],
-          size: 80,
-        ),
-        width: 80,
-        height: 80,
-      ),
-      // The empty name hashes to 0, so every transform is the identity — the
-      // only bauhaus render whose edges all land on pixel boundaries.
-      'bauhaus-empty-name': () => rasterizeScene(
-        buildBauhausScene(
-          name: '',
-          colors: const ['#92A1C6', '#146A7C', '#F0AB3D', '#C271B4', '#C20D90'],
-          size: 80,
-        ),
-        width: 80,
-        height: 80,
-      ),
-      'bauhaus-clara-square': () => rasterizeScene(
-        buildBauhausScene(
-          name: 'Clara Barton',
-          colors: const ['#92A1C6', '#146A7C', '#F0AB3D', '#C271B4', '#C20D90'],
-          size: 80,
-          square: true,
-        ),
-        width: 80,
-        height: 80,
-      ),
-    };
+    //
+    // The roster is `test/support/golden_cases.dart`, shared with the generator
+    // and with the directory check in `golden_contract_test.dart`, so the scene
+    // compared here is the *same object* the committed bytes were written from.
+    final cases = goldenCasesFor('bauhaus');
 
-    cases.forEach((key, build) {
+    test('the roster is not empty, and it is bauhaus\'s', () {
+      // `goldenCasesFor` filters by prefix. A rename would silently empty this
+      // group, and every `forEach` below would pass by running nothing.
+      expect(cases, hasLength(4));
+    });
+
+    cases.forEach((key, value) {
       test('$key is byte-identical', () {
-        final actual = build();
+        final (scene, size) = value;
+        final actual = rasterizeScene(scene, width: size, height: size);
         final golden = File('test/goldens/$key.rgba').readAsBytesSync();
         expectGoldenIdentical(
           RgbaImage(actual.width, actual.height, actual.bytes),
-          RgbaImage(80, 80, golden),
+          RgbaImage(size, size, golden),
           reason: key,
         );
       });
