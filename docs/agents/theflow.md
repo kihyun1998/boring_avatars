@@ -650,6 +650,18 @@ layer-2 SVG strings into `test/fixtures/<state>/`.
 `tool/calibrate/` is the layer-3 equivalent — it drives real Chrome and reports
 the pixel diff. Same shape, same rule: a tool, run deliberately. See Step 4.
 
+`tool/milestones/sync.mjs` renders the GitHub milestone descriptions from
+`CLAUDE.md`'s release table. **Run it whenever that table changes.** A milestone
+description has to carry the version list — "see CLAUDE.md" is useless to
+someone browsing GitHub — so the mapping lives in two surfaces whether or not we
+want it to; generating one from the other is what keeps them together. The
+authored half (what ships in a release, why `1.11.0` is excluded) lives in the
+tool's `NOTES`, so regenerating never destroys it.
+
+It reports three kinds of drift, each verified to fire: a version list that no
+longer matches, a milestone that exists with no row in the table, and a row with
+no note. Dry-run by default; `--apply` writes.
+
 The harness is a **tool, not a gate**: `flutter test` reads the committed
 fixtures and never runs Node. That keeps the gate hermetic (no network, no npm
 state) and makes a parity change appear as a **reviewable `git diff` of the
