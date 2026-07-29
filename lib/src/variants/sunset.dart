@@ -21,6 +21,8 @@
 ///   "not drawn and so not interesting" — it holds the paint.
 library;
 
+import 'dart:convert';
+
 import '../js/utilities.dart';
 import '../scene/scene.dart';
 
@@ -58,6 +60,53 @@ List<String?> sunsetColors(String name, List<String> colors) {
 /// every gradient.
 String sunsetIdName(String name) => name.replaceAll(RegExp(r'\s'), '');
 
+/// The characters that make a `url(#…)` reference unreadable to a browser.
+///
+/// CSS Syntax §4.3.6 ends an unquoted url token on `"`, `'`, `(`, `)`, a
+/// backslash or a non-printable, and `%` starts an escape when the fragment is
+/// resolved — so a raw `%` in the id would be decoded into something else.
+/// Everything outside this set, **including Korean and emoji**, resolves as it
+/// stands: measured in Chrome.
+bool _breaksUrlToken(int rune) =>
+    rune <= 0x20 ||
+    rune == 0x7F ||
+    rune == 0x22 || // "
+    rune == 0x25 || // %
+    rune == 0x27 || // '
+    rune == 0x28 || // (
+    rune == 0x29 || // )
+    rune == 0x5C; //  \
+
+/// The gradient id as it must appear inside `url(#…)`.
+///
+/// **This is the one place the port deliberately diverges from upstream**, and
+/// it is the user's ruling of 2026-07-29 — see the divergence ledger in
+/// `docs/agents/theflow.md`.
+///
+/// Upstream writes the name straight into both the `id` and the reference. For
+/// a name containing `'`, `"`, `(`, `)` or `\` the reference is then not a
+/// valid CSS url token, the paint cannot be resolved, and **the browser draws
+/// nothing at all** — measured in Chrome, every pixel `0,0,0,0`, for a name as
+/// ordinary as `O'Brien`.
+///
+/// Percent-encoding only the *reference* is the smallest repair that works:
+/// the `<linearGradient id="…">` stays byte-identical to upstream, and only the
+/// two `fill` attributes change. Three repairs were measured; encoding the id
+/// as well does **not** work, because an id is matched literally.
+String sunsetUrlReference(String idName) {
+  final out = StringBuffer();
+  for (final rune in idName.runes) {
+    if (_breaksUrlToken(rune)) {
+      for (final byte in utf8.encode(String.fromCharCode(rune))) {
+        out.write('%${byte.toRadixString(16).toUpperCase().padLeft(2, '0')}');
+      }
+    } else {
+      out.writeCharCode(rune);
+    }
+  }
+  return out.toString();
+}
+
 /// Builds the `sunset` scene for upstream v1.6.1.
 SvgNode buildSunsetScene({
   required String name,
@@ -69,6 +118,11 @@ SvgNode buildSunsetScene({
   final idName = sunsetIdName(name);
   final topId = 'gradient_paint0_linear_$idName';
   final bottomId = 'gradient_paint1_linear_$idName';
+  // The ids stay exactly as upstream writes them; only the references are
+  // repaired, which is what keeps the divergence to two attributes.
+  final reference = sunsetUrlReference(idName);
+  final topRef = 'gradient_paint0_linear_$reference';
+  final bottomRef = 'gradient_paint1_linear_$reference';
 
   SvgNode gradient(String id, num y1, num y2, String? from, String? to) =>
       SvgNode(
@@ -143,14 +197,14 @@ SvgNode buildSunsetScene({
           SvgNode(
             SvgElement.path,
             attributes: [
-              SvgAttribute('fill', 'url(#$topId)'),
+              SvgAttribute('fill', 'url(#$topRef)'),
               const SvgAttribute('d', _topHalf),
             ],
           ),
           SvgNode(
             SvgElement.path,
             attributes: [
-              SvgAttribute('fill', 'url(#$bottomId)'),
+              SvgAttribute('fill', 'url(#$bottomRef)'),
               const SvgAttribute('d', _bottomHalf),
             ],
           ),

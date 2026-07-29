@@ -436,13 +436,48 @@ reachable in **zero** states.
 
 ### Upstream divergence ledger
 
-Suspected upstream defects and the **user's ruling** on each. Empty until the
-first one is adjudicated. Never append a row the user has not seen and ruled on.
+Suspected upstream defects and the **user's ruling** on each. Never append a row
+the user has not seen and ruled on. One ruling recorded so far, as an event
+below the table.
 
 | Ref | Upstream `file:line` @ tag | What it does | Ruling | Decided |
 |---|---|---|---|---|
 | — | `avatar-marble.tsx:59` @ v2.0.x | first path's transform reads `properties[2].scale` where `properties[1].scale` is implied — a copy-paste slip. Fixing it changes the output | **not yet ruled** | — |
-| — | `avatar-sunset.js:20,36,41` @ v1.6.1 | builds a gradient id from the caller's name and references it as `url(#…)`. For any name containing `'`, `"`, `(`, `)`, `\` or a control character the reference is not a valid CSS url token, so **the browser paints nothing** and the avatar is blank. Reproduced in Chrome: `O'Brien-Smith, Jr.` → all pixels `0,0,0,0`; `Clara Barton` → the gradient. The corpus name `punctuation` is exactly this case, and an apostrophe in a name is common | **not yet ruled** | — |
+| **S-1** | `avatar-sunset.js:20,36,41` @ v1.6.1 | builds a gradient id from the caller's name and references it as `url(#…)`. For any name containing `'`, `"`, `(`, `)`, `\` or a control character the reference is not a valid CSS url token, so **the browser paints nothing** and the avatar is blank. Reproduced in Chrome: `O'Brien-Smith, Jr.` → all pixels `0,0,0,0`; `Clara Barton` → the gradient. The corpus name `punctuation` is exactly this case, and an apostrophe in a name is common | **repair it — do not reproduce the blank** | 2026-07-29 |
+
+### S-1 — the ruling, as an event
+
+**What the user was shown (2026-07-29):** the reference upstream emits
+(`url(#gradient_paint0_linear_O&#x27;Brien-Smith,Jr.)`), a Chrome render of it —
+every pixel `0,0,0,0`, the whole avatar blank — beside the same name rendering
+correctly once repaired, the count of affected corpus names (**1 of 20**), and
+four candidate repairs each measured in Chrome:
+
+| repair | works | bytes that move |
+|---|---|---|
+| leave it (reproduce upstream) | **no — blank** | none |
+| percent-encode the **reference** only | **yes** | the two `fill` attributes |
+| quote the reference | yes | the two `fill` attributes |
+| strip the characters from the id | yes | the two ids **and** the two references |
+| percent-encode the id as well | **no — blank** | — |
+
+**What they chose:** repair it — *"버그는 수정하자."* Percent-encoding the
+reference is the implementation, because it is the only working repair that
+leaves `<linearGradient id="…">` byte-identical to upstream.
+
+**It is theirs to reverse.** This is a product judgement: it trades "the same
+bytes as upstream" for "an avatar the user can see". A later argument that the
+port should be faithful above all does **not** reopen it — only the user does.
+
+**What it costs.** `sunset` is no longer byte-identical for a name containing
+`'`, `"`, `(`, `)`, `\`, `%` or a control character — one corpus name today.
+`sunset_parity_test.dart` lists those names explicitly and asserts the
+difference is *exactly* a percent-encoding, so the divergence cannot widen
+without someone editing that list. Every other name stays byte-identical, and so
+does every id, for every name.
+
+**The other five variants are unaffected** — `sunset` is the only one that puts
+the caller's name inside an id.
 
 ---
 
