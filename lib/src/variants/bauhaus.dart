@@ -16,11 +16,13 @@
 ///   `i`, so all four elements carry the *same* flag — and only `properties[1]`
 ///   reads it. A port that threaded `i` through it, which is the change a
 ///   reader is most likely to make, **survives the whole 100-render byte
-///   sweep**: measured, 22 tests green. It is blind by construction, not by
-///   luck — `getDigit(n, 2)` is the hundreds digit, so `n + 1` moves it only
-///   when `n ≡ 99 (mod 100)`, about one name in a hundred. The tripwire that
-///   catches it is in `bauhaus_parity_test.dart` and asserts on layer 1
-///   directly.
+///   sweep**: measured, 22 tests green. `getDigit(n, 2)` is the hundreds
+///   digit, so `hash + 1` moves element 1's flag only when
+///   `hash ≡ 99 (mod 100)` — about one name in a hundred, and none of the
+///   corpus's twenty. The blindness is therefore the **corpus's**, not the
+///   port's: one more name in that class would close it at layer 2.
+///   `bauhaus_parity_test.dart` asserts on layer 1 directly and carries three
+///   constructed names so it does not depend on which corpus is current.
 /// * **The translation range shrinks as the index grows.** `SIZE / 2 - (i + 17)`
 ///   is 23, 22, 21 and 20 — so the four elements do not share a range, and a
 ///   port that hoisted the constant out of the loop moves three of them.

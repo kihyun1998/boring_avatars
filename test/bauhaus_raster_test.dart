@@ -140,6 +140,67 @@ void main() {
     test('an empty or absent transform list is the identity, not an error', () {
       expect(parseTransform('').isTranslationOnly, isTrue);
       expect(parseTransform('   ').apply(3, 4), (3.0, 4.0));
+      // A source that trims to empty is the *only* way out of the parse loop
+      // with nothing matched, which is why there is no second check after it.
+      expect(parseTransform('\t\n').apply(3, 4), (3.0, 4.0));
+      // Everything else throws from inside the loop, including a bare comma.
+      for (final unreadable in [',', ' , ', 'x', '()', 'translate']) {
+        expect(
+          () => parseTransform(unreadable),
+          throwsA(isA<UnsupportedSceneError>()),
+          reason: unreadable,
+        );
+      }
+    });
+
+    test('two rotations compose — a list no variant in the six writes', () {
+      // Found by the #39 completeness pass. `multiply`'s two cross terms —
+      // `c * other.b` in slot `a` and `b * other.c` in slot `d` — are **dead
+      // from every real input**: every transform any variant writes is
+      // `translate · rotate` (and `scale`, later), so the left operand's `c`
+      // and the right operand's `b` are never both non-zero. Deleting either
+      // term left all 465 tests green.
+      //
+      // Not a defect and not fixable with better upstream data: the reference
+      // will never produce the case. Constructing it is the answer
+      // `lessons.md` records for exactly this shape.
+      final composed = parseTransform('rotate(30) rotate(20)');
+      final single = parseTransform('rotate(50)');
+      for (final c in [
+        (composed.a, single.a, 'a'),
+        (composed.b, single.b, 'b'),
+        (composed.c, single.c, 'c'),
+        (composed.d, single.d, 'd'),
+      ]) {
+        expect(c.$1, closeTo(c.$2, 1e-12), reason: c.$3);
+      }
+      // And the same about a point, which puts translations between the two
+      // linear parts — the arrangement `bauhaus` itself writes, doubled.
+      // Stated as an identity rather than as coordinates, so no hand
+      // arithmetic of mine can be the thing under test.
+      final aboutPoint = parseTransform('rotate(30 40 40) rotate(20 40 40)');
+      final once = parseTransform('rotate(50 40 40)');
+      for (final c in [
+        (aboutPoint.a, once.a, 'a'),
+        (aboutPoint.b, once.b, 'b'),
+        (aboutPoint.c, once.c, 'c'),
+        (aboutPoint.d, once.d, 'd'),
+        (aboutPoint.e, once.e, 'e'),
+        (aboutPoint.f, once.f, 'f'),
+      ]) {
+        expect(c.$1, closeTo(c.$2, 1e-9), reason: '${c.$3} about a point');
+      }
+    });
+
+    test('a one-argument translate takes ty as zero, per §7.4', () {
+      // Also dead from every real input: all three variants with a transform
+      // concatenate two numbers. A mutation defaulting `ty` to `tx` survived
+      // the whole suite.
+      expect(parseTransform('translate(5)').apply(0, 0), (5.0, 0.0));
+      expect(parseTransform('translate(5)').apply(1, 2), (6.0, 2.0));
+      // The one-argument `rotate` form is exercised by the composition test
+      // above; this is its `translate` counterpart.
+      expect(parseTransform('translate(-3)').apply(3, 7), (0.0, 7.0));
     });
 
     test('an unimplemented function throws and names itself', () {
@@ -259,6 +320,32 @@ void main() {
       expect(strokeSegmentContour(40, 40, 40, 40, 2), isNull);
       expect(strokeSegmentContour(0, 40, 80, 40, 0), isNull);
       expect(strokeSegmentContour(0, 40, 80, 40, -2), isNull);
+    });
+
+    test('and a zero-length line survives the whole scene walk', () {
+      // The three cases above are asserted on the helper. The branch that
+      // turns its `null` into an empty shape lives in `scene_raster.dart`, and
+      // nothing drove it through `rasterizeScene` — replacing it with
+      // `outline!` survived all 465 tests. Found by the #39 completeness pass.
+      final image = rasterizeScene(
+        sceneWith([
+          const SvgNode(
+            SvgElement.line,
+            attributes: [
+              SvgAttribute('x1', 40),
+              SvgAttribute('y1', 40),
+              SvgAttribute('x2', 40),
+              SvgAttribute('y2', 40),
+              SvgAttribute('stroke-width', 2),
+              SvgAttribute('stroke', '#FF0000'),
+              SvgAttribute('transform', 'translate(1 1) rotate(30 40 40)'),
+            ],
+          ),
+        ]),
+        width: 80,
+        height: 80,
+      );
+      expect(image.bytes.every((b) => b == 0), isTrue);
     });
 
     test('an absent stroke-width throws — the default arrives with beam', () {
@@ -487,10 +574,13 @@ void main() {
     });
 
     test('a rotated bar antialiases where an unrotated one does not', () {
-      // The complement of the zero-hash case: `Clara Barton` rotates by 191°,
-      // so the bar's edges fall between pixels and partial coverage has to
-      // appear. A transform silently dropped would give the sharp picture here
-      // too, and every other assertion in this file would still pass.
+      // The complement of the zero-hash case: `Clara Barton` turns its bar by
+      // **22°** — read off the fixture's `rotate(22 40 40)`, not off
+      // `properties[0].rotate`, which is 191° and reaches no pixel because
+      // element 0 contributes only a colour. So the bar's edges fall between
+      // pixels and partial coverage has to appear. A transform silently
+      // dropped would give the sharp picture here too, and every other
+      // assertion in this file would still pass.
       final image = rasterizeScene(
         buildBauhausScene(
           name: 'Clara Barton',

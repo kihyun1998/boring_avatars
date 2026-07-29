@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:boring_avatars/src/js/utilities.dart';
 import 'package:boring_avatars/src/svg/emitter.dart';
 import 'package:boring_avatars/src/variants/bauhaus.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,9 +23,11 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// The reason is **not** that the moved values are unread — element 1's would
 /// move too. It is that `getDigit(n, 2)` reads the hundreds digit, so `n + 1`
-/// changes it only when `n ≡ 99 (mod 100)`. A corpus of 20 names expects 0.2
-/// hits; it has none. Widening the corpus would eventually catch this, and the
-/// tripwire below does not need it to.
+/// changes it only when `hash ≡ 99 (mod 100)`. A corpus of 20 names expects 0.2
+/// such hits and has none, so the blindness is contingent on the corpus rather
+/// than on the port: **one more name in that class would close it at layer 2.**
+/// `aaK` is such a name (hash 96299), and the group below uses it and two
+/// siblings so the tripwire trips by construction instead of by luck.
 void main() {
   final corpus =
       jsonDecode(File('test/fixtures/corpus.json').readAsStringSync())
@@ -132,21 +135,81 @@ void main() {
 
     test('all four elements carry the same flag — upstream omits `i`', () {
       // `getBoolean(numFromName, 2)` is inside the `Array.from` callback and
-      // does not use its index, so the four values are equal by construction.
-      // Only element 1 is ever read, so threading `i` through it — the change a
-      // reader is most likely to make, since every sibling field uses `i` —
-      // **survives the 100-render byte sweep above**. Measured: the mutation
-      // was applied and the sweep's 22 tests all stayed green. It is blind by
-      // construction rather than by luck: `getDigit(n, 2)` is the hundreds
-      // digit, and `n + 1` moves it only when `n ≡ 99 (mod 100)`.
+      // does not use its index, so the four values are equal.
       //
-      // This test is therefore the only thing standing between the port and a
-      // wrong flag, and it asserts on layer 1 because layer 2 cannot see it.
+      // **Two different conditions live near this test and they are not the
+      // same number.** An earlier revision of this comment conflated them.
+      //
+      // * The 100-render byte sweep above is blind to a threaded `i` when
+      //   element *1*'s flag does not move, which needs `hash ≢ 99 (mod 100)`
+      //   — `getDigit(n, 2)` is the hundreds digit. Over 20 names that is 0.2
+      //   expected and **0 observed**, so the sweep is in fact blind: measured
+      //   by applying the mutation and watching its 22 tests stay green.
+      // * This test trips when *any* of `hash…hash+3` crosses a hundred, which
+      //   needs `hash mod 100 ∈ {97, 98, 99}` — 0.6 expected, **2 observed**
+      //   (`single-char`, hash 97; `punctuation`, hash 218314798).
+      //
+      // So its power over the corpus is membership, not construction: drop
+      // those two names and it goes green and silent. The constructed names
+      // below are what make it a tripwire rather than a coincidence — one per
+      // residue, so it trips whatever the corpus becomes.
+      const constructed = {
+        'aaI': 97, // flags 1110 — element 3 alone moves
+        'aaJ': 98, // flags 1100
+        'aaK': 99, // flags 1000 — **element 1 moves**, so layer 2 would see it
+      };
+      for (final entry in constructed.entries) {
+        final flags = bauhausProperties(entry.key, const [
+          '#FF0000',
+        ]).map((e) => e.isSquare).toSet();
+        expect(flags, hasLength(1), reason: entry.key);
+        // The witness has to actually be in its residue class, or it is not
+        // exercising anything and this test is decoration.
+        expect(
+          jsHashCode(entry.key) % 100,
+          entry.value,
+          reason: '${entry.key} is no longer a witness',
+        );
+      }
+
       for (final n in names) {
         final flags = bauhausProperties(n['value'] as String, const [
           '#FF0000',
         ]).map((e) => e.isSquare).toSet();
         expect(flags, hasLength(1), reason: n['id'] as String);
+      }
+    });
+
+    test('and this pins the flag\'s shape, where the fixture pins its value', () {
+      // The test above asserts only that the four agree — `getBoolean(hash, 3)`
+      // satisfies it and is wrong. What kills that is the fixture-height
+      // comparison at the top of this group. Neither test is "the only thing
+      // standing between the port and a wrong flag"; they cover different
+      // halves, and saying so is cheaper than someone deleting one.
+      // Stated over the corpus, not over one name: `Clara Barton`'s hundreds
+      // and thousands digits happen to agree, so it alone could not tell the
+      // two apart. What matters is that *some* name does — otherwise the
+      // fixture-height test is satisfied by the wrong digit and the pair of
+      // tests covers one half twice.
+      final distinguishing = names.where((n) {
+        final hash = jsHashCode(n['value'] as String);
+        return jsGetBoolean(hash, 3) != jsGetBoolean(hash, 2);
+      }).toList();
+      expect(
+        distinguishing,
+        isNotEmpty,
+        reason:
+            'no corpus name separates getDigit(_, 2) from getDigit(_, 3), so '
+            'the fixture-height test cannot pin which digit is read',
+      );
+      for (final n in distinguishing) {
+        expect(
+          bauhausProperties(n['value'] as String, const [
+            '#FF0000',
+          ])[1].isSquare,
+          jsGetBoolean(jsHashCode(n['value'] as String), 2),
+          reason: n['id'] as String,
+        );
       }
     });
   });

@@ -24,11 +24,17 @@ const _default = ['#92A1C6', '#146A7C', '#F0AB3D', '#C271B4', '#C20D90'];
 
 final _cases = <String, (SvgNode, int)>{
   // `bauhaus` is the first variant with a rotated shape and the first with a
-  // stroke, so the two names below are chosen to separate the branches:
-  // `Clara Barton` has `isSquare` true and rotates by 191°, `Alice` has it
-  // false and rotates by 88°. The empty name hashes to 0, so every transform
-  // is the identity — the case that proves a rotation of zero does not
-  // antialias an edge Chrome draws sharp.
+  // stroke, so the two names below separate the branches: `Clara Barton` has
+  // `isSquare` true and turns its bar 22° and its rule 44°; `Alice` has it
+  // false and turns them 176° and 352° — nearly horizontal, which is where a
+  // rasterizer and a browser disagree most. The empty name hashes to 0, so
+  // every transform is the identity and every edge lands on a pixel boundary.
+  //
+  // Read the drawn angles off the fixture, not off `properties[0]`: element 0
+  // contributes a colour and nothing else, and its rotation — 191° for Clara,
+  // 88° for Alice — reaches no pixel. Three comments in this repo cited those
+  // two numbers as the reason for this case selection; the #39 completeness
+  // pass caught it.
   'bauhaus-clara-default': (
     buildBauhausScene(name: 'Clara Barton', colors: _default, size: 80),
     80,

@@ -112,8 +112,16 @@ const _implemented = {'translate', 'rotate'};
 Affine parseTransform(String source) {
   var matrix = Affine.identity;
   var index = 0;
-  var found = false;
 
+  // There is deliberately no second, post-loop check that anything matched.
+  // One was written here and **no mutation could kill it**, because it could
+  // not fire: the loop leaves with nothing matched only when it was never
+  // entered (an empty source) or when it broke at index 0 on an all-whitespace
+  // remainder — and in both cases the source trims to empty, which is the
+  // identity rather than an error. Every other unreadable prefix throws inside
+  // the loop. Measured over `''`, `'   '`, `'\t\n'`, `','`, `'x'`, `'()'`,
+  // `'translate'`, `'translate(1 2) x'`. Same disposition as the gradient's
+  // redundant `pad` clamps in #40: deleted rather than tested.
   while (index < source.length) {
     final match = _function.matchAsPrefix(source, index);
     if (match == null) {
@@ -123,7 +131,6 @@ Affine parseTransform(String source) {
       );
     }
     index = match.end;
-    found = true;
 
     final name = match.group(1)!;
     if (!_implemented.contains(name)) {
@@ -151,9 +158,6 @@ Affine parseTransform(String source) {
     matrix = matrix.multiply(_build(name, arguments, source));
   }
 
-  if (!found && source.trim().isNotEmpty) {
-    throw UnsupportedSceneError('unreadable transform "$source"');
-  }
   return matrix;
 }
 

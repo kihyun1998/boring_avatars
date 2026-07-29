@@ -119,6 +119,50 @@ doing literal `split`/`join`, which cannot mistake a pattern for a regex, and it
 prints `NO MATCH — the mutation never applied` as its own outcome rather than
 folding it into either verdict.
 
+### A runner can report a false *kill*, which is the worse direction (#39)
+
+Fourth and fifth occurrence of "a substitution whose application is not verified
+is not a mutation", both in one session, and the first one in the direction
+nobody had seen.
+
+- **The false kill.** The runner spawned `flutter test` with
+  `execFileSync(cmd, args, {shell: true})`, which concatenates the arguments
+  **unquoted**. `--name "reproduces upstream byte for byte"` arrived as five bare
+  words, the filter never applied, the whole file ran, and a mutation the
+  filtered group is provably blind to was reported **killed**. The claim being
+  measured was "the byte sweep cannot see this", so the runner returned the
+  opposite of the truth on the one question it was asked.
+- **The five silent no-matches.** The working tree is CRLF. Every multi-line
+  pattern was written with `\n` and matched nothing; every single-line one
+  applied. The runner said `NO MATCH` rather than folding them into either
+  verdict, which is the #34/#36/#37 fix working — the pattern was then
+  translated to the file's own line ending.
+
+The first is worse than the recorded direction. A false survivor sends you
+hunting a hole that is not there and costs time; a false kill **retires a real
+question as answered**.
+
+**The rule this earns:** a mutation runner needs three outcomes, not two, and
+the third has to cover *green over zero tests* as well as *no substitution*. It
+now parses the test count out of the run and refuses to call a filtered-to-empty
+run a survivor. Quote arguments yourself when the shell is doing the joining.
+
+### A concurrent agent in the same worktree invalidates a measurement (#39)
+
+Two completeness lenses ran in parallel against one checkout. One of them left
+three mutations applied in `lib/src/raster/transform.dart` while the other was
+measuring, so that run's first pass reported two `NO MATCH`es and a `SURVIVED`
+against a baseline that was already wrong — the "substitution that matched
+nothing" trap in a new form: *a substitution applied on top of an unknown
+baseline*. The affected lens re-ran everything with a `git status` assertion
+before and after each case, and the debris was isolated with `git stash push`
+(never `git checkout --`, the house rule) rather than discarded, so it could be
+inspected before being dropped.
+
+**The rule this earns:** a mutation run asserts the tree is clean before it
+starts, not just afterwards. Parallel read-only lenses are cheap; parallel
+*measuring* lenses share one mutable working tree and are not.
+
 ## Step 4 — real round-trip proof
 
 ### A bar can be recorded, believed, and never run (#33 → #37)
@@ -147,6 +191,69 @@ gate — record *when it was last executed and what it measured*, not just its
 threshold. And before believing a reference, measure the reference: the outside
 opinion that needed no negotiation here was πr², not Chrome.
 
+
+### A gate can be blind to a whole capability, not just to a defect in it (#39)
+
+`bauhaus` added a stroked `<line>` to the rasterizer, and the Chrome
+calibration reported **interior mismatches 0** on all three of its cases. That
+was written into the commit as evidence that "the transform composition, paint
+order and stroke geometry are right".
+
+The refuting lens deleted the entire stroked-line capability — the rule simply
+not drawn — and re-ran it. **Interior mismatches: still 0, on all three.**
+Reproduced independently before it was believed.
+
+The cause is not a weak tolerance. `_isEdge` calls a pixel interior when its
+3×3 neighbourhood is uniform in the reference, and a 2-unit stroke at 1 device
+pixel per unit has no such pixel anywhere — every pixel of the band has a
+neighbour outside it. So the classifier files 100% of the rule as edge, and the
+interior count cannot move whatever happens to it. The worst *edge* delta does
+move, 71 → 174–255, but the recorded bar is ≤1 and the baseline is already 71
+because of Chrome's own curve error (#27), so no threshold separates a missing
+shape from a browser artefact.
+
+`flutter test` killed the deletion, and killed three other wrong pictures the
+lens built (every shape shifted 0.3 px, the disc 3% small, the rule one unit
+thick). The Chrome run killed none of them.
+
+**The rule this earns:** hidden-state #42 said the interior/edge split is
+"defeated by a gradient". It is defeated by anything a 3×3 window does not fit
+inside, which now includes every stroke this package will draw — `beam` adds
+two more. A statistic that *cannot* respond to a change is worse than a loose
+one, because it reads as coverage. Before quoting an aggregate as evidence,
+delete the thing it is supposed to be evidence about and check that it moves.
+
+### A tripwire's power can come from corpus membership rather than construction (#39)
+
+`bauhaus`'s `isSquare` is `getBoolean(numFromName, 2)` with no loop index, so
+all four elements share one flag and only element 1 is ever read. Threading `i`
+through it — the change a reader is most likely to make — survives the whole
+100-render byte sweep. A dedicated layer-1 test was written for it, the
+mutation died, and the comment beside it explained why with a number.
+
+The number was for the wrong condition. Two different thresholds sit here and
+they had been collapsed into one:
+
+- the **sweep** is blind while element 1's flag holds, which needs
+  `hash ≢ 99 (mod 100)` — 0.2 expected over 20 names, 0 observed;
+- the **tripwire** trips when any of `hash…hash+3` crosses a hundred, which
+  needs `hash mod 100 ∈ {97, 98, 99}` — 0.6 expected, **2 observed**
+  (`single-char`, hash 97; `punctuation`, hash 218314798).
+
+So the test was passing on two corpus names. Delete them and it goes green and
+silent — the #34 failure again, one rung further out: not a test whose subject
+never appears in its assertions, but one whose subject appears only because of
+what a *fixture* happens to contain.
+
+Fixed with three constructed names, one per residue. `aaK` (hash 96299) is the
+sharp one: it is the class where element 1's own flag moves, so it is the name
+that would have closed the hole at layer 2. The blindness was never the port's —
+it was the corpus's, and one more name would have ended it.
+
+**The rule this earns:** when a test's discriminating power depends on a corpus,
+say which entries carry it and add a constructed witness beside them. And check
+which condition your number is about — two nearby thresholds that differ by one
+digit of arithmetic will both look like "the obvious one".
 
 ### A byte gate catches what a picture never shows (#36)
 
@@ -236,10 +343,10 @@ at the edges" is the description of a half-pixel error as much as of a
 resolution artefact. This is the #34 rule again, applied to a gate that was
 being designed rather than one already written.
 
-### A value nothing reads is not a value that works (#37, #40)
+### A value nothing reads is not a value that works (#37, #40, #39)
 
-Twice now, the hardest arithmetic in a change turned out to be unreachable from
-any real input, and both times the whole suite was green over it.
+Three times now, the hardest arithmetic in a change turned out to be unreachable
+from any real input, and every time the whole suite was green over it.
 
 - `#37` — every arc upstream writes has a chord equal to its diameter, so
   F.6.5's centre offset is exactly zero and the `largeArc` flag multiplies it.
@@ -250,10 +357,27 @@ any real input, and both times the whole suite was green over it.
   pixel of any render. Three mutants survived, including one that deleted the
   x-term outright.
 
+- `#39` — **every transform any variant writes is `translate · rotate`.** So in
+  `Affine.multiply` the left operand's `c` and the right operand's `b` are never
+  both non-zero, and two of the six terms are dead: deleting `c * other.b` from
+  slot `a`, or `b * other.c` from slot `d`, left all 465 tests green. Two more
+  in the same file: the one-argument `translate(x)` form (§7.4's `ty = 0`
+  default), which no variant and no test wrote, and `<line>`'s zero-length
+  branch, which was asserted on the helper but never driven through
+  `rasterizeScene`.
+
 Neither is a defect and neither is fixable by finding better upstream input:
 the reference will never produce the case. What closes it is a **constructed**
-one — a diagonal gradient, a horizontal one, a reversed axis — written knowing
-that no variant will ever exercise it.
+one — a diagonal gradient, a horizontal one, a reversed axis, two rotations
+composed, `translate(5)` — written knowing that no variant will ever exercise it.
+
+`#39` also produced the fourth answer's first clean instance: a guard that was
+**unsatisfiable**, not merely unreached. `parseTransform` ended with
+`if (!found && source.trim().isNotEmpty) throw` — and `!found` implies the
+source trims to empty, so the conjunction can never hold. Every unreadable
+prefix already throws inside the loop; measured over `''`, `'   '`, `'\t\n'`,
+`','`, `'x'`, `'()'`, `'translate'`, `'translate(1 2) x'`. Deleted, like #40's
+redundant gradient clamps, rather than tested.
 
 The same pass also found two guards that no mutation could kill because they
 *did nothing*: the gradient's explicit `pad` clamps were already implemented by
