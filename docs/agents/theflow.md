@@ -803,11 +803,43 @@ matter more now, not less, because each release covers more versions:
 
 - **Every release re-proves the additive invariant.** A user pinned to `v1_6_1`
   must not have their avatars move because `0.3.0` touched `pixel`.
-- **Per-version fixtures are still generated for every covered version**, not one
-  per release. Collapsing the *releases* does not license collapsing the
-  *evidence* — the `<title>` divergence was found precisely because 1.6.1 and
-  1.7.0 were rendered separately, and a plan that rendered one and claimed four
-  would have missed it.
+- **Every covered version is measured; the committed fixture is per output
+  state.** Collapsing the *releases* does not license collapsing the *evidence* —
+  the `<title>` divergence was found precisely because 1.6.1 and 1.7.0 were
+  rendered separately, and a plan that rendered one and claimed four would have
+  missed it. What that protection actually requires is a **render and a
+  comparison** per covered version, which is what `tool/versions/group.mjs` runs;
+  it does not require a second directory of identical bytes under
+  `test/fixtures/`, and a second copy is not a second measurement.
+
+  **Decided by the user on 2026-07-29**, superseding this rule's earlier wording
+  ("per-version fixtures are still generated for every covered version"), which
+  described something the repo has never done: `test/fixtures/` has held one
+  directory per output state since #33, and `tool/parity/` installs one upstream
+  per state. A product judgement, theirs to reverse — *"문구까지 지킬 필요는
+  없고 결과가 중요함"*, the same criterion they applied to the release boundary
+  one level up.
+
+  **What they were shown.** For the `v1_6_1` group, three artefacts and three
+  answers, which do not all agree:
+
+  | | 1.6.1 | 1.6.2 | 1.6.3 |
+  |---|---|---|---|
+  | git `src/lib` tree | `3cca55f5…` | same | same |
+  | published npm bundle | `c9491576…` | same | **`f4636f1d…`** |
+  | rendered output | — | identical | identical |
+
+  1.6.3's bundle differs by **exactly 34 bytes**: the trailing
+  `//# sourceMappingURL=index.js.map` comment and its newline. Everything
+  executable is byte-identical, verified with `cmp`.
+
+  **So the rule's teeth are in the middle row, not the top one.** "The git tree
+  hash matches, therefore there is nothing to do" is a *source* argument for an
+  *output* claim, and this project has already paid for that confusion once —
+  `1.11.0` shares `1.11.1`'s source intent and emits different markup
+  (hidden-state #37). Here the npm artefacts genuinely diverged and the
+  divergence happened to land in a comment. Next time it may not, and the check
+  that would catch it is the render, not the blob.
 
 **`1.11.0` is not in the table, and that is deliberate** — see "The states in
 scope" above. It emits junk attributes no other version does.

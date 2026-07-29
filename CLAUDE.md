@@ -45,9 +45,11 @@ produces — the same numbers, the same SVG, the same pixels.
    | `0.2.0` | `v1_7_0` | 1.7.0, 1.8.0, 1.9.0, 1.10.0 | `<title>` becomes optional |
    | `0.3.0` | `v1_10_1` | 1.10.1, 1.10.2, 1.11.1, 1.11.2, 2.0.0 – 2.0.4 | `pixel`'s colour index |
 
-   **Collapsing the releases does not collapse the evidence** — fixtures are
-   still generated per upstream version. The measurements behind the grouping,
-   the reason `1.11.0` is excluded, the work each release earns, and the two
+   **Collapsing the releases does not collapse the evidence** — every covered
+   version is *measured*, by rendering it and comparing the result. What is one
+   per release is the committed **fixture**, because a second copy of identical
+   bytes is not a second measurement. The measurements behind the grouping, the
+   reason `1.11.0` is excluded, the work each release earns, and the two
    superseded plans are in `docs/agents/theflow.md` ("The states in scope",
    "Release plan").
 4. **Deterministic everywhere.** The same input yields the same bytes on every
