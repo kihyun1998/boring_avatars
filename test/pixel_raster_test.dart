@@ -89,13 +89,13 @@ void main() {
       final withFill = rasterizeMaskedShapes(
         width: 4,
         height: 4,
-        shapes: const [RasterRect(0, 0, 4, 4, '#FF0000')],
+        shapes: [RasterRect(0, 0, 4, 4, SolidPaint.hex('#FF0000'))],
         mask: RoundedRectMask(x: 0, y: 0, width: 4, height: 4, rx: 0),
       );
       final withoutFill = rasterizeMaskedShapes(
         width: 4,
         height: 4,
-        shapes: const [RasterRect(0, 0, 4, 4, null)],
+        shapes: [RasterRect(0, 0, 4, 4, null)],
         mask: RoundedRectMask(x: 0, y: 0, width: 4, height: 4, rx: 0),
       );
       expect(withFill.bytes.any((b) => b != 0), isTrue);
@@ -309,7 +309,7 @@ void main() {
         width: 2,
         height: 1,
         // Covers 30% of pixel 0 and none of pixel 1.
-        shapes: const [RasterRect(0, 0, 0.3, 1, '#FF0000')],
+        shapes: [RasterRect(0, 0, 0.3, 1, SolidPaint.hex('#FF0000'))],
         mask: RoundedRectMask(x: 0, y: 0, width: 2, height: 1, rx: 0),
       );
       expect(img.bytes.sublist(0, 4), [
@@ -325,7 +325,7 @@ void main() {
       final img = rasterizeMaskedShapes(
         width: 1,
         height: 1,
-        shapes: const [RasterRect(0.25, 0.5, 0.5, 0.5, '#FFFFFF')],
+        shapes: [RasterRect(0.25, 0.5, 0.5, 0.5, SolidPaint.hex('#FFFFFF'))],
         mask: RoundedRectMask(x: 0, y: 0, width: 1, height: 1, rx: 0),
       );
       // 0.5 wide x 0.5 tall = 0.25 coverage -> alpha 64.
@@ -460,7 +460,7 @@ void main() {
           height: size,
           polygon: RasterPolygon([
             flattenCircle(size / 2, size / 2, size / 2),
-          ], '#000000'),
+          ], SolidPaint.hex('#000000')),
         );
         var worst = 0.0;
         var worstAt = '';

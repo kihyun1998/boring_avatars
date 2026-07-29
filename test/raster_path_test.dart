@@ -21,7 +21,7 @@ void main() {
     final coverage = polygonCoverage(
       width: size,
       height: size,
-      polygon: RasterPolygon(parsePath(d), '#000000'),
+      polygon: RasterPolygon(parsePath(d), SolidPaint.hex('#000000')),
     );
     var total = 0.0;
     for (final c in coverage) {
@@ -380,7 +380,9 @@ void main() {
         final coverage = polygonCoverage(
           width: 120,
           height: 120,
-          polygon: RasterPolygon([flattenCircle(60, 60, r)], '#000000'),
+          polygon: RasterPolygon([
+            flattenCircle(60, 60, r),
+          ], SolidPaint.hex('#000000')),
         );
         var area = 0.0;
         for (final c in coverage) {
@@ -411,7 +413,7 @@ void main() {
       mask: halfMask,
       shapes: [
         for (var i = 0; i < shapes; i++)
-          const RasterRect(0, 0, 1, 1, '#FFFFFF'),
+          RasterRect(0, 0, 1, 1, SolidPaint.hex('#FFFFFF')),
       ],
     ).bytes;
 
@@ -426,9 +428,9 @@ void main() {
         width: 1,
         height: 1,
         mask: halfMask,
-        shapes: const [
-          RasterRect(0, 0, 1, 0.5, '#FF0000'),
-          RasterRect(0, 0, 1, 0.5, '#FF0000'),
+        shapes: [
+          RasterRect(0, 0, 1, 0.5, SolidPaint.hex('#FF0000')),
+          RasterRect(0, 0, 1, 0.5, SolidPaint.hex('#FF0000')),
         ],
       );
       // Coverage is a scalar, so two shapes each covering half the pixel
@@ -447,9 +449,137 @@ void main() {
         width: 1,
         height: 1,
         mask: RoundedRectMask(x: 0, y: 0, width: 1, height: 0, rx: 0),
-        shapes: const [RasterRect(0, 0, 1, 1, '#FF0000')],
+        shapes: [RasterRect(0, 0, 1, 1, SolidPaint.hex('#FF0000'))],
       );
       expect(image.bytes, [0, 0, 0, 0]);
+    });
+  });
+
+  group('a linear gradient projects onto its own axis', () {
+    // **Every gradient this package has ever rasterised is vertical.**
+    // `sunset` writes x1 = x2 = 40, so `dx` is zero and the x half of the
+    // projection is multiplied away — `x1` and `x2` are values nothing reads.
+    // Measured: replacing both with -12345 changes not one pixel of any render.
+    //
+    // Same shape as hidden-state #36, where `largeArc` turned out to be
+    // dead-valued across the whole corpus, and the same answer: the cases below
+    // are **constructed**, because no upstream variant will ever produce them.
+    const red = RasterColour(255, 0, 0);
+    const blue = RasterColour(0, 0, 255);
+
+    LinearGradientPaint axis(double x1, double y1, double x2, double y2) =>
+        LinearGradientPaint(
+          x1: x1,
+          y1: y1,
+          x2: x2,
+          y2: y2,
+          stops: const [(0.0, red), (1.0, blue)],
+        );
+
+    /// The blue fraction at a pixel, 0–1, which is `t` recovered from the mix.
+    double blueness(LinearGradientPaint paint, int px, int py) =>
+        paint.colourAt(px, py).b / 255;
+
+    test('a horizontal gradient varies along x and not along y', () {
+      final paint = axis(0, 0, 10, 0);
+      expect(blueness(paint, 0, 0), closeTo(0.05, 0.005));
+      expect(blueness(paint, 9, 0), closeTo(0.95, 0.005));
+      // …and y does nothing.
+      for (final y in [0, 3, 7]) {
+        expect(blueness(paint, 5, y), blueness(paint, 5, 0), reason: 'y=$y');
+      }
+    });
+
+    test('a diagonal gradient reads both axes', () {
+      // From (0,0) to (10,10): t is the projection onto the diagonal, so
+      // (8,2) and (2,8) sit on the same band and (0,0) and (9,9) do not.
+      final paint = axis(0, 0, 10, 10);
+      expect(blueness(paint, 8, 2), closeTo(blueness(paint, 2, 8), 0.005));
+      expect(blueness(paint, 0, 0), closeTo(0.05, 0.005));
+      expect(blueness(paint, 9, 9), closeTo(0.95, 0.005));
+      // A gradient that ignored x would make these three equal, since they
+      // share a row.
+      expect(blueness(paint, 0, 5), isNot(blueness(paint, 9, 5)));
+    });
+
+    test('the axis direction is read, not just its length', () {
+      // Reversing the axis reverses the ramp. A projection that took the
+      // absolute distance from the start would give the same answer for both.
+      final forward = axis(0, 0, 0, 10);
+      final backward = axis(0, 10, 0, 0);
+      expect(blueness(forward, 0, 1), closeTo(blueness(backward, 0, 8), 0.005));
+      expect(blueness(forward, 0, 1), lessThan(blueness(forward, 0, 8)));
+    });
+
+    test('past either end the gradient pads, per the default spread', () {
+      // `sunset`'s stops span exactly the shape, so t never leaves [0, 1] and
+      // neither clamp is ever reached by a real render.
+      final paint = axis(0, 4, 0, 6);
+      expect(paint.colourAt(0, 0).b, 0, reason: 'before the first stop');
+      expect(paint.colourAt(0, 9).b, 255, reason: 'after the last stop');
+      expect(paint.colourAt(0, 0).r, 255);
+      expect(paint.colourAt(0, 9).r, 0);
+    });
+
+    test('a zero-length axis paints the last stop everywhere', () {
+      // SVG 1.1: "if x1 = x2 and y1 = y2, the area is painted with the colour
+      // of the last gradient stop". Dividing by the squared length would give
+      // NaN and paint nothing.
+      final paint = axis(5, 5, 5, 5);
+      for (final point in const [(0, 0), (5, 5), (9, 9)]) {
+        expect(paint.colourAt(point.$1, point.$2).b, 255, reason: '$point');
+      }
+    });
+
+    test('more than two stops interpolate piecewise', () {
+      // Upstream writes two. The loop handles more, and nothing else reaches
+      // it — so the case is made rather than assumed.
+      const green = RasterColour(0, 255, 0);
+      final paint = LinearGradientPaint(
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: 10,
+        stops: const [(0.0, red), (0.5, green), (1.0, blue)],
+      );
+      expect(paint.colourAt(0, 2).g, greaterThan(paint.colourAt(0, 0).g));
+      expect(
+        paint.colourAt(0, 4).g,
+        greaterThan(200),
+        reason: 'near the green',
+      );
+      expect(paint.colourAt(0, 4).b, lessThan(30), reason: 'blue not yet');
+      expect(paint.colourAt(0, 9).b, greaterThan(200));
+      expect(paint.colourAt(0, 9).g, lessThan(60));
+    });
+
+    test('two stops at the same offset step rather than divide by zero', () {
+      final paint = LinearGradientPaint(
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: 10,
+        stops: const [(0.0, red), (0.5, red), (0.5, blue), (1.0, blue)],
+      );
+      expect(paint.colourAt(0, 2).r, 255);
+      expect(paint.colourAt(0, 7).b, 255);
+    });
+
+    test('landing exactly on a doubled offset takes the later stop', () {
+      // The zero-span branch is only reachable when `t` is *exactly* the shared
+      // offset, which needs an axis short enough for a pixel centre to land on
+      // it — one unit tall puts the first row's centre at t = 0.5 exactly. SVG
+      // steps to the later stop there, and the branch that decides it survived
+      // every mutation until this case was constructed.
+      final paint = LinearGradientPaint(
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: 1,
+        stops: const [(0.5, red), (0.5, blue)],
+      );
+      expect(paint.colourAt(0, 0).b, 255, reason: 'the later stop wins');
+      expect(paint.colourAt(0, 0).r, 0);
     });
   });
 
@@ -462,14 +592,16 @@ void main() {
       final asRect = rasterizeMaskedShapes(
         width: 8,
         height: 8,
-        shapes: const [RasterRect(1.25, 2.5, 4.5, 3.25, '#FF8000')],
+        shapes: [RasterRect(1.25, 2.5, 4.5, 3.25, SolidPaint.hex('#FF8000'))],
         mask: mask,
       );
       final asPolygon = rasterizeMaskedShapes(
         width: 8,
         height: 8,
         shapes: [
-          RasterPolygon([rectangleContour(1.25, 2.5, 4.5, 3.25)], '#FF8000'),
+          RasterPolygon([
+            rectangleContour(1.25, 2.5, 4.5, 3.25),
+          ], SolidPaint.hex('#FF8000')),
         ],
         mask: mask,
       );

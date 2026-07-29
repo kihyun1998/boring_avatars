@@ -44,6 +44,15 @@ const _containerAttributes = <SvgElement, Set<String>>{
   SvgElement.title: {},
 };
 
+/// `<defs>` and what it may hold. Nothing here is drawn in place — it is
+/// referenced — but it decides what the drawn shapes look like, so it is
+/// checked as strictly as they are.
+const _defsAttributes = <SvgElement, Set<String>>{
+  SvgElement.defs: {},
+  SvgElement.linearGradient: {'id', 'x1', 'y1', 'x2', 'y2', 'gradientUnits'},
+  SvgElement.stop: {'offset', 'stop-color'},
+};
+
 /// The `<mask>` element and its shape, which [_readMask] reads instead.
 const _maskAttributes = {
   'id',
@@ -72,12 +81,16 @@ RasterImage rasterizeScene(
     throw UnsupportedSceneError('the scene has no <mask>');
   }
   final mask = _readMask(maskNode);
+  // The paint servers are read before the shapes, because a shape's `fill` can
+  // reference one — `sunset` paints both its halves that way.
+  final paints = _readPaintServers(root);
   final shapes = <RasterShape>[];
   _collectShapes(
     root,
     shapes,
     insideMask: false,
     maskId: maskNode.attribute('id') as String?,
+    paints: paints,
   );
 
   return rasterizeMaskedShapes(
@@ -206,11 +219,12 @@ void _collectShapes(
   List<RasterShape> out, {
   required bool insideMask,
   required String? maskId,
+  required Map<String, RasterPaint> paints,
 }) {
-  // `<mask>` is read by _readMask and `<defs>` holds paint servers and filters
-  // that are referenced, never drawn in place. Both are skipped by definition,
-  // and both are validated where they are *used* — an unsupported `fill` or
-  // `filter` on a drawn element throws below.
+  // `<mask>` is read by _readMask and `<defs>` by _readPaintServers — neither
+  // is drawn where it sits. Both are validated there, not skipped: reading
+  // `<defs>` as "not drawn, so not interesting" is what made every `sunset`
+  // render come out blank.
   if (node.element == SvgElement.mask || node.element == SvgElement.defs) {
     return;
   }
@@ -244,7 +258,7 @@ void _collectShapes(
         'content is rasterised',
       );
     }
-    out.add(_shapeOf(node));
+    out.add(_shapeOf(node, paints));
     return;
   }
 
@@ -262,29 +276,153 @@ void _collectShapes(
 
   final within = insideMask || reference != null;
   for (final child in node.children) {
-    _collectShapes(child, out, insideMask: within, maskId: maskId);
+    _collectShapes(
+      child,
+      out,
+      insideMask: within,
+      maskId: maskId,
+      paints: paints,
+    );
+  }
+}
+
+/// Reads every `<defs>` into paint servers, keyed by id.
+///
+/// `<defs>` holds nothing that is drawn where it sits, which made it tempting
+/// to skip — and skipping it is why every `sunset` render came out blank before
+/// #40: the shapes referenced paint that had never been read.
+Map<String, RasterPaint> _readPaintServers(SvgNode root) {
+  final out = <String, RasterPaint>{};
+
+  void walk(SvgNode node) {
+    if (node.element == SvgElement.defs) {
+      _checkAttributes(node, _defsAttributes[SvgElement.defs]!);
+      for (final child in node.children) {
+        final allowed = _defsAttributes[child.element];
+        if (allowed == null) {
+          throw UnsupportedSceneError(
+            '<defs> holds <${child.element.tag}>, which is not implemented',
+          );
+        }
+        _checkAttributes(child, allowed);
+        if (child.element != SvgElement.linearGradient) {
+          throw UnsupportedSceneError(
+            '<${child.element.tag}> is not a paint server this rasterizer '
+            'reads',
+          );
+        }
+        final id = child.attribute('id');
+        if (id is! String) {
+          throw UnsupportedSceneError('a <linearGradient> has no id');
+        }
+        out[id] = _readLinearGradient(child);
+      }
+      return;
+    }
+    for (final child in node.children) {
+      walk(child);
+    }
+  }
+
+  walk(root);
+  return out;
+}
+
+LinearGradientPaint _readLinearGradient(SvgNode node) {
+  // `objectBoundingBox` — the SVG default — would reinterpret x1/y1/x2/y2 as
+  // fractions of the shape's box. All six variants declare user space, and
+  // reading the numbers under the other meaning silently rescales the paint.
+  final units = node.attribute('gradientUnits');
+  if (units != 'userSpaceOnUse') {
+    throw UnsupportedSceneError(
+      'gradientUnits "$units" is not implemented; only userSpaceOnUse',
+    );
+  }
+
+  final stops = <(double, RasterColour)>[];
+  for (final child in node.children) {
+    _checkAttributes(child, _defsAttributes[SvgElement.stop]!);
+    if (child.element != SvgElement.stop) {
+      throw UnsupportedSceneError(
+        '<linearGradient> holds <${child.element.tag}>, expected <stop>',
+      );
+    }
+    // An absent `offset` is 0 and an absent `stop-color` is **black** — both
+    // are SVG's initial values, and the second is what makes an empty palette
+    // paint `sunset` solid black instead of transparent. Confirmed in Chrome.
+    final offset = _num(child.attribute('offset')) ?? 0;
+    final declared = child.attribute('stop-color') as String?;
+    final colour = declared == null
+        ? const RasterColour(0, 0, 0)
+        : parseHexColour(declared);
+    if (colour == null) {
+      throw UnsupportedSceneError(
+        'stop-color "$declared" is not a colour this rasterizer can read',
+      );
+    }
+    stops.add((offset, colour));
+  }
+  if (stops.isEmpty) {
+    throw UnsupportedSceneError('a <linearGradient> has no stops');
+  }
+
+  return LinearGradientPaint(
+    x1: _num(node.attribute('x1')) ?? 0,
+    y1: _num(node.attribute('y1')) ?? 0,
+    x2: _num(node.attribute('x2')) ?? 0,
+    y2: _num(node.attribute('y2')) ?? 0,
+    stops: stops,
+  );
+}
+
+void _checkAttributes(SvgNode node, Set<String> allowed) {
+  for (final a in node.attributes) {
+    if (!allowed.contains(a.name)) {
+      throw UnsupportedSceneError(
+        '<${node.element.tag} ${a.name}="…"> is not implemented and would '
+        'change the picture if ignored',
+      );
+    }
   }
 }
 
 /// Turns one drawn element into a shape, reading its attributes **by name**.
-RasterShape _shapeOf(SvgNode node) {
-  final fill = node.attribute('fill') as String?;
+RasterShape _shapeOf(SvgNode node, Map<String, RasterPaint> paints) {
+  final declared = node.attribute('fill') as String?;
 
-  // A `url(#…)` fill is a paint server — a gradient or a pattern — and this
-  // rasterizer draws neither. Letting it fall through to `parseHexColour`
-  // returning null would treat it as "upstream omitted the fill" and draw
-  // nothing: `sunset` fills every shape that way, so its whole avatar would
-  // rasterise to a transparent square and a golden would freeze the blank.
-  //
-  // Distinct from an unreadable *colour* (`red`, `#F00`), which arrives from
-  // the caller's palette and keeps its recorded behaviour — hidden-state #20.
-  // This one is upstream's own output, not the consumer's.
-  if (fill != null && fill.startsWith('url(')) {
-    throw UnsupportedSceneError(
-      '<${node.element.tag} fill="$fill"> references a paint server; '
-      'gradients and patterns are not implemented',
-    );
+  /// The paint a `fill` names.
+  ///
+  /// Three cases, and collapsing any two of them hides a picture:
+  ///
+  /// * **absent** — upstream's way of saying "no paint" (#17). Draw nothing.
+  /// * **`url(#…)`** — a paint server, and it must exist. A dangling reference
+  ///   makes a browser draw **nothing** — measured, `0,0,0,0` at every pixel,
+  ///   because a CSS `<url>` with no fallback and an invalid target has the
+  ///   used value `none`. So resolving it to "no paint" would in fact agree
+  ///   with Chrome; it throws anyway, because a blank avatar is
+  ///   indistinguishable from the bug where the paint was never *read* — which
+  ///   is exactly what #40 fixed, and it was silent for a whole variant.
+  /// * **anything else** — a colour literal. `#RRGGBB` paints; a form only a
+  ///   browser can read (`red`, `#F00`) keeps its recorded behaviour of
+  ///   painting nothing, which is hidden-state #20 and the caller's palette,
+  ///   not upstream's output.
+  RasterPaint? resolveFill() {
+    if (declared == null) return null;
+    if (declared.startsWith('url(')) {
+      final id = RegExp(r'^url\(#(.*)\)$').firstMatch(declared)?.group(1);
+      final paint = id == null ? null : paints[id];
+      if (paint == null) {
+        throw UnsupportedSceneError(
+          '<${node.element.tag} fill="$declared"> references a paint server '
+          'that is not declared in any <defs>',
+        );
+      }
+      return paint;
+    }
+    return SolidPaint.hex(declared);
   }
+
+  final fill = resolveFill();
 
   /// A geometry attribute the element cannot be drawn without.
   ///

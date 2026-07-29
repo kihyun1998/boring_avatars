@@ -236,6 +236,34 @@ at the edges" is the description of a half-pixel error as much as of a
 resolution artefact. This is the #34 rule again, applied to a gate that was
 being designed rather than one already written.
 
+### A value nothing reads is not a value that works (#37, #40)
+
+Twice now, the hardest arithmetic in a change turned out to be unreachable from
+any real input, and both times the whole suite was green over it.
+
+- `#37` — every arc upstream writes has a chord equal to its diameter, so
+  F.6.5's centre offset is exactly zero and the `largeArc` flag multiplies it.
+  Two mutants on the sign rule survived.
+- `#40` — **every gradient this package rasterises is vertical.** `sunset`
+  writes `x1 = x2 = 40`, so `dx` is zero and the x half of the projection is
+  multiplied away. Replacing both `x1` and `x2` with `-12345` changed not one
+  pixel of any render. Three mutants survived, including one that deleted the
+  x-term outright.
+
+Neither is a defect and neither is fixable by finding better upstream input:
+the reference will never produce the case. What closes it is a **constructed**
+one — a diagonal gradient, a horizontal one, a reversed axis — written knowing
+that no variant will ever exercise it.
+
+The same pass also found two guards that no mutation could kill because they
+*did nothing*: the gradient's explicit `pad` clamps were already implemented by
+the interpolation factor's own clamp. Those were deleted rather than tested.
+
+**The rule this earns:** a surviving mutant asks a third question beyond "is
+the test weak?" and "is the variant degenerate?" — **is the code reachable at
+all?** Answer it before writing a test, because the three answers have three
+different fixes: strengthen, construct, or delete.
+
 ## Step 5 — adversarial completeness pass
 
 ### Two lenses on the same material disagreed usefully (#37)
