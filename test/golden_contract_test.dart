@@ -127,7 +127,7 @@ void main() {
       // `goldenCasesFor` filters by `<variant>-`, so a case whose name does not
       // begin with a known prefix would be generated and compared by nobody
       // while still passing the directory check above.
-      const variants = ['pixel', 'ring', 'sunset', 'bauhaus'];
+      const variants = ['pixel', 'ring', 'sunset', 'bauhaus', 'beam'];
       final claimed = <String>{
         for (final v in variants) ...goldenCasesFor(v).keys,
       };

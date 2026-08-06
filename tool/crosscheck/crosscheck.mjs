@@ -102,6 +102,8 @@ if (!existsSync(oursPath)) {
 }
 const emitted = JSON.parse(readFileSync(oursPath, 'utf8'));
 const ours = emitted.renders;
+const refused = emitted.refused ?? {};
+const agreedRefusals = [];
 const uncovered = emitted.upstreamVariants.filter(
   (v) => !emitted.portedVariants.includes(v),
 );
@@ -446,7 +448,10 @@ for (const variant of variants) {
       if (checked >= LIMIT) continue;
       const key = `${variant}|${n.id}|${p.id}|${square ? 'sq' : 'rd'}`;
       const oursSvg = ours[key];
-      if (!oursSvg) throw new Error(`emit.dart produced nothing for ${key}`);
+      const weRefused = refused[key];
+      if (!oursSvg && !weRefused) {
+        throw new Error(`emit.dart produced nothing for ${key}`);
+      }
 
       // Upstream, rendered fresh and unnormalised.
       //
@@ -466,9 +471,36 @@ for (const variant of variants) {
           }),
         );
       } catch (e) {
+        // **Both sides refusing is agreement, and it is the strongest form of
+        // it.** Upstream produces no document for an empty palette under
+        // `beam`, so there is nothing to render and nothing to diff — the only
+        // comparable fact is *that* it refused, and this port refuses too
+        // (the user's ruling of 2026-08-06, in the divergence ledger).
+        //
+        // Counted separately from `identical` rather than folded into it: a
+        // pixel comparison never happened, and a harness that reported 800
+        // identical renders when 40 of them were two exceptions would be
+        // claiming evidence it does not have.
+        if (weRefused) {
+          agreedRefusals.push(key);
+          checked++;
+          continue;
+        }
         unexpected.push(
           `${key}: upstream threw ${e?.constructor?.name ?? 'Error'} — no ` +
             `picture to compare`,
+        );
+        checked++;
+        continue;
+      }
+
+      // Upstream produced a document and we did not. That is a real
+      // divergence — the port refuses an input the reference renders — and it
+      // has to be news rather than a silent skip.
+      if (weRefused) {
+        unexpected.push(
+          `${key}: this port refused (${weRefused}) but upstream rendered a ` +
+            `document — the refusal is wider than upstream's`,
         );
         checked++;
         continue;
@@ -555,6 +587,24 @@ if (uncovered.length === 0) {
       `${emitted.upstreamVariants.length} variants at 1.6.1 and this package ` +
       `has ported ${emitted.portedVariants.length}. There is no scene of ours ` +
       `to compare, so these are unmeasured rather than passing (#38, #41).`,
+  );
+}
+
+console.log('');
+if (agreedRefusals.length === 0) {
+  console.log('agreed refusals: none — every input produced two documents');
+} else {
+  const byVariant = {};
+  for (const k of agreedRefusals) {
+    const v = k.split('|')[0];
+    byVariant[v] = (byVariant[v] ?? 0) + 1;
+  }
+  console.log(
+    `agreed refusals: ${agreedRefusals.length} — both upstream and this port ` +
+      `produced no document (${Object.entries(byVariant)
+        .map(([v, n]) => `${v} ${n}`)
+        .join(', ')}). Not counted as pixel-identical: no pixels were ` +
+      `compared.`,
   );
 }
 

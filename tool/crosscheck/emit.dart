@@ -18,6 +18,7 @@ import 'dart:io';
 import 'package:boring_avatars/src/scene/scene.dart';
 import 'package:boring_avatars/src/svg/emitter.dart';
 import 'package:boring_avatars/src/variants/bauhaus.dart';
+import 'package:boring_avatars/src/variants/beam.dart';
 import 'package:boring_avatars/src/variants/pixel.dart';
 import 'package:boring_avatars/src/variants/ring.dart';
 import 'package:boring_avatars/src/variants/sunset.dart';
@@ -40,10 +41,10 @@ const upstreamVariants = [
 
 /// The subset this package can build a scene for today.
 ///
-/// `beam` (#38) and `marble` (#41) are not ported — there is no
-/// `lib/src/variants/beam.dart`, so there is nothing of ours to compare against
-/// upstream. They are reported as uncovered rather than dropped.
-const portedVariants = ['pixel', 'sunset', 'ring', 'bauhaus'];
+/// `marble` (#41) is not ported — there is no `lib/src/variants/marble.dart`,
+/// so there is nothing of ours to compare against upstream. It is reported as
+/// uncovered rather than dropped.
+const portedVariants = ['pixel', 'sunset', 'ring', 'bauhaus', 'beam'];
 
 /// The size both sides are rendered at.
 ///
@@ -79,6 +80,12 @@ SvgNode build(
     square: square,
   ),
   'bauhaus' => buildBauhausScene(
+    name: name,
+    colors: colors,
+    size: renderSize,
+    square: square,
+  ),
+  'beam' => buildBeamScene(
     name: name,
     colors: colors,
     size: renderSize,
@@ -120,6 +127,12 @@ void main(List<String> args) {
   }
 
   final out = <String, String>{};
+  // **Refusing is an outcome, not a crash.** `beam` throws on an empty palette
+  // because upstream does (hidden-state #8), so for those inputs there is no
+  // document on *either* side. Recording the refusal is what lets the browser
+  // half treat "both refused" as agreement: letting it propagate would end the
+  // run, and swallowing it would drop 40 renders and still print a pass.
+  final refused = <String, String>{};
   // **Both `square` values.** The fixture matrix runs at one, and #37 recorded
   // what that costs: `pixel` shipped with `square` asserted only against itself
   // *and a golden committed for it*. A prop the matrix never varies is a prop
@@ -129,14 +142,18 @@ void main(List<String> args) {
       for (final p in palettes) {
         for (final square in [false, true]) {
           final key = '$variant|${n['id']}|${p['id']}|${square ? 'sq' : 'rd'}';
-          out[key] = emitSvg(
-            build(
-              variant,
-              n['value'] as String,
-              (p['value'] as List).cast<String>(),
-              square: square,
-            ),
-          );
+          try {
+            out[key] = emitSvg(
+              build(
+                variant,
+                n['value'] as String,
+                (p['value'] as List).cast<String>(),
+                square: square,
+              ),
+            );
+          } on ArgumentError {
+            refused[key] = 'ArgumentError';
+          }
         }
       }
     }
@@ -145,12 +162,16 @@ void main(List<String> args) {
   File('${dir.path}/ours.json').writeAsStringSync(
     const JsonEncoder.withIndent('  ').convert({
       'renders': out,
+      'refused': refused,
       'upstreamVariants': upstreamVariants,
       'portedVariants': portedVariants,
       'size': renderSize,
     }),
   );
-  stdout.writeln('wrote ${dir.path}/ours.json — ${out.length} renders');
+  stdout.writeln(
+    'wrote ${dir.path}/ours.json — ${out.length} renders, '
+    '${refused.length} refused',
+  );
   final uncovered = upstreamVariants
       .where((v) => !portedVariants.contains(v))
       .toList();

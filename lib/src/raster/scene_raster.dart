@@ -26,14 +26,34 @@ export 'raster.dart' show UnsupportedSceneError;
 /// The attributes each drawn element understands.
 ///
 /// Anything else changes the picture, so meeting one is a failure rather than
-/// something to skip. `fill-rule` is absent from every list on purpose, and so
-/// is `stroke` from everything but `<line>` — they are capabilities, not
-/// decorations. `beam` strokes a `<rect>` and a `<path>`, and does it with a
-/// `stroke-linecap` and no `stroke-width`; both arrive with `beam`, so both
-/// still throw here.
+/// something to skip. `fill-rule` is absent from every list on purpose: it is a
+/// capability, not a decoration, and no version in scope overrides the nonzero
+/// default.
+///
+/// `stroke` is on `<rect>` because `beam`'s eyes declare it — always as `none`,
+/// so it never paints. Reading it is not the same as honouring it: a `<rect>`
+/// whose `stroke` would actually paint throws below, because outlining a
+/// rounded rectangle is a real capability and nothing in the six asks for one.
 const _drawableAttributes = <SvgElement, Set<String>>{
-  SvgElement.rect: {'x', 'y', 'width', 'height', 'fill', 'transform'},
-  SvgElement.path: {'d', 'fill', 'transform'},
+  SvgElement.rect: {
+    'x',
+    'y',
+    'width',
+    'height',
+    'rx',
+    'ry',
+    'fill',
+    'stroke',
+    'transform',
+  },
+  SvgElement.path: {
+    'd',
+    'fill',
+    'stroke',
+    'stroke-width',
+    'stroke-linecap',
+    'transform',
+  },
   SvgElement.circle: {'cx', 'cy', 'r', 'fill', 'transform'},
   // A `<line>` has no interior to fill: its colour arrives through `stroke`,
   // whose initial value is `none` — so an empty palette, which makes upstream
@@ -58,7 +78,12 @@ const _drawableAttributes = <SvgElement, Set<String>>{
 /// with nothing thrown. Same failure this file's doc opens with, one level up.
 const _containerAttributes = <SvgElement, Set<String>>{
   SvgElement.svg: {'viewBox', 'fill', 'role', 'xmlns', 'width', 'height'},
-  SvgElement.g: {'mask'},
+  // `transform` on a `<g>` is `beam`'s face wrapper. It is on this list only
+  // because [_collectShapes] now **composes** it into every descendant — an
+  // allow-list entry for a transform nobody applied would render the face 4.5
+  // units off and unrotated with nothing thrown, which is hidden-state #30
+  // exactly.
+  SvgElement.g: {'mask', 'transform'},
   SvgElement.title: {},
 };
 
@@ -109,6 +134,7 @@ RasterImage rasterizeScene(
     insideMask: false,
     maskId: maskNode.attribute('id') as String?,
     paints: paints,
+    inherited: Affine.identity,
   );
 
   return rasterizeMaskedShapes(
@@ -238,6 +264,7 @@ void _collectShapes(
   required bool insideMask,
   required String? maskId,
   required Map<String, RasterPaint> paints,
+  required Affine inherited,
 }) {
   // `<mask>` is read by _readMask and `<defs>` by _readPaintServers — neither
   // is drawn where it sits. Both are validated there, not skipped: reading
@@ -276,9 +303,24 @@ void _collectShapes(
         'content is rasterised',
       );
     }
-    out.add(_shapeOf(node, paints));
+    out.addAll(_shapesOf(node, paints, inherited));
     return;
   }
+
+  // §7.5: nesting is how a transform list is *defined*, so an ancestor's
+  // transform composes with the descendant's exactly as two functions in one
+  // list do — the ancestor applies second, because the child's coordinates are
+  // in the child's own space. `beam` is the only variant with a transformed
+  // container, and it puts its whole face inside one.
+  final ownTransform = node.attribute('transform');
+  if (ownTransform != null && ownTransform is! String) {
+    throw UnsupportedSceneError(
+      '<${node.element.tag}> has an unreadable `transform`',
+    );
+  }
+  final matrix = ownTransform == null
+      ? inherited
+      : inherited.multiply(parseTransform(ownTransform as String));
 
   // A `mask="url(#…)"` that names something else is not a masked group. SVG 1.1
   // says a broken reference renders nothing; SVG 2 says render unmasked. Either
@@ -300,6 +342,7 @@ void _collectShapes(
       insideMask: within,
       maskId: maskId,
       paints: paints,
+      inherited: matrix,
     );
   }
 }
@@ -417,10 +460,20 @@ void _checkAttributes(SvgNode node, Set<String> allowed) {
   }
 }
 
-/// Turns one drawn element into a shape, reading its attributes **by name**.
-RasterShape _shapeOf(SvgNode node, Map<String, RasterPaint> paints) {
-  /// The paint the [attribute] names — `fill` for the filled elements,
-  /// `stroke` for `<line>`.
+/// Turns one drawn element into the shapes it paints, reading its attributes
+/// **by name**.
+///
+/// **One element can paint twice.** `beam`'s open mouth is a `<path>` with both
+/// a `stroke` and a `fill="none"`, and its closed mouth the same `<path>` with
+/// a fill and no stroke — so this returns a list, in SVG's own painting order:
+/// §11 fills first, then strokes. Returning a single shape forced a choice
+/// between the two and would have dropped one of them silently.
+List<RasterShape> _shapesOf(
+  SvgNode node,
+  Map<String, RasterPaint> paints,
+  Affine inherited,
+) {
+  /// The paint the [attribute] names — `fill` or `stroke`.
   ///
   /// A `<funciri>` is resolved here and everything else goes through
   /// [readColourDeclaration], the vocabulary `<stop>` also reads. Five cases,
@@ -477,10 +530,13 @@ RasterShape _shapeOf(SvgNode node, Map<String, RasterPaint> paints) {
 
   final fill = resolvePaint('fill');
 
-  /// The element's own `transform`, as a matrix.
+  /// The element's own `transform`, composed under everything it is nested in.
   ///
   /// SVG 1.1 §7.4 applies it *before* the element's coordinates are read, so
-  /// the shape is built in its own space and every vertex is then mapped.
+  /// the shape is built in its own space and every vertex is then mapped. §7.5
+  /// makes nesting the *definition* of a transform list, so an ancestor's
+  /// matrix multiplies on the left — [inherited] carries `beam`'s face group
+  /// down to the mouth and the eyes.
   final declaredTransform = node.attribute('transform');
   if (declaredTransform != null && declaredTransform is! String) {
     throw UnsupportedSceneError(
@@ -488,8 +544,8 @@ RasterShape _shapeOf(SvgNode node, Map<String, RasterPaint> paints) {
     );
   }
   final matrix = declaredTransform == null
-      ? Affine.identity
-      : parseTransform(declaredTransform as String);
+      ? inherited
+      : inherited.multiply(parseTransform(declaredTransform as String));
 
   /// A geometry attribute the element cannot be drawn without.
   ///
@@ -507,46 +563,115 @@ RasterShape _shapeOf(SvgNode node, Map<String, RasterPaint> paints) {
     return value;
   }
 
+  /// `stroke-width`, defaulting to SVG's initial value.
+  ///
+  /// §11.4 gives `stroke-width` an initial value of **1**, and `beam`'s open
+  /// mouth is the first element in the six to rely on it — it declares
+  /// `stroke-linecap` and no width at all. `<line>` deliberately keeps
+  /// requiring one (below): `bauhaus` always writes it, so a default there
+  /// would be arithmetic no test in this package could reach.
+  double strokeWidth() => _num(node.attribute('stroke-width')) ?? 1;
+
+  /// `stroke-linecap`, defaulting to §11.4's initial `butt`.
+  StrokeCap strokeCap() => switch (node.attribute('stroke-linecap')) {
+    null || 'butt' => StrokeCap.butt,
+    'round' => StrokeCap.round,
+    final other => throw UnsupportedSceneError(
+      'stroke-linecap "$other" is not implemented; only butt and round, which '
+      'are the only two any version in scope writes',
+    ),
+  };
+
   switch (node.element) {
     case SvgElement.rect:
       final x = _num(node.attribute('x')) ?? 0;
       final y = _num(node.attribute('y')) ?? 0;
       final width = required('width');
       final height = required('height');
+
+      // `beam`'s eyes declare `stroke="none"`, which paints nothing — so the
+      // attribute is read rather than refused. Anything that *would* paint is
+      // a different matter: outlining a rounded rectangle is a real capability
+      // and no version in scope asks for one, so it fails loudly here instead
+      // of drawing a rect that is missing its outline.
+      final declaredStroke = node.attribute('stroke');
+      if (declaredStroke != null &&
+          readColourDeclaration(declaredStroke as String) is! NoneColour) {
+        throw UnsupportedSceneError(
+          '<rect stroke="$declaredStroke"> would paint an outline, which is '
+          'not implemented; only stroke="none" is read',
+        );
+      }
+
+      // §9.2's corner radii. Present on `beam`'s wrapper (rx 36 or 6) and on
+      // both eyes (rx 1 on a 1.5 x 2 box, which resolves to two *different*
+      // radii — see [roundedRectContour]).
+      final rx = _num(node.attribute('rx'));
+      final ry = _num(node.attribute('ry'));
+      if (rx != null || ry != null) {
+        return [
+          RasterPolygon([
+            matrix.transformContour(
+              roundedRectContour(x, y, width, height, rx, ry),
+            ),
+          ], fill),
+        ];
+      }
+
       // A pure translation leaves the rectangle axis-aligned, so it keeps the
       // closed-form integrator: a box-overlap product has nothing to
       // approximate, where the polygon path quantises the vertical direction
       // and a horizontal edge is exactly where that is worst. Anything that
-      // rotates it has to become a polygon, and then the quantisation is moot
-      // because none of its edges are horizontal any more.
+      // rotates or scales it has to become a polygon, and then the
+      // quantisation is moot because none of its edges are horizontal any more.
       if (matrix.isTranslationOnly) {
-        return RasterRect(x + matrix.e, y + matrix.f, width, height, fill);
+        return [RasterRect(x + matrix.e, y + matrix.f, width, height, fill)];
       }
-      return RasterPolygon([
-        matrix.transformContour(rectangleContour(x, y, width, height)),
-      ], fill);
+      return [
+        RasterPolygon([
+          matrix.transformContour(rectangleContour(x, y, width, height)),
+        ], fill),
+      ];
     case SvgElement.path:
       final d = node.attribute('d');
       if (d is! String) {
         throw UnsupportedSceneError('<path> has no readable `d`');
       }
-      return RasterPolygon([
-        for (final contour in parsePath(d)) matrix.transformContour(contour),
-      ], fill);
+      final stroke = resolvePaint('stroke');
+      return [
+        // §11: the fill is painted first and the stroke on top of it. `beam`
+        // never asks for both at once — the open mouth strokes and the closed
+        // one fills — but the order is the spec's, not the variant's.
+        if (fill != null)
+          RasterPolygon([
+            for (final contour in parsePath(d)) matrix.transformContour(contour),
+          ], fill),
+        if (stroke != null)
+          RasterPolygon([
+            for (final contour in strokePathOutline(
+              parsePathSubpaths(d),
+              width: strokeWidth(),
+              cap: strokeCap(),
+            ))
+              matrix.transformContour(contour),
+          ], stroke),
+      ];
     case SvgElement.circle:
       // Flatten first, then map. For the rigid transforms implemented here
       // that is exact; it is also why `scale` has to throw rather than be
       // waved through — scaling after flattening would apply the tolerance in
       // the wrong space.
-      return RasterPolygon([
-        matrix.transformContour(
-          flattenCircle(
-            _num(node.attribute('cx')) ?? 0,
-            _num(node.attribute('cy')) ?? 0,
-            required('r'),
+      return [
+        RasterPolygon([
+          matrix.transformContour(
+            flattenCircle(
+              _num(node.attribute('cx')) ?? 0,
+              _num(node.attribute('cy')) ?? 0,
+              required('r'),
+            ),
           ),
-        ),
-      ], fill);
+        ], fill),
+      ];
     case SvgElement.line:
       // The colour is the stroke, and there is no `fill` on the allow-list —
       // a `<line fill="…">` therefore throws one level up rather than being
@@ -557,16 +682,20 @@ RasterShape _shapeOf(SvgNode node, Map<String, RasterPaint> paints) {
         _num(node.attribute('y1')) ?? 0,
         _num(node.attribute('x2')) ?? 0,
         _num(node.attribute('y2')) ?? 0,
-        // SVG's initial `stroke-width` is 1, but no variant in scope omits the
-        // attribute — `bauhaus` writes 2, and `beam`'s stroked `<rect>`, which
-        // *does* omit it, is not drawn here yet. Implementing a default nothing
-        // produces is how untested arithmetic ships.
+        // A `<line>` keeps *requiring* `stroke-width` where a `<path>` defaults
+        // it to §11.4's initial 1. Not an inconsistency for its own sake: the
+        // default is implemented once, in `strokeWidth()` above, and reached
+        // only from the element that actually omits the attribute. `bauhaus`
+        // always writes it, so a default here would be arithmetic no test in
+        // this package could drive.
         required('stroke-width'),
       );
-      return RasterPolygon(
-        outline == null ? const [] : [matrix.transformContour(outline)],
-        stroke,
-      );
+      return [
+        RasterPolygon(
+          outline == null ? const [] : [matrix.transformContour(outline)],
+          stroke,
+        ),
+      ];
     default:
       throw UnsupportedSceneError(
         '<${node.element.tag}> has no shape conversion',

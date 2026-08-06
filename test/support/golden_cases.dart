@@ -22,6 +22,7 @@ library;
 
 import 'package:boring_avatars/src/scene/scene.dart';
 import 'package:boring_avatars/src/variants/bauhaus.dart';
+import 'package:boring_avatars/src/variants/beam.dart';
 import 'package:boring_avatars/src/variants/pixel.dart';
 import 'package:boring_avatars/src/variants/ring.dart';
 import 'package:boring_avatars/src/variants/sunset.dart';
@@ -138,6 +139,50 @@ final Map<String, (SvgNode, int)> goldenCases = {
       square: true,
     ),
     80,
+  ),
+  // `beam` rasterises at **36**, not 80 — its own viewBox, and the smallest in
+  // the package. Hidden-state #26 said otherwise until #38 measured it, and a
+  // golden generated at 80 would be a different picture that still looked
+  // plausible.
+  //
+  // The three names split every branch that changes the drawing:
+  //
+  // | | mouth | card | scale | rotation |
+  // |---|---|---|---|---|
+  // | `Clara Barton` | **open** — a stroked cubic | rounded square, rx 6 | 1.2 | 191° |
+  // | `Alice` | **closed** — the F.6.6 arc | circle, rx clamped to 18 | 1.1 | 88° |
+  // | the empty name | open | circle | **1.0** | **0°** |
+  //
+  // The empty name hashes to 0, so every transform is the identity and every
+  // edge lands on a pixel boundary — the same role it plays for `bauhaus`, and
+  // the case that isolates the geometry from the transform composition.
+  //
+  // There is deliberately **no empty-palette golden**: `beam` is the one
+  // variant that throws on one, so there is no image to freeze.
+  'beam-clara-default': (
+    buildBeamScene(
+      name: 'Clara Barton',
+      colors: goldenDefaultPalette,
+      size: 36,
+    ),
+    36,
+  ),
+  'beam-alice-default': (
+    buildBeamScene(name: 'Alice', colors: goldenDefaultPalette, size: 36),
+    36,
+  ),
+  'beam-empty-name': (
+    buildBeamScene(name: '', colors: goldenDefaultPalette, size: 36),
+    36,
+  ),
+  'beam-clara-square': (
+    buildBeamScene(
+      name: 'Clara Barton',
+      colors: goldenDefaultPalette,
+      size: 36,
+      square: true,
+    ),
+    36,
   ),
 };
 
