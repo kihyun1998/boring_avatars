@@ -23,6 +23,7 @@ library;
 import 'package:boring_avatars/src/scene/scene.dart';
 import 'package:boring_avatars/src/variants/bauhaus.dart';
 import 'package:boring_avatars/src/variants/beam.dart';
+import 'package:boring_avatars/src/variants/marble.dart';
 import 'package:boring_avatars/src/variants/pixel.dart';
 import 'package:boring_avatars/src/variants/ring.dart';
 import 'package:boring_avatars/src/variants/sunset.dart';
@@ -183,6 +184,61 @@ final Map<String, (SvgNode, int)> goldenCases = {
       square: true,
     ),
     36,
+  ),
+  // `marble` is the only variant with a filter and the only one with a blend
+  // mode, and the four names below split what those two actually depend on:
+  //
+  // | | scale | sigma (device px) | d | branch | blend backdrop |
+  // |---|---|---|---|---|---|
+  // | the empty name | 1.2 | 8.4 | 16 | **even** | flat colours |
+  // | `Clara Barton` | 1.3 | 9.1 | 17 | odd | flat colours |
+  // | `Alice` | 1.2 | 8.4 | 16 | even | **saturating** black/white |
+  //
+  // The scale matters because the declared `stdDeviation="7"` is in the
+  // *element's* user space, which includes its own `transform` — so the blur is
+  // 8.4 or 9.1 device pixels and never 7. Getting that wrong measured 27/255
+  // against Chrome; these two names put the three-box approximation's odd and
+  // even branches on opposite sides of the roster so neither can rot unread.
+  //
+  // `Alice`'s two-colour palette is the case that makes the blend visible at
+  // all: `overlay` against an opaque white backdrop returns white whatever the
+  // source is, so a port that dropped the blend entirely still differs there
+  // and nowhere else. It is also the only case whose mismatches against Chrome
+  // land in the *interior* — a blurred variant has no 3×3-uniform pixel, so the
+  // calibration's interior statistic is vacuous for `marble` except where the
+  // blend saturates a region flat (hidden-state #42).
+  //
+  // `marble-clara-square` is not decoration: dropping the mask's corner radius
+  // takes the worst edge disagreement from 71/255 to **5**, which is what
+  // separates the blur's error from the mask curve's (hidden-state #27).
+  //
+  // There is deliberately **no empty-palette golden**: all three fills are
+  // dropped and the result is a fully transparent image, and freezing a blank
+  // as correct is the failure #40 found in `sunset`.
+  'marble-clara-default': (
+    buildMarbleScene(
+      name: 'Clara Barton',
+      colors: goldenDefaultPalette,
+      size: 80,
+    ),
+    80,
+  ),
+  'marble-alice-pair': (
+    buildMarbleScene(name: 'Alice', colors: ['#000000', '#FFFFFF'], size: 80),
+    80,
+  ),
+  'marble-empty-name': (
+    buildMarbleScene(name: '', colors: goldenDefaultPalette, size: 80),
+    80,
+  ),
+  'marble-clara-square': (
+    buildMarbleScene(
+      name: 'Clara Barton',
+      colors: goldenDefaultPalette,
+      size: 80,
+      square: true,
+    ),
+    80,
   ),
 };
 

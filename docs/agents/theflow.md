@@ -61,9 +61,9 @@ aliases), with alias resolution and the degrade-to-`marble` parser that mirror
 upstream's `avatar.js`.
 
 `lib/src/variants/` holds each variant's scene builder (**sacred**) and
-`lib/src/raster/` the deterministic software rasterizer. As of #38 they hold
-`pixel`, `ring`, `sunset`, `bauhaus` and `beam` — five of the six, with `marble`
-(#41) the only one left. `raster.dart` fills two kinds of shape
+`lib/src/raster/` the deterministic software rasterizer. As of #41 they hold
+**all six** — `pixel`, `ring`, `sunset`, `bauhaus`, `beam` and `marble`.
+`raster.dart` fills two kinds of shape
 through a rounded-rect mask — axis-aligned rectangles in closed form, and
 polygons by a scanline integrator under the **nonzero** winding rule —
 `path.dart` turns SVG path data, circles, cubics, rounded rects and stroked
@@ -76,9 +76,32 @@ colour vocabulary — `readColourDeclaration` splits a declaration into absent /
 `none` / read / unreadable, and `fill`, `stroke` and `<stop>` each answer those
 four explicitly (#69). One reader stays outside it on purpose: `_readMask`'s
 `fill != '#FFFFFF'` guard asks whether the mask is filled with the literal white
-upstream writes, which is a byte question and not a colour one. Filters,
-`matrix`/`skew`, quadratics and `stroke-linecap: square` arrive with the variants
-that need them, and everything unimplemented throws.
+upstream writes, which is a byte question and not a colour one. `matrix`/`skew`, quadratics and
+`stroke-linecap: square` arrive with the variants that need them, and everything
+unimplemented throws.
+
+**Filters and blend modes arrived with `marble` (#41), and they are the first
+thing in the package that does not composite straight onto the destination.** A
+shape carrying a `filter` or a `mix-blend-mode` is drawn into its own **padded
+float** layer, blurred premultiplied, and composited once. Three things about
+that are load-bearing and none is obvious:
+
+* **The layer is bigger than the canvas.** `marble`'s second blob reaches x ≈ 89
+  on an 80-wide target once its `scale(1.3)` applies, and a blur of sigma 8.4
+  pulls that back about 25 pixels into view. Rasterising only `[0, width)` drops
+  it and the edge is quietly wrong.
+* **The blur's sigma is in the *element's* user space, which includes the
+  element's own `transform`.** §15.7.2's "user coordinate system in place when
+  the filter is referenced" is the transformed one, so `stdDeviation="7"` under
+  `scale(1.2)` is a blur of **8.4** device pixels. Taking the 7 literally
+  measured **27/255** against Chrome; scaling it took the same comparison to
+  **1/255**. A non-uniform transform would need an elliptical kernel and is
+  refused rather than averaged.
+* **The filter chain is validated as a whole and then reduced to one number.**
+  Upstream writes `feFlood` (transparent) + `feBlend` (source over it) +
+  `feGaussianBlur`, which is a blur and nothing else — but only because the
+  first two are *checked* to be the no-ops they look like. A flood that paints,
+  or a blend reading something other than `SourceGraphic`, throws.
 
 **A stroke outline is a pile of pieces, not one polygon.** `strokePathOutline`
 emits a quad per segment and a disc per joint and lets the **nonzero** rule union
@@ -420,7 +443,7 @@ when a completeness pass surfaces another.
 | 8 | `colors: []` | `% 0` → `NaN` → `colors[NaN]` → `undefined`. **Then it splits by variant, and by *attribute*:** five variants put that straight into a `fill`, and React drops the attribute; **`beam` throws**, because it hands the same `undefined` to `getContrast`, which calls `.slice` on it — **reproduced as an `ArgumentError` since #38, on the user's ruling S-2**, so the port fails on exactly the inputs upstream fails on. **`bauhaus` loses a `stroke` as well** — its `<line>` has no fill at all (#39) | `% 0` **throws** everywhere | crash where JS degrades — *and* silent success where JS crashes. "Empty palette degrades" is true per variant, not in general (measured at v1.6.1, all six variants × 20 names). The two absences are safe for **different reasons**: `stroke`'s initial value is `none`, so a missing one paints nothing on its own, while `fill`'s initial value is **black** and what makes it safe is the root `<svg fill="none">` inheriting down — present in all 600 renders. A variant whose root dropped that would paint every unfilled shape black, and nothing in the rasterizer reads the root to notice. Contrast row #39, where `stop-color`'s absence *is* black |
 | 9 | SVG `rx` on `<rect>` | clamped to `width/2` | Flutter `RRect` scales radii instead | wrong corner shape |
 | 10 | SVG arc with radii too small (`a1,0.75 … 10,0` in beam's closed mouth) | spec **scales both radii up** until the ellipse fits (F.6.6) | `arcToPoint` does not correct | wrong or throwing path. **Implemented in #36/#37 for `ring` and first actually *fired* by `beam` in #38** — every arc `ring` writes has λ exactly 1 (#36), so the correction was dead code for two tickets. Here λ is 25: both radii scale ×5 to rx 5 and ry 3.75, and the filled half-ellipse is **29.45** where an uncorrected one would be **1.18**. `beam_raster_test.dart` measures which, and the two are a factor of 25 apart so no tolerance can confuse them |
-| 11 | `<filter>` with no `x/y/width/height` (marble) | region defaults to **-10%/-10%/120%/120%** of the bbox; the blur is clipped there | unclipped blur | halo beyond the reference |
+| 11 | `<filter>` with no `x/y/width/height` (marble) | the region defaults to **-10% / -10% / 120% / 120%** — and under `filterUnits="userSpaceOnUse"` those percentages resolve against the **viewport**, not the bounding box (SVG 1.1 §7.10). For `marble`'s 80 x 80 viewBox that is `(-8, -8, 96, 96)`. It is a hard clip on the **output only**: content outside it still blurs *in*, it just cannot be seen *out* | reading the percentages as bbox fractions, or clipping the source too | **this row said "of the bbox" from #1 to #41 and nothing could catch it** — `marble` is the only variant with a filter and it was unported, so no code read the number. Measured in Chrome when #41 finally opened it: a 10 x 10 rect at (35, 35) blurred with no region renders **identically** to one given `x="-8" y="-8" width="96" height="96"`, ink from 18.25 to 61.75, and quite differently from the bbox reading's hard cut at 34…46. The output-only half was measured the same way: a bar spanning x = -40…20 inside a region starting at x = 6 is cut to nothing below 6 and **identical to an unclipped render** at every x >= 6. Both readings are now inert for `marble` anyway — the region contains the mask, so the mask cuts first — which is why `marble_raster_test.dart` constructs a region that really does clip. Same lesson as #26: a row nobody can act on is a row nobody checks |
 | 12 | **A variant file existing ≠ the variant being reachable.** `avatar.js`'s dispatch is the authority, not the file listing | `avatar-turbulence.js` ships from v1.2.0 to v1.5.2 with an unchanging blob and is **never dispatched in any version** | porting it from the file tree | the project's heaviest rasterizer feature built for something no user could select |
 | 13 | `eye` | dispatched **only at v1.2.0**; the file survives to v1.5.2 unreachable | assuming it lives as long as its file | a phantom variant in later states |
 | 14 | `geometric` / `abstract` | **two different meanings by era** — distinct variants at v1.2.0; *unreachable* v1.3.0–v1.4.2 (fall through to `marble`); **deprecated aliases** `{geometric→beam, abstract→bauhaus}` from v1.5.3 | one enum value with one meaning | the same name renders three different things |
@@ -428,8 +451,8 @@ when a completeness pass surfaces another.
 | 20 | **The two backends disagree on a malformed colour** | the palette is consumer policy and upstream validates none of it, so `#F00`, `red`, `rgb(…)`, `#RRGGBBAA` all reach the port. The SVG emitter passes them through and a browser draws them; the rasterizer parses `#RRGGBB` only | letting the rasterizer guess, or letting it silently skip | the same input yields a correct SVG and a blank raster — the two-backend divergence the scene seam exists to prevent. Today the rasterizer returns `null` and draws nothing; a sign is rejected outright, since `int.tryParse('+12345', radix: 16)` succeeds and would turn punctuation into a plausible colour. **#69 separated the state without moving the answer**: "unreadable" is now its own case rather than everything `parseHexColour` rejects, so `none` stopped being filed under it (#31) — but a `fill` this rasterizer cannot read still paints nothing and a `<stop>` it cannot read still throws. **#64 is where the answers change**, and it changes them alone because #69 made "unreadable" nameable. The row's own premise — that this is *intended* divergence — was measured false in #62: `red` and `#F00` are not caller garbage, they are notations a browser draws and this rasterizer has not learned. Rewrite the row there, not here. **The rule this row keeps re-deciding is now [ADR-0001](../adr/0001-what-a-colour-declaration-means.md)** — the split it describes is derived there from the property's grammar and its inheritance, not decided per case |
 | 21 | SVG `rx` / `ry` clamping | §9.2 in three steps, and the middle one is the one that gets skipped: one given radius fills **both** slots, then `rx` clamps to width/2 and `ry` to height/2 **independently**, so a non-square rect gets **elliptical** corners | one circular radius, or `min(w,h)/2` for both | wrong corner shape. **Live since #38.** `beam`'s eye rects are `1.5 × 2` with `rx="1"`: `ry` becomes 1 too, then `rx` clamps to 0.75 and `ry` stays 1 — and because each is exactly half its own side the straight edges vanish and the eye is a full **ellipse**. Two ellipses are 4.712 px² where two circles of the clamped 0.75 would be 3.534 and two unrounded rects 6.0, so the reading is decided by arithmetic rather than by a tolerance. The masks are all still square, so the *mask* half of this row remains inert |
 | 22 | `mask-type` | `pixel` declares `mask-type="alpha"`; **the other five declare nothing**, which in SVG means a *luminance* mask | treating every mask as alpha | wrong everywhere the mask shape is not white. Inert today — all six fill the mask `#FFFFFF`, where luminance and alpha both come to 1 — and the rasterizer now **throws** rather than assuming, so the day one is not white it fails loudly |
-| 24 | **Abutting shapes vs stacked shapes** | two half-covering rects meeting inside one pixel should fill it — an exact rasteriser gives alpha 255 | source-over compositing, which gives **192** | source-over is right for shapes *stacked* on each other and wrong for shapes *abutting* each other. Inert for `pixel` — its tile edges are integer-aligned and `_checkViewBox` refuses any target that is not 1:1 — and inert for `ring`, which abuts along `y=45` in four places but at the enforced 90×90 target that is a pixel boundary. **Also inert for `bauhaus`, contrary to what this row said until #39**: it draws a full-canvas background rect and then three shapes *on top of* it, so every pair either overlaps or is disjoint and no two share a boundary. The row named it live on the strength of its fractional edges, which is the condition for the *other* half of the sentence. **And inert for `beam` too, contrary to what this row predicted until #38** — the same correction it already took for `bauhaus`, for the same reason. `beam` lays a full-canvas background, puts the card on top of it and the face on top of the card, so every pair either overlaps or is disjoint and no two shapes meet edge to edge. The row named it live on the strength of its fractional coordinates, which is the condition for the *other* half of the sentence. Still expected live for `marble`, which is now the only untested variant. Valid **as long as every drawn edge falls on a pixel boundary**, and only where two shapes actually meet edge to edge |
-| 23 | Rounding when shapes overlap | a browser draws each shape of a plain display list onto an **8-bit** surface, so it rounds once per shape too | assuming either model without measuring | **corrected in #37 — the row used to claim the opposite of what the code does.** `blend()` reads back the byte the previous shape wrote, so k stacked shapes round k times, and that is what matches the reference. Measured drift against a single float accumulation, over 1.2M stacks of 2–9 opaque shapes: **2/255 premultiplied** (16/255 straight at negligible alpha — #29, not a real difference). `pixel`'s tiles never overlap; `ring` stacks nine; marble, bauhaus and beam stack two to four. Valid **as long as no group opacity or filter introduces an offscreen layer** — `marble` has one, and the seam throws on it |
+| 24 | **Abutting shapes vs stacked shapes** | two half-covering rects meeting inside one pixel should fill it — an exact rasteriser gives alpha 255 | source-over compositing, which gives **192** | source-over is right for shapes *stacked* on each other and wrong for shapes *abutting* each other. Inert for `pixel` — its tile edges are integer-aligned and `_checkViewBox` refuses any target that is not 1:1 — and inert for `ring`, which abuts along `y=45` in four places but at the enforced 90×90 target that is a pixel boundary. **Also inert for `bauhaus`, contrary to what this row said until #39**: it draws a full-canvas background rect and then three shapes *on top of* it, so every pair either overlaps or is disjoint and no two share a boundary. The row named it live on the strength of its fractional edges, which is the condition for the *other* half of the sentence. **And inert for `beam` too, contrary to what this row predicted until #38** — the same correction it already took for `bauhaus`, for the same reason. `beam` lays a full-canvas background, puts the card on top of it and the face on top of the card, so every pair either overlaps or is disjoint and no two shapes meet edge to edge. The row named it live on the strength of its fractional coordinates, which is the condition for the *other* half of the sentence. **And inert for `marble` too, measured in #41 — so the row is now inert for all six and has never once been live.** `marble` lays a full-canvas background and puts two blurred blobs on top of it, so every pair either overlaps or is disjoint; two arbitrarily rotated polygons do not share an edge. That is the third time this row predicted "live" from fractional coordinates alone (after `bauhaus` and `beam`) and the third time the actual condition — two shapes *meeting edge to edge* — was absent. The prediction, not the mechanism, is what keeps being wrong. Valid **as long as every drawn edge falls on a pixel boundary**, and only where two shapes actually meet edge to edge |
+| 23 | Rounding when shapes overlap | a browser draws each shape of a plain display list onto an **8-bit** surface, so it rounds once per shape too | assuming either model without measuring | **corrected in #37 — the row used to claim the opposite of what the code does.** `blend()` reads back the byte the previous shape wrote, so k stacked shapes round k times, and that is what matches the reference. Measured drift against a single float accumulation, over 1.2M stacks of 2–9 opaque shapes: **2/255 premultiplied** (16/255 straight at negligible alpha — #29, not a real difference). `pixel`'s tiles never overlap; `ring` stacks nine; marble, bauhaus and beam stack two to four. **The condition this row reserved is now discharged, and it went the other way.** `marble` does introduce an offscreen layer, and #41 implemented it: a filtered shape is drawn into a padded **float** buffer, blurred premultiplied, and composited once. So the layer rounds *once*, not per shape — the opposite of the model this row defends for a plain display list, and right for the same reason, because a browser also composites a filter result as one image. Measured against Chrome on the real variant: every remaining interior disagreement is exactly **1/255**, on at most 5 pixels of 6400 |
 | 18 | **Attribute order is per call site, not per element** | React emits props in the order the JSX author wrote them, so one element takes several orders: `circle` is `cx cy r fill` in `ring` and `cx cy fill r transform` in `bauhaus`; `rect` and `path` each take five or more | giving the emitter a canonical order per element | every render whose order differs — silently, since a browser does not care about attribute order. The scene node therefore carries **ordered** attributes and the rasterizer reads them by name |
 | 19 | React's serialisation details | no self-closing tags (`<rect …></rect>`, never `<rect/>` — zero `/>` in 480 renders); no whitespace between elements; `'` escapes to **`&#x27;`** not `&apos;`; tabs, newlines and non-ASCII pass through; element names keep camel case (`linearGradient`) while some attributes hyphenate (`mask-type`, `stop-color`) and others do not (`maskUnits`, `stdDeviation`) | any of the plausible alternatives | byte-level layer-2 failure that renders identically on screen. The hyphenation split is **a list, not a rule** — callers supply the emitted spelling |
 | 17 | **`pixel`'s first tile is never filled** | `avatar-pixel.js` builds its 64 colours with `getRandomColor(numFromName % i, …)` from `i == 0`. `hash % 0` is `NaN`, so `colors[NaN]` is `undefined` and the first `<rect>` ships **with no `fill` attribute at all** | filling tile 0 from the palette | wrong on **100% of pixel renders**, every name, every palette — including the defaults. Distinct from #8: that is a degenerate *palette*, this is a degenerate *loop index*, and it needs no unusual input to fire. Committed fixture `svg.json` → `pixel\|upstream-default\|upstream-default` shows it |
@@ -437,7 +460,7 @@ when a completeness pass surfaces another.
 | 25 | **SVG arc flags are single characters and may be packed against the number after them** | `ring` writes `a32 32 0 10-64 0`, where `10` is *two flags* — large-arc 1, sweep 0 — and `-64` is the endpoint | a tokeniser that scans numbers uniformly reads ten, then takes `-64` as the sweep flag | a plausible wrong picture that throws nothing. Upstream writes this form in four of `ring`'s six arcs, so it is not hypothetical. Pinned by `raster_path_test.dart` — two `d` strings differing in one byte must come out mirrored |
 | 26 | **The drawing space is per variant, and is not the display size** | **three** values, not two: `ring` is 90, `beam` is **36**, and `bauhaus`, `marble`, `pixel`, `sunset` are 80. `size` still only reaches `width`/`height` | assuming one canvas constant for the package | the rasterizer refuses a target that does not match the viewBox, so this surfaces as a throw rather than a squashed avatar — but the *goldens* have to be generated at the right number, and a per-package `size` in the golden tool silently produces the wrong reference. **This row said "the other five are 80" until #38 measured it**, and it was wrong for the whole time `beam` was unported — the fact sits in `avatar-beam.js:4` (`const SIZE = 36`) and in all 80 of its fixture renders, and nothing read either. A row nobody can act on yet is a row nobody checks; see `lessons.md` |
 | 27 | **Chrome's own curves are inset from true circular geometry**, by an amount that depends on the radius — **and its shallow straight edges are wrong in the other direction** | measured directly: `<circle r=20>` loses 1.69 px² of area (0.0135 px inward), `r=23` loses 11.95 (0.083 px), `r=40` loses 32.03 (0.127 px); an `<path>` half-disc of r=38 loses 17.32 (0.145 px). An **axis-aligned** `<rect>` is exact at integer edges and within 0.003 px at fractional ones — but a **rotated** one is not, and it errs *outward*: measured in #39 against exact coverage (Sutherland–Hodgman clip + shoelace, which quantises nothing), Chrome overstates a 4°-from-horizontal edge by **30.6/255** and a 22° one by 19, while at 0° it is exact. Ours is within 0.03/255 of exact on every shape `bauhaus` draws | treating a Chrome render as ground truth for *any* antialiased edge, curved or shallow | the recorded ≤1/255 calibration bar is **unmeetable for a curved edge and for a shallow rotated one** — not because our coverage is wrong but because Chrome's is. **Pending the user's ruling** — see Step 4. The row's old sentence "a fractional rect is within 0.003 px" was true and covered only the axis-aligned case, which is exactly the case `bauhaus` stopped being |
-| 28 | **F.6.5's centre square root goes negative when a chord rounds past the diameter** | for an *angled* chord equal to the diameter, `lambda` can compute as exactly `1.0` — so F.6.6's correction does not fire — while `(rx²ry² − …)/…` lands at `-1.3e-16`. Measured at `r = 1/7` | `sqrt` of the raw value | every vertex becomes `NaN` and the render dies in `ceil()`. Inert for `ring`, whose chords are all **horizontal** (the radicand is then exactly zero every time) — which is why a mutation removing the clamp survived the whole suite until a case was searched for. Valid **as long as arcs stay axis-aligned**. **`beam` re-checked in #38 and it is still axis-aligned**: its closed mouth runs `(13, y)` to `(23, y)`, a horizontal chord, so the radicand is exactly zero there too — and that is *after* F.6.6 scales the radii, which is the case this row was written to worry about. `marble` is the one left to check |
+| 28 | **F.6.5's centre square root goes negative when a chord rounds past the diameter** | for an *angled* chord equal to the diameter, `lambda` can compute as exactly `1.0` — so F.6.6's correction does not fire — while `(rx²ry² − …)/…` lands at `-1.3e-16`. Measured at `r = 1/7` | `sqrt` of the raw value | every vertex becomes `NaN` and the render dies in `ceil()`. Inert for `ring`, whose chords are all **horizontal** (the radicand is then exactly zero every time) — which is why a mutation removing the clamp survived the whole suite until a case was searched for. Valid **as long as arcs stay axis-aligned**. **`beam` re-checked in #38 and it is still axis-aligned**: its closed mouth runs `(13, y)` to `(23, y)`, a horizontal chord, so the radicand is exactly zero there too — and that is *after* F.6.6 scales the radii, which is the case this row was written to worry about. **`marble` checked in #41 and it is inert for a stronger reason than `ring`'s or `beam`'s: it has no arcs at all.** Across the 18 distinct `d` strings in all 600 renders, `marble`'s two are the only ones this row had left, and their commands are `M L H v h l z` — no `a`. So the row is now settled for all six, and the only thing that exercises F.6.5 is the constructed case in `raster_path_test.dart` |
 | 29 | **Straight-alpha RGB is meaningless where alpha is small** | both our buffer and a PNG store *straight* alpha, so a pixel we cover 3/255 carries the full undiluted colour while Chrome's uncovered pixel carries zero | comparing the two backends channel by channel as stored | a 3/255 disagreement reads as a delta of **240** and a calibration run fails on a difference nobody could see. Compare **premultiplied** — `tool/calibrate/compare.dart` does. The same trap bites any comparison of our own arithmetic against itself: row #23's drift measures 16 straight and 2 premultiplied |
 | 30 | **A container's attributes change the picture as much as a shape's** | `beam` wraps its whole face in `<g transform="translate(4.5 4.5) rotate(-9 18 18)">`; `<svg>`, `<g>`, `<defs>` and `<mask>` all carry attributes | validating only the elements you know how to *draw*, and walking through containers unchecked | the face renders 4.5 units off and unrotated with **nothing thrown** — the exact failure `UnsupportedSceneError` exists to prevent, one level up from where it was being checked. Found by the #37 completeness pass; every element on the walk now carries an allow-list. **#38 discharged it by implementing the thing rather than refusing it**: `_collectShapes` threads an inherited matrix and composes `parent · own` per §7.5, and `<g transform>` moved onto the container allow-list *in the same change*. The order matters — an allow-list entry for a transform nobody applied is precisely the silent wrong picture this row describes, so the two edits are one edit. Worth keeping as the record of a guard that paid for itself: the Step 1 enumeration for #38 listed five missing capabilities and this was not one of them; the guard is what found it. **And the row had a second half nobody had covered**: `<mask>` was allow-listed in #37 but *its child `<rect>`* was not, because `_readMask` is a different function that reads five geometry attributes and ignores the rest. Measured in #38 before fixing: `transform="scale(2)"` on the mask's shape produced exactly the untransformed coverage where a browser doubles it, and `opacity="0.5"` produced full coverage where a browser halves it — two wrong pictures, no throw, in the element that decides what the whole avatar is clipped to. The lesson generalises past this row: **an allow-list covers the walk it is on, and a second reader of the same tree needs its own** |
 | 31 | **An unreadable `fill` is not the same as an absent one — and neither is `none`, which makes three** | upstream omits `fill` to mean "no paint" (#17), writes `fill="url(#…)"` to mean a gradient, and writes `fill="none"` / `stroke="none"` to mean SVG's own "no paint is applied" (11.2) | letting all of them fall through to "the colour did not parse, so draw nothing" | **every `sunset` render rasterised to a blank square**, silently, and a golden made from one would have frozen the blank as correct. A `url(...)` fill now throws. The third state was added in #69: `parseHexColour('none')` returned `null` because the string is four characters long, so `none` was *accidentally* right — and `beam` is the variant that brings it, `<path fill="none">` on 44 of its 80 non-throwing renders and `<rect stroke="none">` 160 times, so the accident would have been frozen into `beam`'s goldens. `readColourDeclaration` now returns four states — absent / `none` / read / unreadable — and `fill`, `stroke` and `stop-color` each answer them explicitly. The enumeration is closed, not sampled: across every rendered fixture section those three attributes take absent, `none`, `url(#…)` (on `fill` only) and upper-case `#RRGGBB`, and nothing else. Distinct from #20, which is the *caller's* palette and keeps its recorded behaviour — this one is upstream's own output |
@@ -452,7 +475,7 @@ when a completeness pass surfaces another.
 | 41 | **Chrome dithers a gradient but does not approximate it** | measured: Chrome's gradient stays within **0.987** of the exact sRGB interpolation, varying across x within a row | assuming the `≤1/255` bar behaves the same for gradients as for curves | it does not, and the difference is the point. An exact interpolation rounded to nearest lands **≤1/255** from Chrome across all 4548 gradient pixels (58.6% exact, 41.4% off by one) — the bar is *met* here, where for a curve it cannot be (#27). One threshold was measuring two unrelated things |
 | 43 | **A dangling paint reference paints nothing, not black** | measured in Chrome: `fill="url(#nope)"` gives `0,0,0,0` at every pixel, with or without a root `fill` — a CSS `<url>` with no fallback and an invalid target has the used value `none` | writing "a browser renders it black" as the reason for a guard | the guard is still right and the *reason* was wrong, in three places at once (#40 wrote it into `scene_raster.dart` and two tests). Throwing is justified by "a blank is indistinguishable from the paint never having been read" — which is the bug #40 fixed and it was silent for a whole variant — not by a colour Chrome does not produce |
 | 44 | **`sunset` throws on a palette colour the other five draw nothing for** | `parseHexColour` returns `null` for `red`, `#F00`, `rgb(…)`; in a `fill` that means "draw nothing" (#20), and in a `<stop>` `_readLinearGradient` throws instead | assuming the two agree | measured: `['red']` gives a blank avatar for `pixel` and `ring` and an exception for `sunset`. There is an argument for the split — a `<stop>` has no "no paint" state, so `null` there would be a lie where in a `fill` it is upstream's own idiom (#17) — but row #20 says flatly "the rasterizer returns null and draws nothing", which is no longer true of every variant. **Ruled in [ADR-0001](../adr/0001-what-a-colour-declaration-means.md)**, and the answer is neither of the two this row offered. The split is real and *derived*: `fill` is inherited and the root declares `none`, `stop-color` is not inherited and its initial value is black, so one invalid-value rule (CSS 2.1 §4.2 + §6.1.1) produces both answers. What is **not** right is the throw — the derivation says an unreadable `stop-color` is black, and #64 owns that change. So this row is no longer a question, it is a conformance item |
-| 42 | **The calibration's interior/edge split is defeated by a gradient — and by any shape thinner than three pixels** | `_isEdge` asks whether a pixel's 3×3 neighbourhood is uniform — a good proxy for "antialiasing happens here" on flat fills, meaningless where every pixel differs from the one above it by design, and meaningless again for a shape no 3×3 window fits inside | reading "interior mismatches 0" as evidence that a shape is drawn correctly | for `sunset` it is **vacuous**: every gradient pixel is an edge, so the interior count is zero because the interior is empty. For `bauhaus` the interior is **not** empty — 56–61% of the painted pixels — and the statistic is *still* blind to the whole new capability: **deleting the stroked `<line>` outright leaves interior mismatches at 0 on all three cases** (#39, reproduced). A 2-unit stroke at 1 device px/unit has no 3×3-uniform pixel anywhere. The worst edge delta does move, 71 → 174–255, but the recorded bar is ≤1 and the baseline is already 71 (#27), so no threshold separates a missing shape from Chrome's own error. **`flutter test` killed every wrong picture tried; the Chrome run killed none of them** — the same conclusion #37 reached for a different reason. Measure a thin shape separately, or assert it in-repo |
+| 42 | **The calibration's interior/edge split is defeated by a gradient — and by any shape thinner than three pixels** | `_isEdge` asks whether a pixel's 3×3 neighbourhood is uniform — a good proxy for "antialiasing happens here" on flat fills, meaningless where every pixel differs from the one above it by design, and meaningless again for a shape no 3×3 window fits inside | reading "interior mismatches 0" as evidence that a shape is drawn correctly | for `sunset` it is **vacuous**: every gradient pixel is an edge, so the interior count is zero because the interior is empty. For `bauhaus` the interior is **not** empty — 56–61% of the painted pixels — and the statistic is *still* blind to the whole new capability: **deleting the stroked `<line>` outright leaves interior mismatches at 0 on all three cases** (#39, reproduced). A 2-unit stroke at 1 device px/unit has no 3×3-uniform pixel anywhere. The worst edge delta does move, 71 → 174–255, but the recorded bar is ≤1 and the baseline is already 71 (#27), so no threshold separates a missing shape from Chrome's own error. **`flutter test` killed every wrong picture tried; the Chrome run killed none of them** — the same conclusion #37 reached for a different reason. Measure a thin shape separately, or assert it in-repo. **#41 added the sharpest case yet: a *blur*.** Every pixel of a blurred shape differs from the one above it by construction, so `_isEdge` files 100% of `marble` as edge and the interior count is structurally incapable of moving — the `sunset` situation, but covering the whole variant rather than one gradient. The one place `marble` produces interior mismatches at all is where `overlay` **saturates** a region flat (an opaque white backdrop returns white for every source), which is an accident of the two-colour palette and not the statistic working. Read `marble`'s interior 0 as "the calibration had nothing to classify", never as agreement |
 | 48 | **`dart:math`'s transcendentals are not guaranteed bit-identical across platforms, and invariant 4 says the bytes are** | IEEE-754 **requires** `sqrt` to be correctly rounded, and only *recommends* it for `cos`, `sin`, `atan2` and `acos`. Dart does not compute those itself: on the VM they go to the platform libm (UCRT / glibc / Apple's), on web to JS `Math.*` (V8's fdlibm port). Two platforms may differ by an ulp | assuming `math.cos` is a fixed function of its argument, the way `sqrt` is | a 1-ulp difference moves a vertex by ~1e-14, coverage by ~1e-14, and the ×255 product by ~2.5e-12 — which flips a byte only where the exact product sits that close to a rounding boundary. The case that does is **coverage of exactly 0.5**: `127.5` rounds to 128 in Dart, and `0.49999999999999994` rounds to 127. **Not measured — no divergence has been observed, and nothing here could observe one.** The goldens are generated and compared on one machine, and this repo has no CI gate by policy, so a Windows-authored golden differing on Linux would fail nothing. Pre-existing since #37: `flattenCircle` uses `cos`/`sin` and `_appendArc` uses `atan2`/`acos`. What #39 changed is the **scope** — from deciding how finely a curve is chopped, to the *placement* of every rect and line via `Affine.rotation`. `rotate(0)` is exempt: `cos(0)` and `sin(0)` are exact everywhere. Valid **as long as nobody compares this package's bytes across two platforms**; the day someone does, the answers are to narrow invariant 4's wording, implement the transcendentals in-package from a fixed polynomial, or add a second-platform golden run |
 | 45 | **A `transform` list post-multiplies — the rightmost function applies first** | SVG 1.1 §7.5: a list is "as if each transform had been specified separately in the order provided", which the same section shows as nested `<g>` elements. So `translate(tx ty) rotate(a cx cy)` maps a point by `T · R`, and the rotation acts on the shape's own coordinates. §7.4 adds that the transform is applied **before** the element's `x`/`y`/`width`/`height` are read, so those are values in the *new* space | composing the list the other way round | a shape at a plausible wrong place, with nothing thrown — the same class as #30. Live for `bauhaus`, `beam` and `marble`, the only three variants with a transform at all (measured across all 600 renders). Pinned in `bauhaus_raster_test.dart` by an example where the two orders disagree, not by a golden. **#38 extended it one level out**: §7.5 says a list is *defined* by nesting, so an ancestor `<g>`'s matrix composes exactly as another function in the list would — `parent · own`, the ancestor applying second. `beam_raster_test.dart` pins that with a case where the two orders disagree **on canvas**, which took choosing the rotation centre: the obvious construction puts the reversed order off the edge, where both orders paint nothing and the test cannot fail |
 | 46 | **`rotate(a cx cy)` is not a fourth primitive** | §7.4 defines it as *exactly* `translate(cx, cy) rotate(a) translate(-cx, -cy)`, and gives no closed form for it | writing a remembered closed form and hoping | a rotation about the wrong point. Built from the definition here, and the test asserts one spelling against the other rather than against hardcoded numbers. A corollary worth keeping: `rotate(0 …)` **is** the identity exactly — `cos(0)` is 1 and `sin(0)` is 0 with no rounding — so the empty name, whose hash is 0, keeps the closed-form rect integrator. `rotate(360 …)` is *not*, and upstream cannot write it because `getUnit(n, 360)` tops out at 359 |
@@ -479,9 +502,50 @@ below the table.
 
 | Ref | Upstream `file:line` @ tag | What it does | Ruling | Decided |
 |---|---|---|---|---|
-| — | `avatar-marble.tsx:59` @ v2.0.x | first path's transform reads `properties[2].scale` where `properties[1].scale` is implied — a copy-paste slip. Fixing it changes the output | **not yet ruled** | — |
+| **S-3** | `avatar-marble.js:56` @ v1.6.1 (still `avatar-marble.tsx:59` @ v2.0.x) | the first path takes its colour, translation and rotation from `properties[1]` and its **scale from `properties[2]`** — a copy-paste slip, five neighbouring reads all say `[1]`. Fixing it changes the output on **11 of 20 corpus names**, and on **75% of all hashes** by derivation: `getUnit(2h, 4)` is always even, so element 1's scale can only ever be 1.2 or 1.4, while element 2's `3h mod 4` reaches all four | **reproduce it — the reference is the specification** | 2026-08-07 |
 | **S-1** | `avatar-sunset.js:20,36,41` @ v1.6.1 | builds a gradient id from the caller's name and references it as `url(#…)`. For any name containing `'`, `"`, `(`, `)`, `\` or a control character the reference is not a valid CSS url token, so **the browser paints nothing** and the avatar is blank. Reproduced in Chrome: `O'Brien-Smith, Jr.` → all pixels `0,0,0,0`; `Clara Barton` → the gradient. The corpus name `punctuation` is exactly this case, and an apostrophe in a name is common | **repair it — do not reproduce the blank** | 2026-07-29 |
 | **S-2** | `avatar-beam.js:9,17` + `utilities.js:42` @ v1.6.1 | an **empty palette** makes `getRandomColor` return `undefined`, which `getContrast` calls `.slice(0, 1)` on — a `TypeError`, and no document at all. `beam` is the only one of the six that does this; the other five drop an attribute and render. Measured: 20 of 20 names throw, against 0 of 100 for the rest (hidden-state #8) | **reproduce the failure, in a Dart-idiomatic exception** | 2026-08-06 |
+
+### S-3 — the ruling, as an event
+
+**What the user was shown (2026-08-07):** the five lines of
+`avatar-marble.js` side by side — `properties[1]` for the colour, the two
+translations and the rotation, then `properties[2]` for the scale — the
+measurement that 11 of the 20 corpus names take different values, the
+derivation that puts it at 3 in 4 for *any* name, and **a rendered page**:
+every corpus name drawn twice, upstream's version beside the "corrected" one,
+with a live difference panel where black means identical.
+
+The derivation is what made the number safe to act on. A count over 20 names is
+a fact about those 20 names; here `getUnit(2h, 4)` is `2h mod 4`, which is 0 for
+even `h` and 2 for odd, so **element 1's scale is 1.2 or 1.4 and nothing else,
+for every name that will ever exist**. Element 2's `3h mod 4` cycles through all
+four. They differ whenever `h` is odd, and again when `h ≡ 2 (mod 4)` — 1/2 plus
+1/4. A synthetic sweep of two million hashes gives exactly 1,500,000.
+
+| option | what a caller gets | what it costs |
+|---|---|---|
+| reproduce it | upstream's avatar, byte for byte | the port carries a copy-paste slip |
+| correct it | an avatar nobody has ever seen | 3 names in 4 change identity; a divergence row; `tool/crosscheck` reports 110 ruled cases against a bar of **0** pixels; permanent divergence from every upstream version, 2.0.4 included |
+
+**What they chose:** reproduce it — *"그대로 재현으로 가자."*
+
+**Why this is not S-1.** S-1 repaired `sunset` because upstream's own output was
+**a blank avatar** — a defect the user could see. Here both versions are
+perfectly good avatars and the only claim available is about the author's
+*intent*. "Fix the bug" does not carry over from one to the other, and the two
+rulings going opposite ways is the ledger working rather than a contradiction.
+
+**It is theirs to reverse.** A product judgement about fidelity versus intent. A
+later argument that the slip is obviously unintended does **not** reopen it —
+only the user does.
+
+**What it costs.** Nothing at layer 2: the fixture *is* upstream's output, so
+reproducing it is what makes the 100 renders byte-identical. What it costs is
+that `marble.dart` has to carry an explanation, and
+`marble_parity_test.dart` has to pin the odd read directly — otherwise the next
+reader "fixes" it and the byte sweep tells them they broke something without
+telling them why.
 
 ### S-1 — the ruling, as an event
 
@@ -638,14 +702,20 @@ its `url()` wrapper, so a fixture entry handed to a browser renders unmasked.
 `playwright-core` drives the **system Chrome** (`channel: 'chrome'`), so nothing
 downloads a browser and no path is hardcoded.
 
-**Measured, #38 (2026-08-06):**
+**Measured, #41 (2026-08-07) — the full roster for the first time:**
 
 | | |
 |---|---|
-| checked | **1000** — 5 variants × 20 names × 5 palettes × `square` on and off, at size 320 |
-| pixel-identical | **950** |
+| checked | **1200** — 6 variants × 20 names × 5 palettes × `square` on and off, at size 320 |
+| pixel-identical | **1150** |
 | agreed refusals | **40** — `beam` × the empty palette, both `square` values: upstream throws and so do we, so there is no document on either side |
 | ruled divergences | **10** — `sunset` × `punctuation`, both `square` values, five palettes |
+
+`marble`'s 200 renders are **all pixel-identical**, including the blur, the
+`overlay` blend and the filter region — through one browser, so the browser's own
+approximation cancels. That is the bar this project has that a Chrome update
+cannot break, and it is the reason the layer-3 calibration's failure to reach
+≤1/255 (below) is not evidence of a wrong picture.
 
 The ten are S-1 in the divergence ledger: upstream paints **0 pixels** for a
 name containing an apostrophe, because its own `url(#…)` reference is not a
@@ -659,13 +729,11 @@ reporting 990 identical renders when 40 of them were two exceptions would be
 claiming evidence it does not have. The asymmetric cases are the interesting
 ones and both are failures: upstream rendering where we refuse, or the reverse.
 
-**⚠ `marble` is not covered, and the harness says so by name.** Upstream
-dispatches six variants at 1.6.1 and this package has ported five (#41), so
-there is no scene of ours to compare — it is **unmeasured, not passing**.
-`emit.dart` also reads `lib/src/variants/` and refuses to run if a variant gains
-a file without gaining a line in its roster, so the day `marble` lands it cannot
-be silently skipped. That guard fired on `beam` in #38, which is what made the
-roster edit part of the change rather than a later sweep.
+**All six are covered as of #41.** `marble` was the last one missing, and the
+guard is what made adding it part of that change: `emit.dart` reads
+`lib/src/variants/` and refuses to run if a variant gains a file without gaining
+a line in its roster. It fired on `beam` in #38 and again on `marble` in #41 —
+twice now, which is the whole argument for keeping it.
 
 `square` is in the matrix here and **not** in the fixture matrix, which runs at
 one value. That is the #37 lesson applied: a prop the matrix never varies is a
@@ -746,6 +814,32 @@ which was merged in #36 without it. Measured, comparing premultiplied
 | `bauhaus-clara-default` | **0** | 71/255 | #39 |
 | `bauhaus-alice-pair` | **0** | 71/255 | #39 |
 | `bauhaus-empty-name` | **0** | 71/255 | #39 |
+| `marble-empty-name` | **0** | 71/255 | #41 |
+| `marble-clara-default` | 2 | 71/255 | #41 |
+| `marble-alice-pair` | 5 | 71/255 | #41 |
+| `marble-clara-square` | 2 | **5/255** | #41 |
+
+**⚠ `marble`'s rows read differently from every other row in this table, and
+the difference is the point.**
+
+* Its interior mismatches are **not zero** — 2 to 5 pixels of 6400 — and every
+  one of them is exactly **1/255**. They appear only where `overlay` saturates a
+  region flat (an opaque backdrop returns itself for every source), because that
+  is the only place a blurred variant *has* a 3x3-uniform pixel to classify. See
+  hidden-state #42: for `marble` the interior statistic is otherwise vacuous, so
+  its 0s carry less information than anyone else's, not more.
+* `marble-clara-square`'s worst edge is **5/255** against everyone else's 71 —
+  and that is the same 71, at the same pixel (71, 15), on five other rows.
+  Dropping the mask's corner radius removes it. So the 71 this table has carried
+  since #37 is **the mask's own curve** (hidden-state #27), not the variant's
+  drawing, and `marble-clara-square` is the row that separates the two.
+* The blur itself is the one mechanism in this package that can meet the bar.
+  SVG 1.1 §15.17 specifies the three-box algorithm exactly rather than leaving
+  it to the renderer, so both sides compute the same convolution: measured on a
+  step edge, our kernel and Chrome's agree to **0–1/255** for every sigma from 3
+  to 12. Above about 12 Chrome stops following it (31/255 at sigma 20, 65 at
+  sigma 30 — Skia downsamples for large radii); `marble`'s sigma is 8.4–9.1
+  device pixels, inside the range where the spec is what Chrome does.
 
 **Interior 0 is the part that matters for a *solid* region and it holds**: every
 solid area matches Chrome exactly, which is what proves the arc sweep
@@ -1053,11 +1147,14 @@ hidden-state list above is *pre-incident* enumeration, not evidence; move a
 row's story into `lessons.md` the first time it actually catches a defect, and
 cite the issue number.
 
-Nineteen entries as of #38. The ones that have caught something more than once:
+Twenty-three entries as of #41. The ones that have caught something more than
+once:
 
 | Rule | Caught in |
 |---|---|
 | A file existing is not the feature existing | #1 → closed #8 |
+| A row nobody can act on yet is a row nobody checks | #38, #41 |
+| A pattern written with the wrong line ending matches nothing | #39, #41 |
 | A tripwire that cannot trip reads as coverage | #34, #39 |
 | A mutation surviving means one of two opposite things | #34, #37 |
 | A substitution that matches nothing reads as a surviving mutation | #34, #36, #37, #39 |

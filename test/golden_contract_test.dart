@@ -127,7 +127,12 @@ void main() {
       // `goldenCasesFor` filters by `<variant>-`, so a case whose name does not
       // begin with a known prefix would be generated and compared by nobody
       // while still passing the directory check above.
-      const variants = ['pixel', 'ring', 'sunset', 'bauhaus', 'beam'];
+      //
+      // This list is a **fourth** copy of the roster, and unlike the other
+      // three it is not derived from anything — which is the point: it is the
+      // one place that has to be edited by hand when a variant lands, so a new
+      // prefix cannot slip in unclaimed. It fired on `marble` in #41.
+      const variants = ['pixel', 'ring', 'sunset', 'bauhaus', 'beam', 'marble'];
       final claimed = <String>{
         for (final v in variants) ...goldenCasesFor(v).keys,
       };
