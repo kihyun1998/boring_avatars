@@ -368,16 +368,29 @@ LinearGradientPaint _readLinearGradient(SvgNode node) {
     // An absent `offset` is 0 and an absent `stop-color` is **black** — both
     // are SVG's initial values, and the second is what makes an empty palette
     // paint `sunset` solid black instead of transparent. Confirmed in Chrome.
+    //
+    // The same four states a `fill` reads, answered differently on purpose.
+    // `stop-color` takes `currentColor | <color> <icccolor> | inherit` (SVG
+    // 1.1, 13.2.4) and **`none` is not in that grammar**, where for `<paint>`
+    // it is the first alternative — so the value that means "no paint" over
+    // there is an invalid value here. It cannot mean "no paint" anyway: a
+    // gradient stop has no such state, only a colour.
     final offset = _num(child.attribute('offset')) ?? 0;
     final declared = child.attribute('stop-color') as String?;
-    final colour = declared == null
-        ? const RasterColour(0, 0, 0)
-        : parseHexColour(declared);
-    if (colour == null) {
-      throw UnsupportedSceneError(
-        'stop-color "$declared" is not a colour this rasterizer can read',
-      );
-    }
+    final colour = switch (readColourDeclaration(declared)) {
+      AbsentColour() => const RasterColour(0, 0, 0),
+      ParsedColour(:final colour) => colour,
+      NoneColour() => throw UnsupportedSceneError(
+        'stop-color "none" is not in this property\'s grammar; `none` is a '
+        '<paint> value and a <stop> has no "do not paint" state',
+      ),
+      // Chrome paints an unreadable `stop-color` **black**, not nothing —
+      // measured. Refusing rather than guessing is today's answer and #64 is
+      // where it is taken, together with `fill`'s.
+      UnreadableColour(:final text) => throw UnsupportedSceneError(
+        'stop-color "$text" is not a colour this rasterizer can read',
+      ),
+    };
     stops.add((offset, colour));
   }
   if (stops.isEmpty) {
@@ -409,17 +422,25 @@ RasterShape _shapeOf(SvgNode node, Map<String, RasterPaint> paints) {
   /// The paint the [attribute] names — `fill` for the filled elements,
   /// `stroke` for `<line>`.
   ///
-  /// Three cases, and collapsing any two of them hides a picture:
+  /// A `<funciri>` is resolved here and everything else goes through
+  /// [readColourDeclaration], the vocabulary `<stop>` also reads. Five cases,
+  /// and three of them paint nothing — by three different decisions, which no
+  /// picture can tell apart and which therefore have to be written down:
   ///
-  /// * **absent** — no paint. Draw nothing. For `stroke` that is SVG's own
-  ///   initial value; for `fill` the initial value is **black**, and what makes
-  ///   the absence mean nothing is the root `<svg fill="none">` every one of the
-  ///   six variants declares, inherited down (#17). Measured across all 600
+  /// * **absent** — no paint. For `stroke` that is SVG's own initial value;
+  ///   for `fill` the initial value is **black**, and what makes the absence
+  ///   mean nothing is the root `<svg fill="none">` every one of the six
+  ///   variants declares, inherited down (#17). Measured across all 600
   ///   renders in the fixture: the root's `fill` is `none` in every one. Valid
   ///   **as long as that stays true** — a scene whose root declared a colour
   ///   would paint every unfilled shape with it, and nothing here reads the
   ///   root to notice. Not reachable from any public entry point today, since
   ///   the scene is only ever built by this package's own variant builders.
+  /// * **`none`** — no paint, because SVG says so: it is the first alternative
+  ///   of `<paint>` (11.2). This is the one that used to be indistinguishable
+  ///   from a parse failure, and `beam` is the only variant that writes it —
+  ///   `<path fill="none">` on 44 of its 80 renders and `<rect stroke="none">`
+  ///   160 times.
   /// * **`url(#…)`** — a paint server, and it must exist. A dangling reference
   ///   makes a browser draw **nothing** — measured, `0,0,0,0` at every pixel,
   ///   because a CSS `<url>` with no fallback and an invalid target has the
@@ -427,14 +448,15 @@ RasterShape _shapeOf(SvgNode node, Map<String, RasterPaint> paints) {
   ///   with Chrome; it throws anyway, because a blank avatar is
   ///   indistinguishable from the bug where the paint was never *read* — which
   ///   is exactly what #40 fixed, and it was silent for a whole variant.
-  /// * **anything else** — a colour literal. `#RRGGBB` paints; a form only a
-  ///   browser can read (`red`, `#F00`) keeps its recorded behaviour of
-  ///   painting nothing, which is hidden-state #20 and the caller's palette,
-  ///   not upstream's output.
+  /// * **a colour** — `#RRGGBB` paints.
+  /// * **unreadable** — a form only a browser can read (`red`, `#F00`) keeps
+  ///   its recorded behaviour of painting nothing, which is hidden-state #20
+  ///   and the caller's palette, not upstream's output. **#64 is where this
+  ///   answer changes**; splitting it out of the two above is what lets it
+  ///   change alone.
   RasterPaint? resolvePaint(String attribute) {
     final declared = node.attribute(attribute) as String?;
-    if (declared == null) return null;
-    if (declared.startsWith('url(')) {
+    if (declared != null && declared.startsWith('url(')) {
       final id = RegExp(r'^url\(#(.*)\)$').firstMatch(declared)?.group(1);
       final paint = id == null ? null : paints[id];
       if (paint == null) {
@@ -445,7 +467,12 @@ RasterShape _shapeOf(SvgNode node, Map<String, RasterPaint> paints) {
       }
       return paint;
     }
-    return SolidPaint.hex(declared);
+    return switch (readColourDeclaration(declared)) {
+      AbsentColour() => null,
+      NoneColour() => null,
+      ParsedColour(:final colour) => SolidPaint(colour),
+      UnreadableColour() => null,
+    };
   }
 
   final fill = resolvePaint('fill');
