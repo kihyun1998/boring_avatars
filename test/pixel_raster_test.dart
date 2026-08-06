@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
+
 
 import 'package:boring_avatars/src/raster/path.dart';
 import 'package:boring_avatars/src/raster/raster.dart';
@@ -176,10 +178,12 @@ void main() {
     );
 
     test('a transform this rasterizer cannot compose is refused', () {
-      // This test used to pin the *absence* of transforms — `translate`/
-      // `rotate` were refused too, and #39 implemented them. What is still a
-      // gap is `scale`, which `beam` and `marble` both use; refusing it is what
-      // stops a shape being drawn at a plausible wrong size.
+      // Third subject for this test. It began pinning the absence of
+      // transforms outright; #39 implemented `translate` and `rotate` and it
+      // moved to `scale`; #38 implemented `scale` and it moves again. What is
+      // left of §7.4 is `matrix`, `skewX` and `skewY`, which no version in
+      // scope writes — refusing one is what stops a shape being drawn at a
+      // plausible wrong size or shear.
       expectRejected(
         wrap(const [
           SvgNode(
@@ -187,7 +191,7 @@ void main() {
             attributes: [
               SvgAttribute('width', 2),
               SvgAttribute('height', 2),
-              SvgAttribute('transform', 'translate(2 2) scale(2)'),
+              SvgAttribute('transform', 'translate(2 2) skewX(20)'),
               SvgAttribute('fill', '#FF0000'),
             ],
           ),
@@ -195,7 +199,15 @@ void main() {
       );
     });
 
-    test('a rect with rx is refused — the corners would be square', () {
+    test('a rect whose stroke would actually paint is refused', () {
+      // This test used to refuse `rx` outright, because square corners where
+      // the document asks for round ones is a wrong picture. #38 implements
+      // `rx` — `beam`'s wrapper and both of its eyes carry one — so the subject
+      // moved to the neighbouring gap on the same element: outlining a
+      // rectangle. `beam` declares `stroke="none"` on its eyes, which is read
+      // and paints nothing (ADR-0001); a stroke that *would* paint is a
+      // capability nobody has built, and drawing the rect without its outline
+      // is exactly the plausible-wrong-picture this seam exists to stop.
       expectRejected(
         wrap(const [
           SvgNode(
@@ -203,12 +215,38 @@ void main() {
             attributes: [
               SvgAttribute('width', 2),
               SvgAttribute('height', 2),
-              SvgAttribute('rx', 1),
+              SvgAttribute('stroke', '#FF0000'),
               SvgAttribute('fill', '#FF0000'),
             ],
           ),
         ]),
       );
+    });
+
+    test('but rx is now honoured rather than refused', () {
+      // The other half of the flip above: a 2x2 rect with rx=1 is a circle of
+      // radius 1, area π — not a square of area 4. Asserting only the throw's
+      // removal would leave the new behaviour unpinned.
+      final image = rasterizeScene(
+        wrap(const [
+          SvgNode(
+            SvgElement.rect,
+            attributes: [
+              SvgAttribute('width', 4),
+              SvgAttribute('height', 4),
+              SvgAttribute('rx', 2),
+              SvgAttribute('fill', '#FF0000'),
+            ],
+          ),
+        ]),
+        width: 4,
+        height: 4,
+      );
+      var ink = 0.0;
+      for (var i = 3; i < image.bytes.length; i += 4) {
+        ink += image.bytes[i] / 255;
+      }
+      expect(ink, closeTo(math.pi * 4, 0.05));
     });
 
     test('the shapes no variant has needed yet are refused', () {

@@ -350,17 +350,35 @@ void main() {
       throwsA(isA<UnsupportedSceneError>()),
     );
 
-    test('a transform on the group is refused', () {
-      // Verbatim from `beam|accented|pair` in the fixture. Before the fix this
-      // drew the content 4.5 units off and unrotated, and threw nothing.
-      expectRejected(
+    test('a transform on the group is applied, not ignored and not refused', () {
+      // This test used to assert the *refusal* of a group transform, because
+      // ignoring one drew `beam`'s face 4.5 units off and unrotated while
+      // throwing nothing (hidden-state #30). #38 implements composition, so the
+      // subject flips: the guard is discharged by making the thing work, and
+      // what has to be pinned now is that it really moves the content.
+      //
+      // A 4×4 red square at the origin, pushed 4 right and 4 down by the group
+      // alone, must land in the far quadrant of the 8×8 canvas.
+      final image = rasterizeScene(
         wrap(
           const [redSquare],
-          group: const [
-            SvgAttribute('transform', 'translate(4.5 4.5) rotate(-9 18 18)'),
-          ],
+          group: const [SvgAttribute('transform', 'translate(4 4)')],
         ),
+        width: 8,
+        height: 8,
       );
+      expect(image.bytes.sublist((5 * 8 + 5) * 4, (5 * 8 + 5) * 4 + 4), [
+        255,
+        0,
+        0,
+        255,
+      ], reason: 'moved into the far quadrant');
+      expect(image.bytes.sublist((1 * 8 + 1) * 4, (1 * 8 + 1) * 4 + 4), [
+        0,
+        0,
+        0,
+        0,
+      ], reason: 'and left the near one empty');
     });
 
     test('an opacity on the group is refused', () {

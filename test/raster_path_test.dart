@@ -288,16 +288,18 @@ void main() {
       expect(areaOf('M10 10a0 5 0 0 0 10 0z'), closeTo(0, 1e-9));
     });
 
-    test('a cubic throws rather than rendering as a straight line', () {
-      // `beam` is the only variant of the six that uses one, and it names
-      // itself in the message when it arrives.
+    test('a quadratic still throws — no variant of the six writes one', () {
+      // This group used to hold the same assertion for a cubic, with a comment
+      // saying `beam` would name itself when it arrived. It has arrived, so
+      // that test was replaced by the cubic group below rather than deleted:
+      // the guard it was protecting is still here, one command narrower.
       expect(
-        () => parsePath('M0 0c1 1 2 2 3 3z'),
+        () => parsePath('M0 0q1 1 2 2z'),
         throwsA(
           isA<UnsupportedSceneError>().having(
             (e) => e.message,
             'message',
-            contains('"c"'),
+            contains('"q"'),
           ),
         ),
       );
@@ -316,6 +318,415 @@ void main() {
       // failure mode without the guard is not a wrong picture — it is a hang.
       expect(
         () => parsePath('M0 0h10z 5 5').toString(),
+        throwsA(isA<UnsupportedSceneError>()),
+      );
+    });
+  });
+
+  group('cubics, which `beam` brings and nothing else in the six uses', () {
+    /// The cubic itself, evaluated from Bernstein's polynomial — the
+    /// *definition*, not our flattener. Every assertion below compares the
+    /// output to this, so none of them is the port marking its own homework.
+    (double, double) bezier(
+      List<(double, double)> p,
+      double t,
+    ) {
+      final u = 1 - t;
+      final b0 = u * u * u;
+      final b1 = 3 * u * u * t;
+      final b2 = 3 * u * t * t;
+      final b3 = t * t * t;
+      return (
+        b0 * p[0].$1 + b1 * p[1].$1 + b2 * p[2].$1 + b3 * p[3].$1,
+        b0 * p[0].$2 + b1 * p[1].$2 + b2 * p[2].$2 + b3 * p[3].$2,
+      );
+    }
+
+    // `beam`'s open mouth at mouthSpread 0, verbatim from avatar-beam.js:95.
+    const mouth = 'M15 19c2 1 4 1 6 0';
+    const mouthPoints = <(double, double)>[
+      (15, 19),
+      (17, 20),
+      (19, 20),
+      (21, 19),
+    ];
+
+    test('the curve ends exactly on its last control point', () {
+      final c = parsePath(mouth).single;
+      final last = c.length - 1;
+      expect(c.x(last), closeTo(21, 1e-12));
+      expect(c.y(last), closeTo(19, 1e-12));
+    });
+
+    test('every vertex lies on the curve, to float64 precision', () {
+      // Uniform in the parameter, so vertex i is exactly B(i/n) — which makes
+      // this an equality check against Bernstein rather than a proximity one.
+      final c = parsePath(mouth).single;
+      final n = c.length - 1;
+      for (var i = 0; i <= n; i++) {
+        final (x, y) = bezier(mouthPoints, i / n);
+        expect(c.x(i), closeTo(x, 1e-12), reason: 'vertex $i');
+        expect(c.y(i), closeTo(y, 1e-12), reason: 'vertex $i');
+      }
+    });
+
+    test('no chord falls further from the curve than the declared flatness', () {
+      // The same bar the arcs are held to, measured the same way: sample the
+      // true curve densely and take the worst distance to the polyline.
+      final c = parsePath(mouth).single;
+      var worst = 0.0;
+      for (var s = 0; s <= 4000; s++) {
+        final (x, y) = bezier(mouthPoints, s / 4000);
+        var best = double.infinity;
+        for (var i = 0; i < c.length - 1; i++) {
+          best = math.min(
+            best,
+            _distanceToSegment(x, y, c.x(i), c.y(i), c.x(i + 1), c.y(i + 1)),
+          );
+        }
+        worst = math.max(worst, best);
+      }
+      expect(worst, lessThanOrEqualTo(defaultFlatness));
+    });
+
+    test('a cubic whose control points are collinear is a straight line', () {
+      // The degenerate case a flattener gets wrong by dividing by a curvature
+      // that is zero — here the second-derivative bound is exactly 0, so the
+      // segment count cannot come from `ceil(sqrt(0/…))` by luck.
+      //
+      // Closed with two straight sides into a right triangle of legs 3, whose
+      // area is 4.5 and is not this package's opinion. If the cubic bulged at
+      // all the area would move.
+      const d = 'M0 0c1 1 2 2 3 3L0 3z';
+      final c = parsePath(d).single;
+      for (var i = 0; i < c.length; i++) {
+        if (c.x(i) == 0 && c.y(i) == 3) continue; // the L, not the curve
+        expect(c.y(i), closeTo(c.x(i), 1e-12), reason: 'vertex $i');
+      }
+      expect(areaOf(d), closeTo(4.5, 1e-9));
+    });
+
+    test('a straight cubic is one chord, not a hundred', () {
+      // The derived count has to *fall* as the curve flattens, or the tolerance
+      // is not what decides it. Collinear is the limit, and there the answer is
+      // a single segment.
+      final straight = parsePath('M0 0c1 1 2 2 3 3L0 3z').single;
+      final curved = parsePath('M15 19c2 1 4 1 6 0L15 19z').single;
+      expect(straight.length, 3, reason: 'moveto, the chord, the L');
+      expect(curved.length, greaterThan(50));
+    });
+
+    test('every vertex lies inside the control hull, which is a theorem', () {
+      // A Bézier never leaves the convex hull of its control points. The mouth
+      // curve's hull is the box x∈[15,21], y∈[19,20], so this is exact and
+      // needs nothing from the implementation.
+      final c = parsePath(mouth).single;
+      for (var i = 0; i < c.length; i++) {
+        expect(c.x(i), inInclusiveRange(15 - 1e-12, 21 + 1e-12));
+        expect(c.y(i), inInclusiveRange(19 - 1e-12, 20 + 1e-12));
+      }
+    });
+
+    test('relative and absolute forms describe the same curve', () {
+      final relative = parsePath(mouth).single;
+      final absolute = parsePath('M15 19C17 20 19 20 21 19').single;
+      expect(relative.points.length, absolute.points.length);
+      for (var i = 0; i < relative.points.length; i++) {
+        expect(relative.points[i], closeTo(absolute.points[i], 1e-12));
+      }
+    });
+
+    test('a repeated coordinate run continues the same command', () {
+      // The grammar lets `c` take several sextuples in a row. No upstream
+      // version writes one, so this is constructed — but the repeat rule is
+      // shared with every other command and a cubic that silently consumed
+      // only the first six numbers would be a wrong picture, not a throw.
+      final c = parsePath('M0 0c1 1 2 2 3 3 1 1 2 2 3 3').single;
+      final last = c.length - 1;
+      expect(c.x(last), closeTo(6, 1e-12));
+      expect(c.y(last), closeTo(6, 1e-12));
+    });
+  });
+
+  group('a stroked path, which `beam`\'s open mouth brings', () {
+    /// Coverage of a set of contours filled together under the nonzero rule.
+    ///
+    /// The stroke outline is deliberately *not* one polygon — it is a pile of
+    /// overlapping quads and discs that nonzero winding unions. Measuring their
+    /// combined coverage is therefore the only honest way to ask its area.
+    double area(List<PathContour> contours, {int size = 120}) {
+      final coverage = polygonCoverage(
+        width: size,
+        height: size,
+        polygon: RasterPolygon(contours, SolidPaint.hex('#000000')),
+      );
+      var total = 0.0;
+      for (final c in coverage) {
+        total += c;
+      }
+      return total;
+    }
+
+    // The area of everything within distance ρ of a simple curve of length L is
+    // `L·2ρ + πρ²` — the straight part swept, plus one full disc's worth from
+    // the two ends. It holds while the curve does not double back on itself and
+    // its curvature radius stays above ρ, which is true of every stroke in the
+    // six. Nothing about this package decides it.
+    double sausage(double length, double width) =>
+        length * width + pi * width * width / 4;
+
+    test('a straight round-capped stroke is the swept box plus two half-discs',
+        () {
+      final outline = strokePathOutline(
+        parsePathSubpaths('M20 60h40'),
+        width: 6,
+        cap: StrokeCap.round,
+      );
+      expect(area(outline), closeTo(sausage(40, 6), 0.05));
+    });
+
+    test('butt caps stop at the endpoints and round caps do not', () {
+      // The whole difference between the two is one disc, and it is visible in
+      // both the area and the bounding box.
+      final butt = strokePathOutline(
+        parsePathSubpaths('M20 60h40'),
+        width: 6,
+        cap: StrokeCap.butt,
+      );
+      expect(area(butt), closeTo(40 * 6, 0.05));
+
+      var minX = double.infinity;
+      for (final c in strokePathOutline(
+        parsePathSubpaths('M20 60h40'),
+        width: 6,
+        cap: StrokeCap.round,
+      )) {
+        for (var i = 0; i < c.length; i++) {
+          minX = math.min(minX, c.x(i));
+        }
+      }
+      // The cap is a flattened circle, so its leftmost vertex sits up to one
+      // sagitta inside the true radius — same rule as the arc apexes above,
+      // and the same bar. Butt would leave it at 20.
+      expect(minX, closeTo(17, defaultFlatness));
+      expect(minX, greaterThan(17), reason: 'inscribed, never beyond');
+    });
+
+    test('a curved stroke is the same formula, on the arc length', () {
+      // A half-circle of radius 20 has length 20π exactly, so the expected area
+      // needs no measurement of ours at all.
+      final outline = strokePathOutline(
+        parsePathSubpaths('M40 60a20 20 0 0 0 40 0'),
+        width: 4,
+        cap: StrokeCap.round,
+      );
+      expect(area(outline), closeTo(sausage(20 * pi, 4), 0.1));
+    });
+
+    test('`beam`\'s own mouth comes out at its own arc length', () {
+      // Simpson's rule on |B'(t)|, which is the *definition* of arc length and
+      // shares no code with the flattener.
+      const p = <(double, double)>[(15, 19), (17, 20), (19, 20), (21, 19)];
+      double speed(double t) {
+        final u = 1 - t;
+        final dx = 3 * u * u * (p[1].$1 - p[0].$1) +
+            6 * u * t * (p[2].$1 - p[1].$1) +
+            3 * t * t * (p[3].$1 - p[2].$1);
+        final dy = 3 * u * u * (p[1].$2 - p[0].$2) +
+            6 * u * t * (p[2].$2 - p[1].$2) +
+            3 * t * t * (p[3].$2 - p[2].$2);
+        return math.sqrt(dx * dx + dy * dy);
+      }
+
+      const n = 10000;
+      var length = speed(0) + speed(1);
+      for (var i = 1; i < n; i++) {
+        length += speed(i / n) * (i.isOdd ? 4 : 2);
+      }
+      length *= 1 / (3 * n);
+
+      final outline = strokePathOutline(
+        parsePathSubpaths('M15 19c2 1 4 1 6 0'),
+        width: 1,
+        cap: StrokeCap.round,
+      );
+      expect(area(outline, size: 40), closeTo(sausage(length, 1), 0.02));
+    });
+
+    test('a zero-length subpath is a circle under round, nothing under butt',
+        () {
+      // 11.4, verbatim: such a subpath "shall not be stroked if stroke-linecap
+      // has a value of butt but shall be stroked if it has a value of round or
+      // square, producing respectively a circle or a square". The spec even
+      // lists `M 40,40 c 0,0 0,0 0,0` as an example, which is a *cubic* — so
+      // this is reachable from the very command `beam` introduces.
+      final round = strokePathOutline(
+        parsePathSubpaths('M40 40c0 0 0 0 0 0'),
+        width: 8,
+        cap: StrokeCap.round,
+      );
+      expect(area(round), closeTo(pi * 16, 0.05));
+
+      final butt = strokePathOutline(
+        parsePathSubpaths('M40 40c0 0 0 0 0 0'),
+        width: 8,
+        cap: StrokeCap.butt,
+      );
+      expect(area(butt), closeTo(0, 1e-9));
+    });
+
+    test('a single moveto is never stroked, whatever the cap', () {
+      // 11.4: "A subpath consisting of a single moveto shall not be stroked."
+      // Distinct from the zero-length case above, which *is* stroked under
+      // round — collapsing the two paints a disc the spec says is not there.
+      for (final cap in StrokeCap.values) {
+        expect(
+          area(strokePathOutline(
+            parsePathSubpaths('M40 40'),
+            width: 8,
+            cap: cap,
+          )),
+          closeTo(0, 1e-9),
+          reason: '$cap',
+        );
+      }
+    });
+
+    test('a zero width paints nothing, per 11.4', () {
+      expect(
+        area(strokePathOutline(
+          parsePathSubpaths('M20 60h40'),
+          width: 0,
+          cap: StrokeCap.round,
+        )),
+        closeTo(0, 1e-9),
+      );
+    });
+
+    test('the outline carries no NaN, whatever the input', () {
+      // A normalised direction vector over a zero-length segment is the NaN
+      // factory hidden-state #47 records, and the scanline integrator carries
+      // NaN *silently* rather than throwing.
+      for (final d in [
+        'M20 60h40',
+        'M40 40c0 0 0 0 0 0',
+        'M15 19c2 1 4 1 6 0',
+        'M10 10L10 10L20 20',
+        'M0 0h10v10H0z',
+      ]) {
+        for (final c in strokePathOutline(
+          parsePathSubpaths(d),
+          width: 2,
+          cap: StrokeCap.round,
+        )) {
+          for (final v in c.points) {
+            expect(v.isFinite, isTrue, reason: d);
+          }
+        }
+      }
+    });
+
+    test('a closed subpath joins rather than capping', () {
+      // `z` makes the start and the end the same point, so an open stroke would
+      // put two caps there and a closed one a single join. For a right-angled
+      // corner under round joins the difference is a quarter disc.
+      final closed = strokePathOutline(
+        parsePathSubpaths('M30 30h30v30H30z'),
+        width: 4,
+        cap: StrokeCap.round,
+      );
+      // The stroked region is everything within 2 of the outline. Outside, a
+      // 34-square with corner radius 2: 34² − (4−π)·2·2. Inside, a sharp
+      // 26-square: 26². The difference is 464 + 4π ≈ 476.6 — and note it is
+      // *not* perimeter × width (480), because a corner's outer wedge and its
+      // inner overlap do not cancel the way a circle's do.
+      expect(area(closed), closeTo(464 + 4 * pi, 0.15));
+    });
+  });
+
+  group('a rounded rect clamps rx and ry independently (SVG 9.2)', () {
+    /// Coverage of one contour, the same way [areaOf] measures a path.
+    double area(PathContour contour, {int size = 120}) {
+      final coverage = polygonCoverage(
+        width: size,
+        height: size,
+        polygon: RasterPolygon([contour], SolidPaint.hex('#000000')),
+      );
+      var total = 0.0;
+      for (final c in coverage) {
+        total += c;
+      }
+      return total;
+    }
+
+    // Each corner replaces a square of rx·ry with a quarter ellipse, so the
+    // shape loses (4 − π)·rx·ry in total. That is arithmetic, not a rendering
+    // opinion, and it distinguishes elliptical corners from circular ones.
+    double exactArea(double w, double h, double rx, double ry) =>
+        w * h - (4 - pi) * rx * ry;
+
+    test('no radius at all is the plain rectangle', () {
+      final c = roundedRectContour(10, 10, 40, 20, null, null);
+      expect(area(c), closeTo(40 * 20, 1e-9));
+      expect(c.length, 4, reason: 'four corners, no arcs');
+    });
+
+    test('rx alone sets ry too, and then each clamps to its own half', () {
+      // `beam`'s eye, verbatim: 1.5 x 2 with rx=1. 9.2 sets ry to rx, then
+      // clamps rx to width/2 = 0.75 and ry to height/2 = 1 — **different
+      // numbers**. The corners are elliptical, and since 2·rx is the full width
+      // and 2·ry the full height, the straight edges vanish: the eye is an
+      // ellipse. Hidden-state #21, live for the first time.
+      final c = roundedRectContour(10, 10, 1.5, 2, 1, null);
+      expect(area(c, size: 40), closeTo(pi * 0.75 * 1, 0.02));
+    });
+
+    test('and a single clamped radius would give a visibly different shape', () {
+      // The mutation this exists for: clamping both to min(w, h)/2 = 0.75.
+      // That is a circle-cornered rect of area 2.517 where the ellipse is
+      // 2.356 — 7% apart, far outside the flattening error.
+      final circular = exactArea(1.5, 2, 0.75, 0.75);
+      final elliptical = pi * 0.75 * 1;
+      expect((circular - elliptical).abs(), greaterThan(0.15));
+      expect(area(roundedRectContour(10, 10, 1.5, 2, 1, null), size: 40),
+          isNot(closeTo(circular, 0.05)));
+    });
+
+    test('a radius larger than the box becomes the inscribed ellipse', () {
+      // `beam`'s wrapper at isCircle: 36 x 36 with rx=36, which clamps to 18 —
+      // a circle. Upstream turns a rect into a circle exactly this way, and
+      // `pixel` does the same to its mask with rx=160 on 80.
+      final c = roundedRectContour(0, 0, 36, 36, 36, null);
+      expect(area(c, size: 60), closeTo(pi * 18 * 18, 0.05));
+    });
+
+    test('an ordinary radius loses exactly the four corner slivers', () {
+      // `beam`'s wrapper when it is not a circle: rx = SIZE/6 = 6 on 36 x 36.
+      final c = roundedRectContour(0, 0, 36, 36, 6, null);
+      expect(area(c, size: 60), closeTo(exactArea(36, 36, 6, 6), 0.05));
+    });
+
+    test('rx and ry given separately are both honoured', () {
+      final c = roundedRectContour(10, 10, 40, 30, 8, 3);
+      expect(area(c), closeTo(exactArea(40, 30, 8, 3), 0.05));
+    });
+
+    test('the shape never leaves its own box', () {
+      for (final r in <double>[0.5, 6, 18, 100]) {
+        final c = roundedRectContour(10, 20, 36, 36, r, null);
+        for (var i = 0; i < c.length; i++) {
+          expect(c.x(i), inInclusiveRange(10 - 1e-9, 46 + 1e-9));
+          expect(c.y(i), inInclusiveRange(20 - 1e-9, 56 + 1e-9));
+        }
+      }
+    });
+
+    test('a negative radius is an error, not silently absolute', () {
+      // 9.2: "A negative value is an error". Taking `abs()` — which is what the
+      // arc code legitimately does for its own radii, F.6.6 step 1 — would draw
+      // a rounded corner where the document is invalid.
+      expect(
+        () => roundedRectContour(0, 0, 10, 10, -2, null),
         throwsA(isA<UnsupportedSceneError>()),
       );
     });
@@ -616,4 +1027,27 @@ void main() {
       }
     });
   });
+}
+
+/// Distance from (px, py) to the segment (ax, ay)–(bx, by).
+///
+/// Used to measure a flattened polyline against the curve it replaces, in the
+/// direction that matters: how far the *curve* strays from the chords, which
+/// is what a coverage error is made of. A vertex-only check would pass for a
+/// flattener that put every vertex on the curve and used two of them.
+double _distanceToSegment(
+  double px,
+  double py,
+  double ax,
+  double ay,
+  double bx,
+  double by,
+) {
+  final dx = bx - ax, dy = by - ay;
+  final lengthSquared = dx * dx + dy * dy;
+  final t = lengthSquared == 0
+      ? 0.0
+      : (((px - ax) * dx + (py - ay) * dy) / lengthSquared).clamp(0.0, 1.0);
+  final qx = ax + t * dx, qy = ay + t * dy;
+  return math.sqrt((px - qx) * (px - qx) + (py - qy) * (py - qy));
 }

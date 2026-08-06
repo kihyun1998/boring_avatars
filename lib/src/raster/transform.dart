@@ -23,10 +23,17 @@
 ///   coordinate system. So the shape's geometry is built first and then mapped,
 ///   which is what [Affine.apply] does to each vertex.
 ///
-/// **Only `translate` and `rotate` are implemented.** `bauhaus` uses those two;
-/// `beam` and `marble` also use `scale`, measured across all 600 renders in the
-/// v1.6.1 fixture. Anything else throws rather than being skipped — an ignored
+/// **`translate`, `rotate` and `scale` are implemented.** Those are the three
+/// the six variants write, measured across all 600 renders in the v1.6.1
+/// fixture — `bauhaus` uses the first two, `beam` and `marble` all three.
+/// `matrix`, `skewX` and `skewY` throw rather than being skipped: an ignored
 /// transform is the failure `UnsupportedSceneError` exists for.
+///
+/// A fourth thing taken from the text rather than from habit: **`scale`'s
+/// missing second argument copies the first**, where `translate`'s missing
+/// second argument is zero. The two rules sit three lines apart in §7.4 and a
+/// port that shares one defaulting helper between them squashes every scaled
+/// shape onto a line.
 library;
 
 import 'dart:math' as math;
@@ -52,6 +59,9 @@ class Affine {
 
   /// `[1 0 0 1 tx ty]` — §7.4.
   const Affine.translation(double tx, double ty) : this(1, 0, 0, 1, tx, ty);
+
+  /// `[sx 0 0 sy 0 0]` — §7.4.
+  const Affine.scaling(double sx, double sy) : this(sx, 0, 0, sy, 0, 0);
 
   /// `[cos(a) sin(a) -sin(a) cos(a) 0 0]` — §7.4, about the origin.
   factory Affine.rotation(double degrees) {
@@ -103,7 +113,7 @@ class Affine {
 }
 
 /// The functions this rasterizer can read. Everything else is a real capability.
-const _implemented = {'translate', 'rotate'};
+const _implemented = {'translate', 'rotate', 'scale'};
 
 /// Parses a `transform` attribute into a single matrix.
 ///
@@ -174,6 +184,24 @@ Affine _build(String name, List<double> arguments, String source) {
       return Affine.translation(
         arguments[0],
         arguments.length == 2 ? arguments[1] : 0,
+      );
+    case 'scale':
+      // §7.4: "If <sy> is not provided, it is assumed to be equal to <sx>."
+      //
+      // **Not zero.** `translate` three lines above defaults its missing second
+      // argument to 0 and `scale` defaults its to the first — two neighbouring
+      // rules that differ, which is exactly the pair a shared helper collapses.
+      // `beam` writes the one-argument form on every render, so a port that
+      // borrowed `translate`'s rule would squash every wrapper flat.
+      if (arguments.length != 1 && arguments.length != 2) {
+        throw UnsupportedSceneError(
+          'scale takes one or two numbers, got ${arguments.length}, in '
+          '"$source"',
+        );
+      }
+      return Affine.scaling(
+        arguments[0],
+        arguments.length == 2 ? arguments[1] : arguments[0],
       );
     case 'rotate':
       if (arguments.length == 1) {

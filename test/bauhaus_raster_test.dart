@@ -205,25 +205,23 @@ void main() {
     });
 
     test('an unimplemented function throws and names itself', () {
-      // `beam` and `marble` both use `scale`; measured across all 600 renders,
-      // those two and `bauhaus` are the only variants with a transform at all.
-      // Ignoring one would draw a shape at a plausible size and throw nothing.
-      expect(
-        () => parseTransform('translate(4.5 4.5) scale(2)'),
-        throwsA(
-          isA<UnsupportedSceneError>().having(
-            (e) => e.message,
-            'message',
-            allOf(contains('scale'), contains('beam')),
-          ),
-        ),
-      );
+      // This test used to name `scale` first, on the grounds that `beam` and
+      // `marble` both write one. `beam` has arrived (#38) and `scale` is
+      // implemented, so the subject moved to the two functions that are still
+      // nobody's — deleting the case rather than moving it would have left the
+      // guard itself untested. `beam`'s own scale assertions are in
+      // `beam_raster_test.dart`.
+      //
+      // Measured across all 600 renders, `bauhaus`, `beam` and `marble` are the
+      // only variants with a transform at all, and between them they write
+      // exactly translate, rotate and scale. Ignoring an unknown one would draw
+      // a shape at a plausible size and throw nothing.
       expect(
         () => parseTransform('skewX(20)'),
         throwsA(isA<UnsupportedSceneError>()),
       );
       expect(
-        () => parseTransform('matrix(1 0 0 1 0 0)'),
+        () => parseTransform('translate(4.5 4.5) matrix(1 0 0 1 0 0)'),
         throwsA(isA<UnsupportedSceneError>()),
       );
     });
