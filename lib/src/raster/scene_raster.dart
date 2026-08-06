@@ -644,7 +644,8 @@ List<RasterShape> _shapesOf(
         // one fills — but the order is the spec's, not the variant's.
         if (fill != null)
           RasterPolygon([
-            for (final contour in parsePath(d)) matrix.transformContour(contour),
+            for (final contour in parsePath(d))
+              matrix.transformContour(contour),
           ], fill),
         if (stroke != null)
           RasterPolygon([

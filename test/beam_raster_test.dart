@@ -52,8 +52,7 @@ void main() {
       expect(m.isTranslationOnly, isTrue);
     });
 
-    test('a scale is not a translation, so a rect stops being axis-aligned',
-        () {
+    test('a scale is not a translation, so a rect stops being axis-aligned', () {
       // The flag that decides whether a rect keeps the closed-form integrator.
       expect(parseTransform('scale(1.1)').isTranslationOnly, isFalse);
     });
@@ -70,32 +69,36 @@ void main() {
       expect(swapped.apply(1, 1), (20.0, 20.0));
     });
 
-    test('upstream\'s own wrapper string parses to the composition it means',
-        () {
-      // rotate(0 …) is exactly the identity — cos(0) is 1 and sin(0) is 0 with
-      // no rounding — so this isolates translate ∘ scale from the rotation.
-      final m = parseTransform('translate(4 4) rotate(0 18 18) scale(1.2)');
-      final (x, y) = m.apply(10, 20);
-      expect(x, closeTo(16, 1e-12));
-      expect(y, closeTo(28, 1e-12));
-    });
+    test(
+      'upstream\'s own wrapper string parses to the composition it means',
+      () {
+        // rotate(0 …) is exactly the identity — cos(0) is 1 and sin(0) is 0 with
+        // no rounding — so this isolates translate ∘ scale from the rotation.
+        final m = parseTransform('translate(4 4) rotate(0 18 18) scale(1.2)');
+        final (x, y) = m.apply(10, 20);
+        expect(x, closeTo(16, 1e-12));
+        expect(y, closeTo(28, 1e-12));
+      },
+    );
 
-    test('a scaled rotation still preserves angles, which a shear would not',
-        () {
-      // A uniform scale is conformal: the image of a right angle is a right
-      // angle. This is what tells `scale(s)` apart from the `matrix(…)` shear
-      // a wrong composition can produce, and it needs no reference render.
-      final m = parseTransform('translate(3 5) rotate(37 18 18) scale(1.1)');
-      final (ox, oy) = m.apply(0, 0);
-      final (ax, ay) = m.apply(1, 0);
-      final (bx, by) = m.apply(0, 1);
-      final dot = (ax - ox) * (bx - ox) + (ay - oy) * (by - oy);
-      expect(dot, closeTo(0, 1e-12));
-      final la = math.sqrt((ax - ox) * (ax - ox) + (ay - oy) * (ay - oy));
-      final lb = math.sqrt((bx - ox) * (bx - ox) + (by - oy) * (by - oy));
-      expect(la, closeTo(1.1, 1e-12));
-      expect(lb, closeTo(1.1, 1e-12));
-    });
+    test(
+      'a scaled rotation still preserves angles, which a shear would not',
+      () {
+        // A uniform scale is conformal: the image of a right angle is a right
+        // angle. This is what tells `scale(s)` apart from the `matrix(…)` shear
+        // a wrong composition can produce, and it needs no reference render.
+        final m = parseTransform('translate(3 5) rotate(37 18 18) scale(1.1)');
+        final (ox, oy) = m.apply(0, 0);
+        final (ax, ay) = m.apply(1, 0);
+        final (bx, by) = m.apply(0, 1);
+        final dot = (ax - ox) * (bx - ox) + (ay - oy) * (by - oy);
+        expect(dot, closeTo(0, 1e-12));
+        final la = math.sqrt((ax - ox) * (ax - ox) + (ay - oy) * (ay - oy));
+        final lb = math.sqrt((bx - ox) * (bx - ox) + (by - oy) * (by - oy));
+        expect(la, closeTo(1.1, 1e-12));
+        expect(lb, closeTo(1.1, 1e-12));
+      },
+    );
 
     test('the wrong number of arguments throws rather than guessing', () {
       expect(

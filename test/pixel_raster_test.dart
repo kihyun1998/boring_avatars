@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
-
 import 'package:boring_avatars/src/raster/path.dart';
 import 'package:boring_avatars/src/raster/raster.dart';
 import 'package:boring_avatars/src/raster/scene_raster.dart';

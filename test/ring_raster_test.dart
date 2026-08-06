@@ -367,18 +367,16 @@ void main() {
         width: 8,
         height: 8,
       );
-      expect(image.bytes.sublist((5 * 8 + 5) * 4, (5 * 8 + 5) * 4 + 4), [
-        255,
-        0,
-        0,
-        255,
-      ], reason: 'moved into the far quadrant');
-      expect(image.bytes.sublist((1 * 8 + 1) * 4, (1 * 8 + 1) * 4 + 4), [
-        0,
-        0,
-        0,
-        0,
-      ], reason: 'and left the near one empty');
+      expect(
+        image.bytes.sublist((5 * 8 + 5) * 4, (5 * 8 + 5) * 4 + 4),
+        [255, 0, 0, 255],
+        reason: 'moved into the far quadrant',
+      );
+      expect(
+        image.bytes.sublist((1 * 8 + 1) * 4, (1 * 8 + 1) * 4 + 4),
+        [0, 0, 0, 0],
+        reason: 'and left the near one empty',
+      );
     });
 
     test('an opacity on the group is refused', () {

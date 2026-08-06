@@ -70,11 +70,8 @@ void main() {
               reason: 'the fixture records which failure',
             );
             expect(
-              () => buildBeamScene(
-                name: name,
-                colors: colors,
-                size: matrixSize,
-              ),
+              () =>
+                  buildBeamScene(name: name, colors: colors, size: matrixSize),
               throwsA(isA<ArgumentError>()),
               reason: '${n['id']}/${p['id']}',
             );
@@ -176,20 +173,24 @@ void main() {
   });
 
   group('an empty palette fails, and only for beam', () {
-    test('the failure names the palette rather than leaking an index error', () {
-      // The user's ruling was "throw, in a Dart-idiomatic way" — so what a
-      // caller sees has to be about *their* input, not about a null slice.
-      expect(
-        () => buildBeamScene(name: 'Clara Barton', colors: const [], size: 80),
-        throwsA(
-          isA<ArgumentError>().having(
-            (e) => e.message.toString(),
-            'message',
-            contains('palette'),
+    test(
+      'the failure names the palette rather than leaking an index error',
+      () {
+        // The user's ruling was "throw, in a Dart-idiomatic way" — so what a
+        // caller sees has to be about *their* input, not about a null slice.
+        expect(
+          () =>
+              buildBeamScene(name: 'Clara Barton', colors: const [], size: 80),
+          throwsA(
+            isA<ArgumentError>().having(
+              (e) => e.message.toString(),
+              'message',
+              contains('palette'),
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
 
     test('a one-colour palette does not fail — the guard is the empty one', () {
       // The discriminating half: a guard that rejected any short palette would
