@@ -75,6 +75,90 @@ class RasterColour {
   final int b;
 }
 
+/// What a colour-valued attribute declared, before any call site decides what
+/// to do about it.
+///
+/// Four states, and three of them paint nothing today — so a picture cannot
+/// tell them apart and neither could the code, until this existed. Splitting
+/// them changes no output; it makes the *reason* inspectable, which is what
+/// lets `fill` and `stop-color` answer the same declaration differently on
+/// purpose rather than by accident.
+///
+/// The split matters because the two properties really do have different
+/// grammars. `fill` and `stroke` take `<paint>`, whose first alternative is
+/// `none` — "Indicates that no paint is applied" (SVG 1.1, 11.2). `stop-color`
+/// takes `currentColor | <color> <icccolor> | inherit` (13.2.4), which does
+/// **not** include `none`. A vocabulary that folded `none` into "unreadable"
+/// would make `beam`'s 204 `none` declarations right by coincidence, and a
+/// golden would freeze the coincidence.
+sealed class ColourDeclaration {
+  const ColourDeclaration();
+}
+
+/// The attribute was not written at all.
+///
+/// Upstream's own idiom for "no paint" — it omits `fill` rather than writing
+/// `none` when a palette entry is `undefined` (#17), which is why 100% of
+/// `pixel` renders lead with an unfilled tile. What each property makes of an
+/// absence is its own initial value's business: `fill` is black, `stroke` is
+/// `none`, `stop-color` is black.
+final class AbsentColour extends ColourDeclaration {
+  const AbsentColour();
+}
+
+/// The attribute said `none`.
+///
+/// A value that was read, not one that failed to parse. In `<paint>` it means
+/// no paint is applied; in `stop-color` it is outside the grammar entirely.
+final class NoneColour extends ColourDeclaration {
+  const NoneColour();
+}
+
+/// A colour this rasterizer read.
+final class ParsedColour extends ColourDeclaration {
+  const ParsedColour(this.colour);
+  final RasterColour colour;
+}
+
+/// A value in a notation this rasterizer has not learned.
+///
+/// `red`, `#F00`, `rgb(…)`, `#RRGGBBAA` — all of which a browser draws. The
+/// palette is consumer policy and upstream validates none of it, so these
+/// reach here and the SVG backend passes them through intact while this one
+/// cannot draw them (hidden-state #20). [text] is kept so the seam can say
+/// what it could not read.
+final class UnreadableColour extends ColourDeclaration {
+  const UnreadableColour(this.text);
+  final String text;
+}
+
+/// Reads [declared] into one of the four [ColourDeclaration] states.
+///
+/// This is the *reading*; the answer is the call site's. `fill` and
+/// `stop-color` share this and diverge afterwards, which is the only way the
+/// divergence can be argued about.
+///
+/// The keyword is matched exactly. CSS keywords are ASCII case-insensitive and
+/// tolerate surrounding whitespace, so `NONE` and ` none ` are `none` to a
+/// browser and are `unreadable` here — which costs nothing today, since both
+/// answers are "draw nothing" and upstream writes exactly `none`, lower case
+/// and unpadded, everywhere it writes it: 204 times on a drawn element (all of
+/// them `beam`'s) and once on the root `<svg>` of every render. Valid **as long
+/// as the only writer of these scenes is this package's own emitter**. #63 has
+/// to settle case folding for 148 named colours and is where a loose match
+/// belongs if one is ever wanted.
+///
+/// The enumeration behind that is closed rather than sampled. Across every
+/// rendered section of the fixture, `fill`, `stroke` and `stop-color` take
+/// exactly four shapes and no fifth: absent (1880 elements), `none`,
+/// `url(#…)` — on a `fill` only — and an upper-case six-digit `#RRGGBB`.
+ColourDeclaration readColourDeclaration(String? declared) {
+  if (declared == null) return const AbsentColour();
+  if (declared == 'none') return const NoneColour();
+  final colour = parseHexColour(declared);
+  return colour == null ? UnreadableColour(declared) : ParsedColour(colour);
+}
+
 /// Parses the `#RRGGBB` form upstream's default palette uses.
 ///
 /// Returns `null` for anything else, **including forms a browser would
@@ -82,6 +166,11 @@ class RasterColour {
 /// policy and upstream validates none of it, so those reach here; the SVG
 /// backend passes them through intact while this one cannot draw them. That
 /// divergence is recorded rather than papered over: see hidden-state #20.
+///
+/// It is a **hex parser**, not the vocabulary: `none` fails here the way `red`
+/// does, four characters that are not six. Anything deciding what a
+/// declaration *means* goes through [readColourDeclaration], which reads the
+/// keyword before it reaches this.
 ///
 /// A sign is rejected. `int.tryParse('+12345', radix: 16)` succeeds, which
 /// would turn punctuation into a plausible colour.
@@ -215,6 +304,11 @@ class SolidPaint extends RasterPaint {
   const SolidPaint(this.colour);
 
   /// `#RRGGBB` only, and `null` for anything else — see [parseHexColour].
+  ///
+  /// A shorthand for building a paint from a literal, which is what the tests
+  /// do. It is **not** the route a scene's `fill` takes: that goes through
+  /// [readColourDeclaration], which tells `none` apart from a notation this
+  /// rasterizer cannot read, where this one folds both into `null`.
   static SolidPaint? hex(String? value) {
     final colour = parseHexColour(value);
     return colour == null ? null : SolidPaint(colour);

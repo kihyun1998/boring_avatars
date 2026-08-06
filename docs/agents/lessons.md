@@ -147,6 +147,34 @@ the third has to cover *green over zero tests* as well as *no substitution*. It
 now parses the test count out of the run and refuses to call a filtered-to-empty
 run a survivor. Quote arguments yourself when the shell is doing the joining.
 
+### An output-neutral change is invisible to every test that looks at output (#69)
+
+#69 split one `null` into three states — an absent `fill`, `fill="none"`, and a
+colour notation the rasterizer cannot read — all of which paint nothing. The
+ticket's own premise was that not one byte moves, and none did: 493 tests green,
+14 goldens unchanged.
+
+Six mutations were run. Five died. The sixth was the measurement that mattered:
+**reverting `resolvePaint` to its pre-#69 one-liner survived the entire suite**,
+because the old code and the new code give identical answers on every one of the
+four states. So the eight seam-level tests written for this change — `none`
+draws nothing, absent draws nothing, unreadable draws nothing — are *pins*, not
+discriminators. Every one of them passes against the code the ticket exists to
+replace.
+
+What does discriminate is the vocabulary's own type-level assertions
+(`readColourDeclaration('none')` is `NoneColour` and not `UnreadableColour`) and
+the `<stop>` side, where absent and unreadable already had different answers.
+Those are the mutations the ticket asked for, and they are the only ones that
+could have been asked for.
+
+**The rule this earns:** when a change is deliberately output-neutral, the
+regression suite cannot be its evidence — it is *guaranteed* to pass, which is
+the ticket's acceptance criterion, not a test result. Say which assertions would
+survive a full revert before claiming the change is covered, and put the
+discriminating power where the change actually is. The same run that proves the
+goldens did not move proves nothing about whether the new code is reached.
+
 ### A concurrent agent in the same worktree invalidates a measurement (#39)
 
 Two completeness lenses ran in parallel against one checkout. One of them left
