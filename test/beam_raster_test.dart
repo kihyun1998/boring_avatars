@@ -586,6 +586,85 @@ void main() {
       );
     });
 
+    test('an attribute on the mask\'s own rect is refused, not read past', () {
+      // `<mask>` got an allow-list in #37; its **child** did not, and
+      // `_readMask` reads only the five geometry attributes it knows. Measured
+      // before the fix: a `transform="scale(2)"` on the mask's rect produced
+      // exactly the untransformed 4×4 coverage where a browser gives 8×8, and
+      // an `opacity="0.5"` produced full coverage where a browser halves it.
+      // Two wrong pictures and no throw, in the element that decides what the
+      // whole avatar is clipped to.
+      SvgNode masked(List<SvgAttribute> maskRect) => SvgNode(
+        SvgElement.svg,
+        attributes: const [SvgAttribute('viewBox', '0 0 8 8')],
+        children: [
+          SvgNode(
+            SvgElement.mask,
+            attributes: const [
+              SvgAttribute('id', 'm'),
+              SvgAttribute('mask-type', 'alpha'),
+            ],
+            children: [SvgNode(SvgElement.rect, attributes: maskRect)],
+          ),
+          const SvgNode(
+            SvgElement.g,
+            attributes: [SvgAttribute('mask', 'url(#m)')],
+            children: [
+              SvgNode(
+                SvgElement.rect,
+                attributes: [
+                  SvgAttribute('width', 8),
+                  SvgAttribute('height', 8),
+                  SvgAttribute('fill', '#FF0000'),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+
+      for (final extra in const [
+        SvgAttribute('transform', 'scale(2)'),
+        SvgAttribute('opacity', '0.5'),
+        // `ry` too: [RoundedRectMask] clamps one radius jointly, so a mask
+        // asking for two would silently get circular corners.
+        SvgAttribute('ry', 2),
+      ]) {
+        expect(
+          () => rasterizeScene(
+            masked([
+              const SvgAttribute('width', 4),
+              const SvgAttribute('height', 4),
+              const SvgAttribute('fill', '#FFFFFF'),
+              extra,
+            ]),
+            width: 8,
+            height: 8,
+          ),
+          throwsA(isA<UnsupportedSceneError>()),
+          reason: extra.name,
+        );
+      }
+
+      // …and the shape upstream actually writes still works, so the guard is
+      // not simply refusing everything.
+      final image = rasterizeScene(
+        masked(const [
+          SvgAttribute('width', 4),
+          SvgAttribute('height', 4),
+          SvgAttribute('rx', 16),
+          SvgAttribute('fill', '#FFFFFF'),
+        ]),
+        width: 8,
+        height: 8,
+      );
+      var ink = 0.0;
+      for (var i = 3; i < image.bytes.length; i += 4) {
+        ink += image.bytes[i] / 255;
+      }
+      expect(ink, closeTo(math.pi * 4, 0.05), reason: 'rx clamps to a disc');
+    });
+
     test('a rect stroke that would paint is refused', () {
       expectRejected(
         wrap(const [

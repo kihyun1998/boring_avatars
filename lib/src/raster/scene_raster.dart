@@ -109,6 +109,26 @@ const _maskAttributes = {
   'height',
 };
 
+/// What the `<mask>`'s own `<rect>` may carry.
+///
+/// The mask element was allow-listed in #37 and **its child was not**, so a
+/// `transform` or an `opacity` on the shape that defines the mask was read past
+/// in silence. Measured before it was fixed: `<rect width="4" height="4"
+/// transform="scale(2)">` inside the mask produced exactly the 4×4 coverage of
+/// the untransformed rect, where a browser gives 8×8 — and `opacity="0.5"`
+/// produced full coverage where a browser halves it. Two wrong pictures, no
+/// throw, in the element that decides what the whole avatar is clipped to.
+///
+/// Same class as hidden-state #30, one level in: that row was about containers
+/// on the *drawing* walk, and `<mask>` is read by a different function that
+/// never got the same treatment.
+///
+/// **`ry` is deliberately absent.** [RoundedRectMask] clamps a single radius
+/// jointly, which is only right while every mask is square; a mask that
+/// declared `ry` would silently take circular corners where §9.2 says
+/// elliptical. It throws until that class grows the second radius.
+const _maskShapeAttributes = {'x', 'y', 'width', 'height', 'rx', 'fill'};
+
 /// Rasterises [root] at [width] × [height] device pixels.
 ///
 /// Throws [UnsupportedSceneError] when the scene's `viewBox` does not match
@@ -208,6 +228,7 @@ RoundedRectMask _readMask(SvgNode maskNode) {
     );
   }
   final rect = shapes.single;
+  _checkAttributes(rect, _maskShapeAttributes);
 
   final fill = rect.attribute('fill');
   if (maskType == null && fill != '#FFFFFF') {
