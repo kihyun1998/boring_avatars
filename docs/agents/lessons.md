@@ -191,6 +191,59 @@ inspected before being dropped.
 starts, not just afterwards. Parallel read-only lenses are cheap; parallel
 *measuring* lenses share one mutable working tree and are not.
 
+### A row nobody can act on yet is a row nobody checks (#38)
+
+Hidden-state **#26** said "`ring`'s viewBox is **90**; the other five are 80".
+`beam`'s is **36** — `avatar-beam.js:4`, `const SIZE = 36`, and all 80 of its
+renders in the committed fixture say so too.
+
+The row had been wrong since it was written. Nothing caught it because nothing
+*could*: `beam` was unported, so no code read the number, no test rendered it,
+and the one consumer that would have noticed — the golden generator, which the
+row itself warns takes a per-variant size — had no `beam` case to generate. The
+error survived four tickets inside the file whose job is to hold exactly this
+kind of fact.
+
+It was found in the first ten minutes of #38 by reading the reference, which is
+the only thing that could have found it.
+
+**The rule this earns:** the hidden-state list has two kinds of row — one
+describing code that exists, and one describing code that does not yet. The
+second kind is unfalsifiable until its ticket starts, so it is a **hypothesis
+written in the same font as a measurement**. When a ticket opens a row's
+territory, re-derive the row from the reference before using it; do not spend
+the row as though it had been checked. And prefer to write such a row with the
+`file:line` it came from, so re-deriving it costs one `grep` instead of a
+survey.
+
+### A guard can catch the capability the enumeration missed (#38)
+
+#38's Step 1 read `avatar-beam.js` in full and listed five capabilities the
+rasterizer lacked: cubics, stroked paths, `scale`, `rx` on a drawn rect, and
+§9.2's independent clamp. All five were real. The list was still incomplete —
+`<g transform>` needed to **compose** down to its descendants, and that was not
+on it.
+
+Nothing in the reading caught it, because the face group's `transform` looks
+exactly like the element transforms three lines below it. What caught it was the
+seam: `<g transform="…"> is not implemented and would change the picture if
+ignored`, thrown by the container allow-list that #37 added for precisely this
+element (hidden-state #30). The first `beam` render failed on it immediately.
+
+The failure it prevented is the one #30 describes: allowing the attribute
+without applying it draws the face 4.5 units off and unrotated, throws nothing,
+and a golden freezes it. Note that the *cheap* fix — adding `transform` to the
+allow-list to make the error go away — is exactly that failure. The guard is
+only worth its cost if the allow-list entry and the implementation land in the
+same change.
+
+**The rule this earns:** a completeness pass is not the only thing that finds
+gaps, and it is not the earliest. A seam that refuses everything it cannot
+honour turns an enumeration miss into a *failing test on the first run* rather
+than into a wrong picture. When such a seam fires on new work, treat it as a
+finding with the same weight as a lens's — and never discharge it by widening
+the allow-list alone.
+
 ## Step 4 — real round-trip proof
 
 ### A bar can be recorded, believed, and never run (#33 → #37)

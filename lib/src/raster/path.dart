@@ -390,7 +390,8 @@ void _appendCubic(
   required double flatness,
 }) {
   double hypot(double dx, double dy) => math.sqrt(dx * dx + dy * dy);
-  final second = 6 *
+  final second =
+      6 *
       math.max(
         hypot(x0 - 2 * x1 + x2, y0 - 2 * y1 + y2),
         hypot(x1 - 2 * x2 + x3, y1 - 2 * y2 + y3),

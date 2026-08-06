@@ -383,7 +383,7 @@ ${
     ? `<p class="warn">⚠ NOT COVERED: ${uncovered.join(', ')} — upstream
        dispatches ${emitted.upstreamVariants.length} variants at 1.6.1 and this
        package has ported ${emitted.portedVariants.length}. Unmeasured, not
-       passing (#38, #41).</p>`
+       passing (#41).</p>`
     : ''
 }
 <p class="legend">The <em>difference</em> panel stacks the two with

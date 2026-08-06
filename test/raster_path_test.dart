@@ -327,10 +327,7 @@ void main() {
     /// The cubic itself, evaluated from Bernstein's polynomial — the
     /// *definition*, not our flattener. Every assertion below compares the
     /// output to this, so none of them is the port marking its own homework.
-    (double, double) bezier(
-      List<(double, double)> p,
-      double t,
-    ) {
+    (double, double) bezier(List<(double, double)> p, double t) {
       final u = 1 - t;
       final b0 = u * u * u;
       final b1 = 3 * u * u * t;
@@ -370,24 +367,27 @@ void main() {
       }
     });
 
-    test('no chord falls further from the curve than the declared flatness', () {
-      // The same bar the arcs are held to, measured the same way: sample the
-      // true curve densely and take the worst distance to the polyline.
-      final c = parsePath(mouth).single;
-      var worst = 0.0;
-      for (var s = 0; s <= 4000; s++) {
-        final (x, y) = bezier(mouthPoints, s / 4000);
-        var best = double.infinity;
-        for (var i = 0; i < c.length - 1; i++) {
-          best = math.min(
-            best,
-            _distanceToSegment(x, y, c.x(i), c.y(i), c.x(i + 1), c.y(i + 1)),
-          );
+    test(
+      'no chord falls further from the curve than the declared flatness',
+      () {
+        // The same bar the arcs are held to, measured the same way: sample the
+        // true curve densely and take the worst distance to the polyline.
+        final c = parsePath(mouth).single;
+        var worst = 0.0;
+        for (var s = 0; s <= 4000; s++) {
+          final (x, y) = bezier(mouthPoints, s / 4000);
+          var best = double.infinity;
+          for (var i = 0; i < c.length - 1; i++) {
+            best = math.min(
+              best,
+              _distanceToSegment(x, y, c.x(i), c.y(i), c.x(i + 1), c.y(i + 1)),
+            );
+          }
+          worst = math.max(worst, best);
         }
-        worst = math.max(worst, best);
-      }
-      expect(worst, lessThanOrEqualTo(defaultFlatness));
-    });
+        expect(worst, lessThanOrEqualTo(defaultFlatness));
+      },
+    );
 
     test('a cubic whose control points are collinear is a straight line', () {
       // The degenerate case a flattener gets wrong by dividing by a curvature
@@ -475,15 +475,17 @@ void main() {
     double sausage(double length, double width) =>
         length * width + pi * width * width / 4;
 
-    test('a straight round-capped stroke is the swept box plus two half-discs',
-        () {
-      final outline = strokePathOutline(
-        parsePathSubpaths('M20 60h40'),
-        width: 6,
-        cap: StrokeCap.round,
-      );
-      expect(area(outline), closeTo(sausage(40, 6), 0.05));
-    });
+    test(
+      'a straight round-capped stroke is the swept box plus two half-discs',
+      () {
+        final outline = strokePathOutline(
+          parsePathSubpaths('M20 60h40'),
+          width: 6,
+          cap: StrokeCap.round,
+        );
+        expect(area(outline), closeTo(sausage(40, 6), 0.05));
+      },
+    );
 
     test('butt caps stop at the endpoints and round caps do not', () {
       // The whole difference between the two is one disc, and it is visible in
@@ -529,10 +531,12 @@ void main() {
       const p = <(double, double)>[(15, 19), (17, 20), (19, 20), (21, 19)];
       double speed(double t) {
         final u = 1 - t;
-        final dx = 3 * u * u * (p[1].$1 - p[0].$1) +
+        final dx =
+            3 * u * u * (p[1].$1 - p[0].$1) +
             6 * u * t * (p[2].$1 - p[1].$1) +
             3 * t * t * (p[3].$1 - p[2].$1);
-        final dy = 3 * u * u * (p[1].$2 - p[0].$2) +
+        final dy =
+            3 * u * u * (p[1].$2 - p[0].$2) +
             6 * u * t * (p[2].$2 - p[1].$2) +
             3 * t * t * (p[3].$2 - p[2].$2);
         return math.sqrt(dx * dx + dy * dy);
@@ -553,8 +557,7 @@ void main() {
       expect(area(outline, size: 40), closeTo(sausage(length, 1), 0.02));
     });
 
-    test('a zero-length subpath is a circle under round, nothing under butt',
-        () {
+    test('a zero-length subpath is a circle under round, nothing under butt', () {
       // 11.4, verbatim: such a subpath "shall not be stroked if stroke-linecap
       // has a value of butt but shall be stroked if it has a value of round or
       // square, producing respectively a circle or a square". The spec even
@@ -581,11 +584,9 @@ void main() {
       // round — collapsing the two paints a disc the spec says is not there.
       for (final cap in StrokeCap.values) {
         expect(
-          area(strokePathOutline(
-            parsePathSubpaths('M40 40'),
-            width: 8,
-            cap: cap,
-          )),
+          area(
+            strokePathOutline(parsePathSubpaths('M40 40'), width: 8, cap: cap),
+          ),
           closeTo(0, 1e-9),
           reason: '$cap',
         );
@@ -594,11 +595,13 @@ void main() {
 
     test('a zero width paints nothing, per 11.4', () {
       expect(
-        area(strokePathOutline(
-          parsePathSubpaths('M20 60h40'),
-          width: 0,
-          cap: StrokeCap.round,
-        )),
+        area(
+          strokePathOutline(
+            parsePathSubpaths('M20 60h40'),
+            width: 0,
+            cap: StrokeCap.round,
+          ),
+        ),
         closeTo(0, 1e-9),
       );
     });
@@ -681,16 +684,21 @@ void main() {
       expect(area(c, size: 40), closeTo(pi * 0.75 * 1, 0.02));
     });
 
-    test('and a single clamped radius would give a visibly different shape', () {
-      // The mutation this exists for: clamping both to min(w, h)/2 = 0.75.
-      // That is a circle-cornered rect of area 2.517 where the ellipse is
-      // 2.356 — 7% apart, far outside the flattening error.
-      final circular = exactArea(1.5, 2, 0.75, 0.75);
-      final elliptical = pi * 0.75 * 1;
-      expect((circular - elliptical).abs(), greaterThan(0.15));
-      expect(area(roundedRectContour(10, 10, 1.5, 2, 1, null), size: 40),
-          isNot(closeTo(circular, 0.05)));
-    });
+    test(
+      'and a single clamped radius would give a visibly different shape',
+      () {
+        // The mutation this exists for: clamping both to min(w, h)/2 = 0.75.
+        // That is a circle-cornered rect of area 2.517 where the ellipse is
+        // 2.356 — 7% apart, far outside the flattening error.
+        final circular = exactArea(1.5, 2, 0.75, 0.75);
+        final elliptical = pi * 0.75 * 1;
+        expect((circular - elliptical).abs(), greaterThan(0.15));
+        expect(
+          area(roundedRectContour(10, 10, 1.5, 2, 1, null), size: 40),
+          isNot(closeTo(circular, 0.05)),
+        );
+      },
+    );
 
     test('a radius larger than the box becomes the inscribed ellipse', () {
       // `beam`'s wrapper at isCircle: 36 x 36 with rx=36, which clamps to 18 —

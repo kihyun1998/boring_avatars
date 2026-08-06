@@ -273,7 +273,10 @@ SvgNode buildBeamScene({
                 SvgNode(
                   SvgElement.path,
                   attributes: [
-                    SvgAttribute('d', 'M15 ${jsNum(19 + p.mouthSpread)}c2 1 4 1 6 0'),
+                    SvgAttribute(
+                      'd',
+                      'M15 ${jsNum(19 + p.mouthSpread)}c2 1 4 1 6 0',
+                    ),
                     SvgAttribute('stroke', p.faceColor),
                     const SvgAttribute('fill', 'none'),
                     const SvgAttribute('stroke-linecap', 'round'),
