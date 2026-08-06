@@ -481,26 +481,28 @@ List<PathContour> strokePathOutline(
   }
 
   for (final subpath in subpaths) {
-    // Consecutive duplicates would normalise a zero vector into NaN, and the
-    // scanline integrator carries NaN silently rather than throwing.
-    final points = <double>[];
-    for (var i = 0; i < subpath.length; i++) {
-      final px = subpath.x(i), py = subpath.y(i);
-      if (points.isNotEmpty &&
-          points[points.length - 2] == px &&
-          points[points.length - 1] == py) {
-        continue;
-      }
-      points.addAll([px, py]);
-    }
-    // A closed subpath's `z` returns to the origin; drop the repeat so the
-    // wrap-around below does not make a zero-length segment of it.
-    if (subpath.closed &&
-        points.length >= 4 &&
-        points[0] == points[points.length - 2] &&
-        points[1] == points[points.length - 1]) {
-      points.removeRange(points.length - 2, points.length);
-    }
+    // **No duplicate-point cleanup here, and that is a measured decision.**
+    // Two passes were written and both were deleted rather than tested, for
+    // the same reason: the nonzero union makes them invisible.
+    //
+    // * Removing *consecutive* duplicates. Its stated purpose was to stop a
+    //   zero-length segment normalising into `NaN` — but [strokeSegmentContour]
+    //   already returns `null` for `length == 0`, one level down.
+    // * Removing a closed subpath's repeated origin (`M0 0h10v10H0V0z`, where
+    //   the `V0` arrives back before the `z`). Without it the wrap-around
+    //   segment is zero-length — a `null` quad — and the joint disc lands on a
+    //   point another disc already covers. Two coincident discs wind to −2,
+    //   and nonzero fills anything that is not zero.
+    //
+    // Both were mutation-tested by deletion and **survived**, which is the
+    // third question a surviving mutant asks: not "is the test weak" or "is the
+    // input degenerate", but *is this code reachable at all*. It is not. Same
+    // disposition as #40's redundant gradient clamps.
+    //
+    // `raster_path_test.dart` still constructs the redundant-origin form and
+    // asserts it agrees with the plain one — a regression pin on the output,
+    // now that there is no branch left to pin.
+    final points = subpath.points;
 
     final count = points.length ~/ 2;
     if (count == 0) continue;

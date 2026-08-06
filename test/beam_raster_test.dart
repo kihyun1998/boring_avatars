@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:boring_avatars/src/raster/path.dart';
 import 'package:boring_avatars/src/raster/raster.dart';
 import 'package:boring_avatars/src/raster/scene_raster.dart';
 import 'package:boring_avatars/src/raster/transform.dart';
@@ -235,6 +236,139 @@ void main() {
       }
     });
 
+    test('the eye has its own equation, at the seam beam reaches it through', () {
+      // The open-mouth sum above is **one equation in two unknowns** — the eye
+      // area and the stroke width both enter it, and the refuting lens built a
+      // drawing where a stadium-shaped eye (+0.316) and a 0.9595 stroke width
+      // (−0.316) cancelled and every arithmetic assertion stayed green.
+      //
+      // `raster_path_test.dart`'s §9.2 group cannot close that: it calls
+      // `roundedRectContour` **directly with both radii**, so it is structurally
+      // blind to how the missing one is filled at the call site. This measures
+      // the eye alone, through `rasterizeScene`, with `beam`'s exact numbers.
+      final image = rasterizeScene(
+        SvgNode(
+          SvgElement.svg,
+          attributes: const [SvgAttribute('viewBox', '0 0 8 8')],
+          children: [
+            const SvgNode(
+              SvgElement.mask,
+              attributes: [
+                SvgAttribute('id', 'm'),
+                SvgAttribute('mask-type', 'alpha'),
+              ],
+              children: [
+                SvgNode(
+                  SvgElement.rect,
+                  attributes: [
+                    SvgAttribute('width', 8),
+                    SvgAttribute('height', 8),
+                    SvgAttribute('fill', '#FFFFFF'),
+                  ],
+                ),
+              ],
+            ),
+            const SvgNode(
+              SvgElement.g,
+              attributes: [SvgAttribute('mask', 'url(#m)')],
+              children: [
+                SvgNode(
+                  SvgElement.rect,
+                  attributes: [
+                    SvgAttribute('x', 3),
+                    SvgAttribute('y', 3),
+                    SvgAttribute('width', 1.5),
+                    SvgAttribute('height', 2),
+                    SvgAttribute('rx', 1),
+                    SvgAttribute('stroke', 'none'),
+                    SvgAttribute('fill', '#FFFFFF'),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+        width: 8,
+        height: 8,
+      );
+      var ink = 0.0;
+      for (var i = 3; i < image.bytes.length; i += 4) {
+        ink += image.bytes[i] / 255;
+      }
+      // π·0.75·1 = 2.356. A stadium (rx and ry both 0.75) is 2.514 and a plain
+      // rect 3.0 — both outside this tolerance by an order of magnitude.
+      expect(ink, closeTo(eyeArea, 0.02));
+    });
+
+    test('the drawing is the right colours, which ink totals cannot see', () {
+      // The green-channel readout measures *how much* white, never *what
+      // colour* anything else is. The refuting lens made an unreadable `fill`
+      // paint SVG's initial black — turning the open mouth into a solid black
+      // lens under the white stroke — and all four area assertions stayed
+      // green, because black and the red card both have G = 0.
+      //
+      // Three sampled points, one per shape, with the palette chosen so the
+      // three colours are all different.
+      final image = rasterizeScene(
+        buildBeamScene(
+          name: '',
+          colors: const ['#FF0000', '#00FF00'],
+          size: 36,
+        ),
+        width: 36,
+        height: 36,
+      );
+      List<int> at(int x, int y) =>
+          image.bytes.sublist((y * 36 + x) * 4, (y * 36 + x) * 4 + 4);
+
+      // The empty name hashes to 0, so the card takes `colors[0]` and the
+      // background `colors[(0 + 13) % 2]` — index **1**. The +13 is what puts
+      // them on different entries, and reading them the other way round is the
+      // mistake this test caught while being written.
+      final p = beamProperties('', const ['#FF0000', '#00FF00']);
+      expect(p.wrapperColor, '#FF0000', reason: 'the card, from hash + 0');
+      expect(p.backgroundColor, '#00FF00', reason: 'the background, hash + 13');
+      expect(p.faceColor, '#FFFFFF', reason: 'getContrast of pure red is 76.2');
+
+      // The card is a disc of radius 18 centred at (22, 22); (30, 22) is well
+      // inside it and (2, 22) is well outside.
+      expect(at(30, 22), [255, 0, 0, 255], reason: 'the card');
+      expect(at(2, 22), [0, 255, 0, 255], reason: 'the background beside it');
+      // The eye spans x ∈ [14, 15.5], y ∈ [14, 16] on a red card, and it is
+      // white — so the pixel it covers gains green and blue. A mouth or eye
+      // painted the initial black instead would *lose* them.
+      expect(
+        at(15, 15)[1],
+        greaterThan(64),
+        reason: 'the eye whitens the card',
+      );
+      expect(at(15, 15)[2], greaterThan(64));
+    });
+
+    test('the closed mouth curves the way upstream drew it, not mirrored', () {
+      // Area is preserved under reflection: inverting the arc's sweep flag
+      // turns the smile into a frown and the ink total does not move at all.
+      // Measured — the closed-mouth assertion above stayed green under exactly
+      // that mutation, caught only by a golden.
+      //
+      // So the direction is pinned by geometry instead: `beam`'s own `d`
+      // string, left to right with sweep 0, must bulge **downwards** (screen
+      // y grows down, so that is a smile). The string itself is pinned
+      // byte-exact by `beam_parity_test.dart`, so the two together cover it.
+      final bounds = parsePath('M13,20 a1,0.75 0 0,0 10,0');
+      var minY = double.infinity, maxY = double.negativeInfinity;
+      for (final c in bounds) {
+        for (var i = 0; i < c.length; i++) {
+          minY = math.min(minY, c.y(i));
+          maxY = math.max(maxY, c.y(i));
+        }
+      }
+      expect(minY, closeTo(20, 1e-9), reason: 'the chord is the top edge');
+      // F.6.6 scales ry to 3.75, so a downward bulge reaches y = 23.75.
+      expect(maxY, closeTo(23.75, defaultFlatness));
+      expect(maxY, greaterThan(20), reason: 'a frown would put maxY at 20');
+    });
+
     test('the face sits inside the mask for every corpus name', () {
       // The whole-ink assertions above are only valid while the mask clips
       // none of the face — otherwise they would be measuring the clip. Checked
@@ -286,6 +420,15 @@ void main() {
       // ancestor's matrix applies **after** the descendant's own. `beam` is the
       // only variant with a transformed container, and both of its transforms
       // are non-trivial — so the wrong order is a plausible wrong picture.
+      //
+      // **`beam` cannot reach this and neither can any of the six.** Its two
+      // transforms are on sibling branches — one on the card `<rect>`, one on
+      // the face `<g>` whose children carry none of their own — so the
+      // multiply always has an identity operand. Measured: flipping the
+      // composition to `own · inherited` in both places kills only this test,
+      // and every golden passes. Constructed on purpose, per `lessons.md`'s
+      // third answer to a surviving mutant — the reference will never produce
+      // the case, so the input has to be built.
       //
       // Chosen so the two orders disagree **on canvas**. `rotate(90 4 4)` maps
       // (x, y) to (8 − y, x), so the 2×2 rect at (2,0)–(4,2) lands at
@@ -348,6 +491,81 @@ void main() {
       expect(at(7, 3), [255, 0, 0, 255]);
       expect(at(2, 0), [0, 0, 0, 0], reason: 'the untransformed position');
       expect(at(0, 2), [0, 0, 0, 0], reason: 'rotation about the wrong centre');
+    });
+
+    test('a group transform inside a group transform composes too', () {
+      // The *container* half of the composition, which the test above does not
+      // reach: there `inherited` is identity when the `<g>` is read, because
+      // `beam`'s transformed group sits directly under the untransformed
+      // `<g mask>`. Measured — deleting the ancestor term in `_collectShapes`
+      // and keeping it in `_shapesOf` survived all 573 tests.
+      //
+      // Two nested translations of (2,0) must move the rect by 4, not 2.
+      final image = rasterizeScene(
+        SvgNode(
+          SvgElement.svg,
+          attributes: const [SvgAttribute('viewBox', '0 0 8 8')],
+          children: [
+            const SvgNode(
+              SvgElement.mask,
+              attributes: [
+                SvgAttribute('id', 'm'),
+                SvgAttribute('mask-type', 'alpha'),
+              ],
+              children: [
+                SvgNode(
+                  SvgElement.rect,
+                  attributes: [
+                    SvgAttribute('width', 8),
+                    SvgAttribute('height', 8),
+                    SvgAttribute('fill', '#FFFFFF'),
+                  ],
+                ),
+              ],
+            ),
+            const SvgNode(
+              SvgElement.g,
+              attributes: [SvgAttribute('mask', 'url(#m)')],
+              children: [
+                SvgNode(
+                  SvgElement.g,
+                  attributes: [SvgAttribute('transform', 'translate(2 0)')],
+                  children: [
+                    SvgNode(
+                      SvgElement.g,
+                      attributes: [SvgAttribute('transform', 'translate(2 0)')],
+                      children: [
+                        SvgNode(
+                          SvgElement.rect,
+                          attributes: [
+                            SvgAttribute('width', 2),
+                            SvgAttribute('height', 2),
+                            SvgAttribute('fill', '#FF0000'),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+        width: 8,
+        height: 8,
+      );
+      List<int> at(int x, int y) =>
+          image.bytes.sublist((y * 8 + x) * 4, (y * 8 + x) * 4 + 4);
+
+      expect(at(4, 0), [255, 0, 0, 255], reason: 'both translations applied');
+      expect(at(5, 1), [255, 0, 0, 255]);
+      expect(at(2, 0), [
+        0,
+        0,
+        0,
+        0,
+      ], reason: 'only the inner one would stop here');
+      expect(at(0, 0), [0, 0, 0, 0]);
     });
 
     test('a stroke-linecap nobody writes is refused, not treated as butt', () {

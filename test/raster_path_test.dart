@@ -436,6 +436,38 @@ void main() {
       }
     });
 
+    test(
+      'an asymmetric curve is segmented by its *larger* end, not its smaller',
+      () {
+        // The bound is `max(|P0−2P1+P2|, |P1−2P2+P3|)` and every cubic anywhere in
+        // this repo or the corpus has those two **equal** — `beam`'s mouth has
+        // both exactly 1, and the constructed ones are collinear so both are 0.
+        // So `max` → `min` survived the whole suite: the tolerance test could not
+        // tell them apart.
+        //
+        // This curve's second differences are (0,−1) and (0,−9), a factor of
+        // nine, so taking the smaller would under-segment by a factor of three
+        // and the chords would leave the curve by far more than the tolerance.
+        const d = 'M0 0c2 1 4 1 6 -8';
+        const p = <(double, double)>[(0, 0), (2, 1), (4, 1), (6, -8)];
+        final c = parsePath('${d}L0 -8z').first;
+
+        var worst = 0.0;
+        for (var s = 0; s <= 4000; s++) {
+          final (x, y) = bezier(p, s / 4000);
+          var best = double.infinity;
+          for (var i = 0; i < c.length - 1; i++) {
+            best = math.min(
+              best,
+              _distanceToSegment(x, y, c.x(i), c.y(i), c.x(i + 1), c.y(i + 1)),
+            );
+          }
+          worst = math.max(worst, best);
+        }
+        expect(worst, lessThanOrEqualTo(defaultFlatness));
+      },
+    );
+
     test('a repeated coordinate run continues the same command', () {
       // The grammar lets `c` take several sextuples in a row. No upstream
       // version writes one, so this is constructed — but the repeat rule is
@@ -628,6 +660,31 @@ void main() {
         }
       }
     });
+
+    test(
+      'a closed subpath that already returned to its origin is not doubled',
+      () {
+        // `V0` arrives back at the start *before* the `z`, so the polyline ends
+        // where it began and the wrap-around segment would be zero-length. No
+        // upstream `d` does this, so the case is constructed — the branch was
+        // dead across the whole suite until it was.
+        //
+        // The answer must equal the same square written without the redundant
+        // return: one perimeter, one set of joints, not a doubled corner.
+        final redundant = strokePathOutline(
+          parsePathSubpaths('M30 30h30v30H30V30z'),
+          width: 4,
+          cap: StrokeCap.round,
+        );
+        final plain = strokePathOutline(
+          parsePathSubpaths('M30 30h30v30H30z'),
+          width: 4,
+          cap: StrokeCap.round,
+        );
+        expect(area(redundant), closeTo(area(plain), 1e-9));
+        expect(area(redundant), closeTo(464 + 4 * pi, 0.15));
+      },
+    );
 
     test('a closed subpath joins rather than capping', () {
       // `z` makes the start and the end the same point, so an open stroke would
