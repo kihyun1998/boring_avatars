@@ -18,6 +18,8 @@
 /// silently incorrect image.
 library;
 
+import 'dart:math' as math;
+
 import '../scene/scene.dart';
 import 'path.dart';
 import 'raster.dart';
@@ -48,6 +50,10 @@ const _drawableAttributes = <SvgElement, Set<String>>{
     'stroke',
     'transform',
   },
+  // `filter` and `style` are `marble`'s, and both are on this list only
+  // because they are now *applied* — an allow-list entry for an effect nobody
+  // honours is hidden-state #30 exactly, and it is the cheap wrong fix every
+  // time this seam fires.
   SvgElement.path: {
     'd',
     'fill',
@@ -55,6 +61,8 @@ const _drawableAttributes = <SvgElement, Set<String>>{
     'stroke-width',
     'stroke-linecap',
     'transform',
+    'filter',
+    'style',
   },
   SvgElement.circle: {'cx', 'cy', 'r', 'fill', 'transform'},
   // A `<line>` has no interior to fill: its colour arrives through `stroke`,
@@ -96,6 +104,22 @@ const _defsAttributes = <SvgElement, Set<String>>{
   SvgElement.defs: {},
   SvgElement.linearGradient: {'id', 'x1', 'y1', 'x2', 'y2', 'gradientUnits'},
   SvgElement.stop: {'offset', 'stop-color'},
+  // `x`, `y`, `width` and `height` are read even though `marble` writes none of
+  // them: the *default* region has to be resolved either way, and an explicit
+  // one is the same arithmetic with the fallback skipped. Reading them is what
+  // makes the clip testable — no variant produces a region that cuts anything.
+  SvgElement.filter: {
+    'id',
+    'filterUnits',
+    'color-interpolation-filters',
+    'x',
+    'y',
+    'width',
+    'height',
+  },
+  SvgElement.feFlood: {'flood-opacity', 'flood-color', 'result'},
+  SvgElement.feBlend: {'in', 'in2', 'mode', 'result'},
+  SvgElement.feGaussianBlur: {'in', 'stdDeviation', 'result'},
 };
 
 /// The `<mask>` element and its shape, which [_readMask] reads instead.
@@ -149,6 +173,10 @@ RasterImage rasterizeScene(
   // The paint servers are read before the shapes, because a shape's `fill` can
   // reference one — `sunset` paints both its halves that way.
   final paints = _readPaintServers(root);
+  // The viewBox has already been checked to equal the target, so user units
+  // and device pixels are the same number here. The day #58 lands a scale,
+  // this is one of the places that has to take it.
+  final filters = _readFilters(root, width.toDouble(), height.toDouble());
   final shapes = <RasterShape>[];
   _collectShapes(
     root,
@@ -156,14 +184,28 @@ RasterImage rasterizeScene(
     insideMask: false,
     maskId: maskNode.attribute('id') as String?,
     paints: paints,
+    filters: filters,
     inherited: Affine.identity,
   );
+
+  // Every filtered shape in the six references the same single `<filter>`, so
+  // there is one region. A scene with two filters whose regions differed would
+  // need the region to travel per shape; it is refused rather than silently
+  // given the first one's.
+  final regions = filters.values.map((f) => f.region).toSet();
+  if (regions.length > 1) {
+    throw UnsupportedSceneError(
+      'the scene declares ${regions.length} different filter regions; only one '
+      'is implemented',
+    );
+  }
 
   return rasterizeMaskedShapes(
     width: width,
     height: height,
     shapes: shapes,
     mask: mask,
+    filterRegion: regions.isEmpty ? null : regions.first,
   );
 }
 
@@ -287,6 +329,7 @@ void _collectShapes(
   required bool insideMask,
   required String? maskId,
   required Map<String, RasterPaint> paints,
+  required Map<String, _Filter> filters,
   required Affine inherited,
 }) {
   // `<mask>` is read by _readMask and `<defs>` by _readPaintServers — neither
@@ -326,7 +369,7 @@ void _collectShapes(
         'content is rasterised',
       );
     }
-    out.addAll(_shapesOf(node, paints, inherited));
+    out.addAll(_shapesOf(node, paints, filters, inherited));
     return;
   }
 
@@ -365,6 +408,7 @@ void _collectShapes(
       insideMask: within,
       maskId: maskId,
       paints: paints,
+      filters: filters,
       inherited: matrix,
     );
   }
@@ -389,6 +433,10 @@ Map<String, RasterPaint> _readPaintServers(SvgNode root) {
           );
         }
         _checkAttributes(child, allowed);
+        // `<filter>` also lives in `<defs>` and is read by [_readFilters]. It
+        // is skipped here rather than refused, and validated there — the same
+        // split `<mask>` and `<defs>` already take on the drawing walk.
+        if (child.element == SvgElement.filter) continue;
         if (child.element != SvgElement.linearGradient) {
           throw UnsupportedSceneError(
             '<${child.element.tag}> is not a paint server this rasterizer '
@@ -401,6 +449,156 @@ Map<String, RasterPaint> _readPaintServers(SvgNode root) {
         }
         out[id] = _readLinearGradient(child);
       }
+      return;
+    }
+    for (final child in node.children) {
+      walk(child);
+    }
+  }
+
+  walk(root);
+  return out;
+}
+
+/// One `<filter>`, reduced to the only thing it does to the picture.
+class _Filter {
+  const _Filter(this.sigma, this.region);
+
+  /// `feGaussianBlur`'s `stdDeviation`, in user units.
+  final double sigma;
+
+  /// The filter region in user units — a hard clip on the **output**.
+  final ({double x, double y, double width, double height}) region;
+}
+
+/// Reads every `<filter>` in the scene, keyed by id.
+///
+/// **The chain is validated as a whole, not primitive by primitive.** Upstream
+/// writes exactly one shape of filter:
+///
+/// ```
+/// feFlood  flood-opacity="0"  result="BackgroundImageFix"
+/// feBlend  in="SourceGraphic" in2="BackgroundImageFix" result="shape"
+/// feGaussianBlur stdDeviation="7" result="effect1_foregroundBlur"
+/// ```
+///
+/// A fully transparent flood, the source blended over it (which leaves the
+/// source alone), and a blur of the result. Net effect: **blur the source**.
+/// Reducing it to a sigma is only honest because the first two primitives are
+/// checked to be the no-ops they look like — a `flood-opacity` that was not
+/// zero, or an `feBlend` reading something other than `SourceGraphic`, is a
+/// different picture and throws rather than being reduced away.
+Map<String, _Filter> _readFilters(
+  SvgNode root,
+  double viewWidth,
+  double viewHeight,
+) {
+  final out = <String, _Filter>{};
+
+  void walk(SvgNode node) {
+    if (node.element == SvgElement.filter) {
+      final id = node.attribute('id');
+      if (id is! String) {
+        throw UnsupportedSceneError('a <filter> has no id');
+      }
+
+      // `objectBoundingBox` — the SVG default — would reinterpret the region
+      // as fractions of the shape's box. `marble` declares user space.
+      final units = node.attribute('filterUnits');
+      if (units != 'userSpaceOnUse') {
+        throw UnsupportedSceneError(
+          'filterUnits "$units" is not implemented; only userSpaceOnUse',
+        );
+      }
+
+      // The SVG default is **linearRGB**, so an absent attribute is not the
+      // same as this one. `marble` declares sRGB, which is what this
+      // rasterizer does — it blurs the channels as stored.
+      final space = node.attribute('color-interpolation-filters');
+      if (space != 'sRGB') {
+        throw UnsupportedSceneError(
+          'color-interpolation-filters "$space" is not implemented; only '
+          'sRGB. The SVG default is linearRGB and would need a gamma pass',
+        );
+      }
+
+      // §15.7.2's defaults are -10% / -10% / 120% / 120%, and under
+      // `userSpaceOnUse` a percentage resolves against the **viewport**, not
+      // the bounding box (§7.10). Measured in Chrome before it was written:
+      // a 10 × 10 rect at (35, 35) blurred with no region renders identically
+      // to one given x="-8" y="-8" width="96" height="96" on an 80 × 80
+      // viewBox, and quite differently from the bbox reading's 34…46.
+      //
+      // hidden-state #11 said "of the bbox" and had never been executed —
+      // `marble` is the only variant with a filter and it was unported.
+      final region = (
+        x: _num(node.attribute('x')) ?? -0.1 * viewWidth,
+        y: _num(node.attribute('y')) ?? -0.1 * viewHeight,
+        width: _num(node.attribute('width')) ?? 1.2 * viewWidth,
+        height: _num(node.attribute('height')) ?? 1.2 * viewHeight,
+      );
+
+      final primitives = node.children;
+      if (primitives.length != 3 ||
+          primitives[0].element != SvgElement.feFlood ||
+          primitives[1].element != SvgElement.feBlend ||
+          primitives[2].element != SvgElement.feGaussianBlur) {
+        throw UnsupportedSceneError(
+          'the only filter chain implemented is feFlood + feBlend + '
+          'feGaussianBlur, found '
+          '${primitives.map((p) => "<${p.element.tag}>").join(", ")}',
+        );
+      }
+      for (final p in primitives) {
+        _checkAttributes(p, _defsAttributes[p.element]!);
+      }
+
+      // The flood must be invisible, or it is a background this rasterizer
+      // would be dropping.
+      final floodOpacity = _num(primitives[0].attribute('flood-opacity'));
+      if (floodOpacity != 0) {
+        throw UnsupportedSceneError(
+          '<feFlood flood-opacity="$floodOpacity"> paints; only a fully '
+          'transparent flood is reduced away',
+        );
+      }
+      final floodResult = primitives[0].attribute('result');
+
+      // The blend must be the source over that invisible flood, in `normal`
+      // mode — anything else is a real compositing step.
+      final blend = primitives[1];
+      if (blend.attribute('in') != 'SourceGraphic' ||
+          blend.attribute('in2') != floodResult) {
+        throw UnsupportedSceneError(
+          '<feBlend in="${blend.attribute('in')}" in2="${blend.attribute('in2')}"> '
+          'is not the source over the flood, so it cannot be reduced away',
+        );
+      }
+      final blendMode = blend.attribute('mode');
+      if (blendMode != null && blendMode != 'normal') {
+        throw UnsupportedSceneError(
+          '<feBlend mode="$blendMode"> is not implemented',
+        );
+      }
+
+      // And the blur must read the blend's output — an explicit `in` naming
+      // something else would be filtering a different image.
+      final blur = primitives[2];
+      final blurIn = blur.attribute('in');
+      if (blurIn != null && blurIn != blend.attribute('result')) {
+        throw UnsupportedSceneError(
+          '<feGaussianBlur in="$blurIn"> does not read the blend\'s result',
+        );
+      }
+      final sigma = _num(blur.attribute('stdDeviation'));
+      if (sigma == null || sigma < 0) {
+        throw UnsupportedSceneError(
+          '<feGaussianBlur stdDeviation="${blur.attribute('stdDeviation')}"> is '
+          'not a usable standard deviation',
+        );
+      }
+
+      out[id] = _Filter(sigma, region);
       return;
     }
     for (final child in node.children) {
@@ -494,6 +692,7 @@ void _checkAttributes(SvgNode node, Set<String> allowed) {
 List<RasterShape> _shapesOf(
   SvgNode node,
   Map<String, RasterPaint> paints,
+  Map<String, _Filter> filters,
   Affine inherited,
 ) {
   /// The paint the [attribute] names — `fill` or `stroke`.
@@ -595,6 +794,75 @@ List<RasterShape> _shapesOf(
   /// would be arithmetic no test in this package could reach.
   double strokeWidth() => _num(node.attribute('stroke-width')) ?? 1;
 
+  /// The `stdDeviation` of the `<filter>` this element references, in **device
+  /// pixels**, if any.
+  ///
+  /// A `filter="url(#…)"` naming something absent is refused rather than
+  /// ignored: a browser renders the element **unfiltered** in that case, so
+  /// ignoring it would draw a sharp blob where upstream draws a blurred one —
+  /// a plausible wrong picture, which is what this seam exists to stop.
+  ///
+  /// **The declared sigma is in the referencing element's own user space, and
+  /// that space includes the element's `transform`.** §15.7.2 says
+  /// `userSpaceOnUse` means "the user coordinate system in place at the time
+  /// when the filter is referenced", which for an element carrying a transform
+  /// is the transformed one — so `marble`'s `scale(1.2)` makes a declared
+  /// `stdDeviation="7"` a blur of **8.4** device pixels.
+  ///
+  /// Measured before it was written this way. Sweeping our sigma against
+  /// Chrome's fixed `stdDeviation="7"` render of the same blob, the error
+  /// bottoms out at 8.4–8.5 and not at 7:
+  ///
+  /// ```
+  /// sigma 7.0  d=13  worst 27  mean 6.23
+  /// sigma 8.0  d=15  worst 15  mean 2.85
+  /// sigma 8.5  d=16  worst 12  mean 0.76   <- 7 x 1.2 = 8.4
+  /// sigma 9.0  d=17  worst 10  mean 1.00
+  /// ```
+  double? blurSigma(Affine matrix) {
+    final declared = node.attribute('filter') as String?;
+    if (declared == null) return null;
+    final id = RegExp(r'^url\(#(.*)\)$').firstMatch(declared)?.group(1);
+    final filter = id == null ? null : filters[id];
+    if (filter == null) {
+      throw UnsupportedSceneError(
+        '<${node.element.tag} filter="$declared"> references a filter that is '
+        'not declared in any <defs>',
+      );
+    }
+
+    // A Gaussian is only isotropic under a *similarity* transform. Every
+    // transform any version in scope writes is `translate · rotate · scale`
+    // with one scale factor, so the two column norms agree; a non-uniform
+    // scale or a skew would need an elliptical kernel, which is a real
+    // capability and not one to fake with the average of two numbers.
+    final scaleX = math.sqrt(matrix.a * matrix.a + matrix.b * matrix.b);
+    final scaleY = math.sqrt(matrix.c * matrix.c + matrix.d * matrix.d);
+    if ((scaleX - scaleY).abs() > 1e-9) {
+      throw UnsupportedSceneError(
+        'a filtered element under a non-uniform transform ($scaleX x $scaleY) '
+        'would need an anisotropic blur, which is not implemented',
+      );
+    }
+    return filter.sigma * scaleX;
+  }
+
+  /// The `mix-blend-mode` this element's inline `style` declares.
+  ///
+  /// The whole `style` attribute is matched, not searched: `marble` writes
+  /// exactly one declaration and nothing else in the six writes a `style` at
+  /// all, so accepting a *substring* would let a second declaration through
+  /// unread. A CSS parser is a capability no version in scope asks for.
+  RasterBlendMode blendMode() {
+    final declared = node.attribute('style') as String?;
+    if (declared == null) return RasterBlendMode.normal;
+    if (declared == 'mix-blend-mode:overlay') return RasterBlendMode.overlay;
+    throw UnsupportedSceneError(
+      '<${node.element.tag} style="$declared"> is not implemented; the only '
+      'inline style in scope is "mix-blend-mode:overlay"',
+    );
+  }
+
   /// `stroke-linecap`, defaulting to §11.4's initial `butt`.
   StrokeCap strokeCap() => switch (node.attribute('stroke-linecap')) {
     null || 'butt' => StrokeCap.butt,
@@ -661,24 +929,47 @@ List<RasterShape> _shapesOf(
         throw UnsupportedSceneError('<path> has no readable `d`');
       }
       final stroke = resolvePaint('stroke');
+      // A filter and a blend mode apply to the element as a whole — to its
+      // fill and its stroke together, as one offscreen result. No element in
+      // the six carries both a stroke and a filter, so the two `RasterPolygon`s
+      // below are never both filtered; were that to change, they would have to
+      // share one layer rather than take one each.
+      final sigma = blurSigma(matrix);
+      final mode = blendMode();
+      if (sigma != null && fill != null && stroke != null) {
+        throw UnsupportedSceneError(
+          '<path> has a fill, a stroke and a filter; the two would be blurred '
+          'separately where SVG blurs the composited element',
+        );
+      }
       return [
         // §11: the fill is painted first and the stroke on top of it. `beam`
         // never asks for both at once — the open mouth strokes and the closed
         // one fills — but the order is the spec's, not the variant's.
         if (fill != null)
-          RasterPolygon([
-            for (final contour in parsePath(d))
-              matrix.transformContour(contour),
-          ], fill),
+          RasterPolygon(
+            [
+              for (final contour in parsePath(d))
+                matrix.transformContour(contour),
+            ],
+            fill,
+            blurSigma: sigma,
+            blendMode: mode,
+          ),
         if (stroke != null)
-          RasterPolygon([
-            for (final contour in strokePathOutline(
-              parsePathSubpaths(d),
-              width: strokeWidth(),
-              cap: strokeCap(),
-            ))
-              matrix.transformContour(contour),
-          ], stroke),
+          RasterPolygon(
+            [
+              for (final contour in strokePathOutline(
+                parsePathSubpaths(d),
+                width: strokeWidth(),
+                cap: strokeCap(),
+              ))
+                matrix.transformContour(contour),
+            ],
+            stroke,
+            blurSigma: sigma,
+            blendMode: mode,
+          ),
       ];
     case SvgElement.circle:
       // Flatten first, then map. For a **rigid** transform that is exact.

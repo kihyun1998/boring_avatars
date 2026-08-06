@@ -19,6 +19,7 @@ import 'package:boring_avatars/src/scene/scene.dart';
 import 'package:boring_avatars/src/svg/emitter.dart';
 import 'package:boring_avatars/src/variants/bauhaus.dart';
 import 'package:boring_avatars/src/variants/beam.dart';
+import 'package:boring_avatars/src/variants/marble.dart';
 import 'package:boring_avatars/src/variants/pixel.dart';
 import 'package:boring_avatars/src/variants/ring.dart';
 import 'package:boring_avatars/src/variants/sunset.dart';
@@ -41,10 +42,16 @@ const upstreamVariants = [
 
 /// The subset this package can build a scene for today.
 ///
-/// `marble` (#41) is not ported — there is no `lib/src/variants/marble.dart`,
-/// so there is nothing of ours to compare against upstream. It is reported as
-/// uncovered rather than dropped.
-const portedVariants = ['pixel', 'sunset', 'ring', 'bauhaus', 'beam'];
+/// All six as of #41 — `marble` was the last one missing, and the guard below
+/// is what made adding it here part of that change rather than a later sweep.
+const portedVariants = [
+  'marble',
+  'pixel',
+  'sunset',
+  'ring',
+  'bauhaus',
+  'beam',
+];
 
 /// The size both sides are rendered at.
 ///
@@ -86,6 +93,12 @@ SvgNode build(
     square: square,
   ),
   'beam' => buildBeamScene(
+    name: name,
+    colors: colors,
+    size: renderSize,
+    square: square,
+  ),
+  'marble' => buildMarbleScene(
     name: name,
     colors: colors,
     size: renderSize,

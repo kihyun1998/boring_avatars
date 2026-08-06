@@ -16,6 +16,7 @@ import 'package:boring_avatars/src/raster/scene_raster.dart';
 import 'package:boring_avatars/src/scene/scene.dart';
 import 'package:boring_avatars/src/svg/emitter.dart';
 import 'package:boring_avatars/src/variants/bauhaus.dart';
+import 'package:boring_avatars/src/variants/marble.dart';
 import 'package:boring_avatars/src/variants/pixel.dart';
 import 'package:boring_avatars/src/variants/ring.dart';
 import 'package:boring_avatars/src/variants/sunset.dart';
@@ -75,6 +76,38 @@ final _cases = <String, (SvgNode, int)>{
       square: true,
     ),
     90,
+  ),
+  // `marble` is the first variant with a filter and the first with a blend
+  // mode, and it is the one case in this harness where the recorded ≤1/255 bar
+  // is **not** obviously unmeetable: SVG 1.1 §15.17 specifies the blur as an
+  // exact three-box algorithm rather than leaving it to the renderer, so both
+  // sides compute the same convolution. Measured separately at sigma 56 device
+  // px: 0/255 across a step edge. Contrast hidden-state #27, where Chrome's own
+  // curve tessellation puts the bar out of reach whatever we do.
+  //
+  // The empty name hashes to 0, so both blobs take `rotate(0)` and
+  // `translate(0 0)` — the identity — and the only thing under test is the blur
+  // and the blend. The other two carry rotation and a non-unit scale.
+  'marble-empty-name': (
+    buildMarbleScene(name: '', colors: _default, size: 80),
+    80,
+  ),
+  'marble-clara-default': (
+    buildMarbleScene(name: 'Clara Barton', colors: _default, size: 80),
+    80,
+  ),
+  'marble-alice-pair': (
+    buildMarbleScene(name: 'Alice', colors: ['#000000', '#FFFFFF'], size: 80),
+    80,
+  ),
+  'marble-clara-square': (
+    buildMarbleScene(
+      name: 'Clara Barton',
+      colors: _default,
+      size: 80,
+      square: true,
+    ),
+    80,
   ),
 };
 

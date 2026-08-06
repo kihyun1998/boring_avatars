@@ -43,6 +43,65 @@ called done. The exhaustive sweep is what makes "zero in every version" a fact
 instead of a strong guess — for an enumeration that *is* the deliverable, sample
 size is not a detail.
 
+### A row nobody can act on yet is a row nobody checks — again (#38, #41)
+
+Second occurrence, and the first one's rule predicted it exactly. Hidden-state
+**#11** said the default filter region is "-10% / -10% / 120% / 120% **of the
+bbox**". It is of the **viewport** — SVG 1.1 §7.10, for percentages under
+`filterUnits="userSpaceOnUse"`. For `marble`'s 80 x 80 viewBox that is
+`(-8, -8, 96, 96)` rather than something around the blob.
+
+The row had been wrong since it was written in #1, through six tickets, inside
+the file whose job is to hold exactly this kind of fact. Nothing caught it
+because nothing *could*: `marble` is the only variant with a filter and it was
+unported, so no code read the number and no test rendered it. It was found in
+the first hour of #41, by rendering the two readings in Chrome and seeing which
+one the browser agreed with — they differ enormously (ink from 18.25 to 61.75
+against a hard cut at 34…46).
+
+**The rule this earns** is #38's, unchanged, and the point of recording it twice
+is that it is now a pattern rather than an anecdote: a hidden-state row about
+code that does not exist yet is a **hypothesis written in the same font as a
+measurement**. Re-derive it from the reference when its ticket opens. What #41
+adds is the *second* half — the row was not only wrong, it was wrong in a way
+that would have been invisible even after implementing it, because for `marble`
+both readings are inert: the region contains the mask, so the mask cuts first.
+A wrong row can survive its own ticket. Construct the case that separates the
+readings, or the row stays unfalsified.
+
+### A filter's units are the element's, not the canvas's (#41)
+
+`marble` declares `stdDeviation="7"` and its blobs carry `scale(1.2)` or
+`scale(1.3)`. The blur was implemented with sigma 7 in device pixels, which is
+the reading every part of the code around it invites — the viewBox is 80, the
+target is 80, one user unit is one device pixel, so 7 is 7.
+
+It is not. §15.7.2 says `userSpaceOnUse` means the user coordinate system in
+place *where the filter is referenced*, and an element's own `transform` is part
+of that system. The blur is **8.4** or **9.1** device pixels.
+
+What makes this worth recording is how it surfaced. The whole-scene calibration
+was **interior 0** on three of four `marble` cases — which reads as agreement
+and is not, because a blur leaves no 3x3-uniform pixel for the classifier to
+call interior (hidden-state #42). The fourth case had a two-colour palette,
+where `overlay` against an opaque backdrop **saturates** a region flat and
+manufactures the uniform neighbourhood the statistic needs. So the bug was
+visible on exactly one of four cases, through a mechanism unrelated to the bug,
+and it showed up as 10 interior mismatches of 8/255 rather than as the 27/255
+it actually was.
+
+Isolating it took cutting one stage at a time — overlay off, blob 2 removed,
+blob 1 removed, filter removed — until the unfiltered shape was shown to match
+Chrome and the blurred one not to. Then a sweep of sigma against Chrome's fixed
+render put the minimum at 8.5, and 7 x 1.2 = 8.4 named the cause.
+
+**The rule this earns:** when a comparison against a reference is off by an
+amount that is not obviously rounding, sweep the parameter you are least sure
+of before touching the algorithm. A one-line unit error and a wrong kernel look
+identical in a diff of the output, and only the sweep separates them. And a
+statistic that reports agreement on 3 of 4 cases is not 75% right — check
+whether it *could* have disagreed.
+
 ## Step 2 — mechanism / policy boundary
 
 _(none yet)_
@@ -147,6 +206,31 @@ the third has to cover *green over zero tests* as well as *no substitution*. It
 now parses the test count out of the run and refuses to call a filtered-to-empty
 run a survivor. Quote arguments yourself when the shell is doing the joining.
 
+### The CRLF trap, and a restoration check that outlived its assumption (#39, #41)
+
+Two failures in one mutation run, both of them the runner rather than the code.
+
+* **Five multi-line patterns matched nothing.** Same cause as #39: the working
+  tree is CRLF and the patterns were built from bare newlines. The runner said
+  `NO MATCH` rather than folding them into either verdict — the #34/#36/#37 fix
+  working — and they were re-run against the file's own line ending, read off
+  the file instead of assumed. All three then died.
+* **The restoration guard stopped the run on its first case, correctly and for
+  the wrong reason.** It asked `git status --porcelain` whether the mutated file
+  was clean. That was right when it was written, because the files under test
+  were untracked; by #41 they were tracked *and* legitimately modified as part
+  of the work in progress, so `git status` was dirty by design and the guard
+  could not tell a mutation from the change it was testing. Replaced with a
+  direct comparison against the bytes the runner itself saved, which answers
+  exactly the question being asked.
+
+**The rule this earns:** a guard's *premise* ages like everything else. "The
+tree is clean" was a proxy for "the mutation was backed out", and the proxy
+stopped tracking the thing the moment the file's status changed. Prefer a check
+that compares against what you are actually asserting — here, the saved
+original — over one that infers it from a tool whose answer depends on
+unrelated state.
+
 ### An output-neutral change is invisible to every test that looks at output (#69)
 
 #69 split one `null` into three states — an absent `fill`, `fill="none"`, and a
@@ -174,6 +258,36 @@ the ticket's acceptance criterion, not a test result. Say which assertions would
 survive a full revert before claiming the change is covered, and put the
 discriminating power where the change actually is. The same run that proves the
 goldens did not move proves nothing about whether the new code is reached.
+
+### A probe that returns "no difference" three times is usually the probe (#41)
+
+Three facts had to be pinned before `marble`'s rasterizer could be written: does
+the filter region clip the *source* or only the output, what backdrop does
+`mix-blend-mode` see, and does `color-interpolation-filters` change anything.
+The first probe answered **no** to all three. Two of those answers were the
+probe's fault and one was real:
+
+* the colour-space case sampled the **exact midpoint** of a symmetric
+  black-to-white ramp — the one x where sRGB and linearRGB agree by symmetry;
+* the blend case used a blue backdrop and a green source, and
+  `overlay(blue, green)` **is** blue, so the "blended" pixel equalled the
+  unblended one by arithmetic. The probe's own printed expectation said so and
+  it was read past.
+
+Rebuilt with a **discrimination control** in every case — a companion input
+that must come out different, printed beside the result — all three questions
+answered cleanly, and one of the three original answers survived: the region
+really does clip the output only. The colour-space answer also survived, but for
+a reason the first probe could not have supported: a *flat-colour* source is
+genuinely space-independent, because only its alpha varies and alpha is not
+gamma-encoded. The control (two colours inside one filter) differs by 60/255,
+which is what makes that a finding rather than a coincidence.
+
+**The rule this earns:** a probe that reports "no difference" has two possible
+causes and only one of them is about the subject. Every negative result needs a
+control that produces a *positive* one in the same run, or it is not a
+measurement. This is #37's "run the wrong pictures through it" applied one stage
+earlier — to the instrument rather than to the gate.
 
 ### A concurrent agent in the same worktree invalidates a measurement (#39)
 
