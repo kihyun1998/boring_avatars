@@ -4,11 +4,13 @@
 /// which is what lets the SVG emitter depend on attribute *order* without that
 /// ordering leaking down here. This file is where that claim is cashed.
 ///
-/// It handles what `pixel`, `ring`, `sunset` and `bauhaus` need — a rounded-rect
-/// mask over axis-aligned rectangles, filled paths and circles, gradient paint
-/// servers, `translate`/`rotate` transforms and a stroked `<line>`. Filters,
-/// `scale`, cubics and every other stroked element arrive with the variants that
-/// use them, and **everything else throws**. That is the point of
+/// It handles what `pixel`, `ring`, `sunset`, `bauhaus` and `beam` need — a
+/// rounded-rect mask over axis-aligned and rounded rectangles, filled and
+/// stroked paths, circles, cubics, gradient paint servers,
+/// `translate`/`rotate`/`scale` transforms composed down through `<g>`, and a
+/// stroked `<line>`. Filters, `matrix`/`skew`, quadratics and
+/// `stroke-linecap: square` arrive with the variants that use them, and
+/// **everything else throws**. That is the point of
 /// [UnsupportedSceneError]: an unhandled `<line>` rendering as blank, or a
 /// `transform` being ignored so a rect lands square and unrotated, is a
 /// plausible *wrong picture* — and a golden would freeze it. A loud failure at
@@ -658,10 +660,22 @@ List<RasterShape> _shapesOf(
           ], stroke),
       ];
     case SvgElement.circle:
-      // Flatten first, then map. For the rigid transforms implemented here
-      // that is exact; it is also why `scale` has to throw rather than be
-      // waved through — scaling after flattening would apply the tolerance in
-      // the wrong space.
+      // Flatten first, then map. For a **rigid** transform that is exact.
+      //
+      // This comment used to end "…which is also why `scale` has to throw:
+      // scaling after flattening would apply the tolerance in the wrong
+      // space". `scale` no longer throws, and the rounded rect thirty lines
+      // above does exactly what that sentence warned about — so the rule is
+      // restated rather than left contradicting the code beside it.
+      //
+      // **What it actually costs, measured.** A scale of `s` multiplies the
+      // flattening error by `s`. `beam`'s wrapper is the only scaled shape in
+      // the six and its largest is 1.2, so the worst tolerance becomes
+      // 1.2/4096 = 0.00029 user units against the ≤1/255 = 0.0039 coverage
+      // bar — an order of magnitude of headroom. Pre-scaling the tolerance
+      // would be exact and would move every golden for no visible gain, so it
+      // is not done. Valid **as long as no variant scales by more than about
+      // 13×**, at which point the flattening error reaches the coverage bar.
       return [
         RasterPolygon([
           matrix.transformContour(

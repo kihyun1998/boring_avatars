@@ -213,6 +213,16 @@ class RoundedRectMask {
        // SVG 1.1 clamps rx and ry *independently*, giving elliptical corners on
        // a non-square rect. Every mask in the six variants is square, so one
        // radius suffices — recorded with its condition in hidden-state #21.
+       //
+       // **This is now the second §9.2 implementation in the package and the
+       // two deliberately differ.** `roundedRectContour` in `path.dart` clamps
+       // the two radii separately, because `beam`'s eye is 1.5 × 2 and needs
+       // the ellipse; this one takes a single `min` because a *mask* is square
+       // in all six and a shared elliptical path would cost the closed-form
+       // coverage that keeps the mask exact in x. The divergence is safe only
+       // while that stays true — **a non-square mask would silently take the
+       // joint clamp and draw circular corners where SVG says elliptical.**
+       // The day one appears, this class is what has to move.
        radius = math.min(rx, math.min(width / 2, height / 2));
 
   final double x;
