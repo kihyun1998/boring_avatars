@@ -321,6 +321,29 @@ control that produces a *positive* one in the same run, or it is not a
 measurement. This is #37's "run the wrong pictures through it" applied one stage
 earlier — to the instrument rather than to the gate.
 
+### The runner caught itself, on the outcome it exists for (#41)
+
+`tool/mutate/` was written to make the test-trust gate re-runnable, with the
+four outcomes five previous incidents had earned. Its first full run reported
+**`NO TESTS` on all 32 cases**.
+
+Nothing was wrong with the mutations. `flutter` is a `.bat`, so it cannot be
+`execFile`d directly, and handing `cmd.exe` a multi-part argv gets Node's
+escaping applied on top of cmd's own — every invocation died with "The syntax
+of the command is incorrect" before a single test started.
+
+A two-outcome runner would have reported **32 survivors**: 32 mechanisms
+declared unguarded, on a sacred surface, in the report whose entire job is to
+say which ones are. The fix was one line — build the command string and quote
+it here, which is #39's *prescription* rather than its prohibition; what that
+incident caught was an argv array being concatenated unquoted by someone else.
+
+**The rule this earns:** the third and fourth outcomes are not bookkeeping for
+unusual cases, they are what makes the tool safe to believe on its *first* run,
+before anyone has calibrated it. A harness whose failure mode is "reports the
+opposite of the truth" has to be able to say "I did not measure anything" —
+and it has to say it in the exit status, not only in the log.
+
 ### A concurrent agent in the same worktree invalidates a measurement (#39)
 
 Two completeness lenses ran in parallel against one checkout. One of them left
