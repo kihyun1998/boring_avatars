@@ -634,6 +634,124 @@ void main() {
       );
     });
 
+    test('the three chain guards nothing was exercising', () {
+      // The #41 refuting lens deleted each of these with `if (false)` and the
+      // whole suite stayed green — a half-covered seam, five of its guards
+      // tested and four not. They all *work*; reproduced before writing this,
+      // which is worth saying because the lens reported the third one as a
+      // live wrong picture ("renders sharp rather than being refused") and it
+      // does not: it throws.
+      SvgNode withPrimitives(List<SvgNode> primitives) => _editFilterChildren(
+        buildMarbleScene(name: 'Clara Barton', colors: palette, size: 80),
+        primitives,
+      );
+
+      // `feBlend mode="multiply"` is a real compositing step, not the no-op
+      // the chain is reduced away on the strength of.
+      expect(
+        () => rasterizeScene(
+          withPrimitives(const [
+            SvgNode(
+              SvgElement.feFlood,
+              attributes: [
+                SvgAttribute('flood-opacity', 0),
+                SvgAttribute('result', 'BackgroundImageFix'),
+              ],
+            ),
+            SvgNode(
+              SvgElement.feBlend,
+              attributes: [
+                SvgAttribute('in', 'SourceGraphic'),
+                SvgAttribute('in2', 'BackgroundImageFix'),
+                SvgAttribute('mode', 'multiply'),
+                SvgAttribute('result', 'shape'),
+              ],
+            ),
+            SvgNode(
+              SvgElement.feGaussianBlur,
+              attributes: [
+                SvgAttribute('stdDeviation', 7),
+                SvgAttribute('result', 'e'),
+              ],
+            ),
+          ]),
+          width: 80,
+          height: 80,
+        ),
+        throwsA(isA<UnsupportedSceneError>()),
+      );
+
+      // A blur reading the flood instead of the blend is filtering a different
+      // image — a fully transparent one, so the element would vanish.
+      expect(
+        () => rasterizeScene(
+          withPrimitives(const [
+            SvgNode(
+              SvgElement.feFlood,
+              attributes: [
+                SvgAttribute('flood-opacity', 0),
+                SvgAttribute('result', 'BackgroundImageFix'),
+              ],
+            ),
+            SvgNode(
+              SvgElement.feBlend,
+              attributes: [
+                SvgAttribute('in', 'SourceGraphic'),
+                SvgAttribute('in2', 'BackgroundImageFix'),
+                SvgAttribute('result', 'shape'),
+              ],
+            ),
+            SvgNode(
+              SvgElement.feGaussianBlur,
+              attributes: [
+                SvgAttribute('in', 'BackgroundImageFix'),
+                SvgAttribute('stdDeviation', 7),
+                SvgAttribute('result', 'e'),
+              ],
+            ),
+          ]),
+          width: 80,
+          height: 80,
+        ),
+        throwsA(isA<UnsupportedSceneError>()),
+      );
+
+      // A negative sigma would make `gaussianBoxSize` negative and `d <= 1`,
+      // which skips the blur — so the element would render **sharp** rather
+      // than refusing. That is the wrong-picture failure this seam exists for.
+      expect(
+        () => rasterizeScene(
+          withPrimitives(const [
+            SvgNode(
+              SvgElement.feFlood,
+              attributes: [
+                SvgAttribute('flood-opacity', 0),
+                SvgAttribute('result', 'BackgroundImageFix'),
+              ],
+            ),
+            SvgNode(
+              SvgElement.feBlend,
+              attributes: [
+                SvgAttribute('in', 'SourceGraphic'),
+                SvgAttribute('in2', 'BackgroundImageFix'),
+                SvgAttribute('result', 'shape'),
+              ],
+            ),
+            SvgNode(
+              SvgElement.feGaussianBlur,
+              attributes: [
+                SvgAttribute('stdDeviation', -7),
+                SvgAttribute('result', 'e'),
+              ],
+            ),
+          ]),
+          width: 80,
+          height: 80,
+        ),
+        throwsA(isA<UnsupportedSceneError>()),
+      );
+    });
+
     test('an inline style we do not implement is refused', () {
       expect(
         () => rasterizeScene(
@@ -793,4 +911,14 @@ SvgNode _widenFilterRegion(SvgNode n) => SvgNode(
       : n.attributes,
   text: n.text,
   children: [for (final c in n.children) _widenFilterRegion(c)],
+);
+
+/// Replaces the `<filter>`'s primitive list.
+SvgNode _editFilterChildren(SvgNode n, List<SvgNode> primitives) => SvgNode(
+  n.element,
+  attributes: n.attributes,
+  text: n.text,
+  children: n.element == SvgElement.filter
+      ? primitives
+      : [for (final c in n.children) _editFilterChildren(c, primitives)],
 );
