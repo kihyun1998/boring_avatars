@@ -660,6 +660,20 @@ void _boxPass(
   // is two of `d` centred on the two pixel boundaries and a third of `d + 1`
   // centred on the pixel — which is how the spec keeps an even-width box from
   // shifting the image half a pixel.
+  //
+  // **The even branch's two half-pixel boxes can be swapped and nothing in this
+  // package can tell.** Measured by the #41 refuting lens and reproduced on a
+  // standalone transcription of this function: box convolutions commute, so
+  // with the signal clear of the buffer edge the two orderings agree to
+  // **0.0 exactly**, and they diverge only when a pass pushes mass outside
+  // `[0, count)` and loses it — up to 3.75/255 for ink flush against index 0.
+  // The layer is padded by [blurReach], which always leaves the kernel headroom,
+  // so that case is unreachable here. Recorded rather than tested: a test that
+  // cannot distinguish two implementations is not a weak test, it is an
+  // unfalsifiable distinction, and writing one would read as coverage.
+  //
+  // The branch *itself* is exercised — `marble`'s `scale(1.2)` gives d = 16 —
+  // and mutating its box widths does die. Only the ordering is free.
   final passes = d.isOdd
       ? [(d, (d - 1) ~/ 2), (d, (d - 1) ~/ 2), (d, (d - 1) ~/ 2)]
       : [(d, d ~/ 2), (d, d ~/ 2 - 1), (d + 1, d ~/ 2)];
