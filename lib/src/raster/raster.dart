@@ -740,7 +740,16 @@ void _drawThroughLayer(
 
   switch (shape) {
     case RasterRect():
-      _coverRect(shape, lw, lh, pad, put, paint);
+      // Unreachable, and deleted rather than tested. `filter` and `style` are
+      // on `<path>`'s allow-list only, so nothing can build a rect that needs
+      // a layer — the #41 refuting lens replaced this branch's 32-line
+      // coverage routine with a throw and the whole suite stayed green. That
+      // is lessons.md's third question (is the code reachable at all?) and
+      // its third answer.
+      throw UnsupportedSceneError(
+        'a filtered or blended <rect> is not reachable from any scene this '
+        'package builds; only <path> carries a filter or a style',
+      );
     case RasterPolygon():
       _coverPolygon(shape, lw, lh, pad, put, paint);
   }
@@ -789,40 +798,6 @@ void _drawThroughLayer(
         layerAlpha * coverage,
         shape.blendMode,
       );
-    }
-  }
-}
-
-/// Coverage of an axis-aligned rect, offset into a padded layer.
-void _coverRect(
-  RasterRect rect,
-  int lw,
-  int lh,
-  int pad,
-  void Function(int, int, RasterColour, double) put,
-  RasterPaint paint,
-) {
-  final x0 = rect.x.floor().clamp(-pad, lw - pad);
-  final x1 = (rect.x + rect.width).ceil().clamp(-pad, lw - pad);
-  final y0 = rect.y.floor().clamp(-pad, lh - pad);
-  final y1 = (rect.y + rect.height).ceil().clamp(-pad, lh - pad);
-  for (var py = y0; py < y1; py++) {
-    final rowOverlap = _overlap(
-      py.toDouble(),
-      py + 1.0,
-      rect.y,
-      rect.y + rect.height,
-    );
-    if (rowOverlap <= 0) continue;
-    for (var px = x0; px < x1; px++) {
-      final colOverlap = _overlap(
-        px.toDouble(),
-        px + 1.0,
-        rect.x,
-        rect.x + rect.width,
-      );
-      if (colOverlap <= 0) continue;
-      put(px, py, paint.colourAt(px, py), rowOverlap * colOverlap);
     }
   }
 }
