@@ -465,13 +465,30 @@ enum RasterBlendMode {
 /// carrying either is drawn into its **own layer** rather than straight onto
 /// the destination — see [rasterizeMaskedShapes].
 sealed class RasterShape {
-  const RasterShape({this.blurSigma, this.blendMode = RasterBlendMode.normal});
+  const RasterShape({
+    this.blurSigma,
+    this.blendMode = RasterBlendMode.normal,
+    this.filterRegion,
+  });
 
-  /// The `feGaussianBlur`'s `stdDeviation` in **user units**, or `null` for an
-  /// unfiltered shape.
+  /// The `feGaussianBlur`'s `stdDeviation` in **device pixels**, or `null` for
+  /// an unfiltered shape.
   final double? blurSigma;
 
   final RasterBlendMode blendMode;
+
+  /// This shape's filter region as a closed quad, in **device** coordinates.
+  ///
+  /// **Per shape, not per scene, and not axis-aligned.** SVG 1.1 §15.7.2 puts
+  /// the region's `x/y/width/height` in the *referencing element's* user space
+  /// — the same sentence that governs `stdDeviation` — so the element's own
+  /// `transform` moves, scales and **rotates** it. Its image here is therefore
+  /// a quadrilateral, which is why this is a contour and not a rectangle.
+  ///
+  /// It is a contour rather than a predicate so the clip can be **antialiased**
+  /// by the same integrator every other shape uses. A binary pixel-centre test
+  /// measured 11/255 against Chrome at the boundary where Chrome shades it.
+  final PathContour? filterRegion;
 
   /// Whether this shape needs an offscreen layer at all.
   bool get needsLayer =>
@@ -497,6 +514,7 @@ class RasterRect extends RasterShape {
     this.fill, {
     super.blurSigma,
     super.blendMode,
+    super.filterRegion,
   });
   final double x;
   final double y;
@@ -515,6 +533,7 @@ class RasterPolygon extends RasterShape {
     this.fill, {
     super.blurSigma,
     super.blendMode,
+    super.filterRegion,
   });
   final List<PathContour> contours;
 
@@ -537,21 +556,18 @@ class RasterPolygon extends RasterShape {
 /// `pixel` and `ring`, whose mask-edge pixels are reached by at most one shape;
 /// live for `marble`, `bauhaus` and `beam`, which each lay a background rect
 /// under a second shape that crosses the mask edge.
-/// [filterRegion] is the rectangle a filtered shape's output is clipped to, in
-/// device pixels. SVG 1.1 §15.7.5 makes it a hard clip on the **output** — not
-/// on the source, which is the half that is easy to assume and wrong. Measured
-/// in Chrome: a bar spanning x = −40…20 blurred inside a region starting at
-/// x = 6 renders identically to an unclipped one at every x ≥ 6, and is cut to
-/// nothing below it. So content outside the region still bleeds *in*; it just
-/// cannot be *seen* outside.
-///
-/// `null` means no filtered shape is present and no region was resolved.
+/// Each filtered shape carries its own region test — see
+/// [RasterShape.filterRegion]. SVG 1.1 §15.7.5 makes the region a clip on
+/// the **output**, not on the source, which is the half that is easy to assume
+/// and wrong. Measured in Chrome: a bar spanning x = −40…20 blurred inside a
+/// region starting at x = 6 renders identically to an unclipped one at every
+/// x ≥ 6, and is cut to nothing below it. So content outside the region still
+/// bleeds *in*; it just cannot be *seen* outside.
 RasterImage rasterizeMaskedShapes({
   required int width,
   required int height,
   required List<RasterShape> shapes,
   required RoundedRectMask mask,
-  ({double x, double y, double width, double height})? filterRegion,
 }) {
   final image = RasterImage(width, height);
 
@@ -560,7 +576,7 @@ RasterImage rasterizeMaskedShapes({
     if (paint == null) continue; // no fill attribute — nothing is drawn
 
     if (shape.needsLayer) {
-      _drawThroughLayer(image, shape, paint, filterRegion);
+      _drawThroughLayer(image, shape, paint);
       continue;
     }
 
@@ -694,7 +710,6 @@ void _drawThroughLayer(
   RasterImage image,
   RasterShape shape,
   RasterPaint paint,
-  ({double x, double y, double width, double height})? filterRegion,
 ) {
   final sigma = shape.blurSigma;
   final d = sigma == null ? 0 : gaussianBoxSize(sigma);
@@ -735,30 +750,43 @@ void _drawThroughLayer(
     _boxPass(layer, 4, lh, lw * 4, lw, 4, d); // vertical
   }
 
+  // The region is a quad in device space, so its coverage comes from the same
+  // scanline integrator every other shape uses — one implementation, not two.
+  final region = shape.filterRegion;
+  final regionCoverage = region == null
+      ? null
+      : polygonCoverage(
+          width: image.width,
+          height: image.height,
+          polygon: RasterPolygon([region], null),
+        );
+
   for (var py = 0; py < image.height; py++) {
     for (var px = 0; px < image.width; px++) {
-      // §15.7.5's hard clip, on the output only.
-      if (filterRegion != null && shape.blurSigma != null) {
-        if (px + 0.5 < filterRegion.x ||
-            py + 0.5 < filterRegion.y ||
-            px + 0.5 > filterRegion.x + filterRegion.width ||
-            py + 0.5 > filterRegion.y + filterRegion.height) {
-          continue;
-        }
-      }
+      // §15.7.5's clip, on the output only — and **antialiased**, because
+      // Chrome shades the boundary rather than stepping it. Measured on
+      // `marble-clara-square`, where the region really does cut a corner: a
+      // binary pixel-centre test leaves 11/255 at the edge and this leaves
+      // less. The coverage is computed once per shape, above.
+      final coverage = regionCoverage == null
+          ? 1.0
+          : regionCoverage[py * image.width + px];
+      if (coverage <= 0) continue;
       final i = ((py + pad) * lw + (px + pad)) * 4;
-      final sa = layer[i + 3];
-      if (sa <= 0) continue;
+      final layerAlpha = layer[i + 3];
+      if (layerAlpha <= 0) continue;
       image.blendSource(
         px,
         py,
         // Back to straight alpha for the composite, which is the buffer's
-        // format. Dividing by the alpha we just blurred is exact for a flat
-        // fill and is the general un-premultiply otherwise.
-        layer[i] / sa,
-        layer[i + 1] / sa,
-        layer[i + 2] / sa,
-        sa,
+        // format. The divisor is the **layer's own** alpha, not the clipped
+        // one: the region scales how much of the result is let through, and
+        // scaling a straight colour by it would darken the boundary instead of
+        // fading it.
+        layer[i] / layerAlpha,
+        layer[i + 1] / layerAlpha,
+        layer[i + 2] / layerAlpha,
+        layerAlpha * coverage,
         shape.blendMode,
       );
     }

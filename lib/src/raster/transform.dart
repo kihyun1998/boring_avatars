@@ -90,6 +90,31 @@ class Affine {
   (double, double) apply(double x, double y) =>
       (a * x + c * y + e, b * x + d * y + f);
 
+  /// The inverse map, or `null` where this matrix is singular.
+  ///
+  /// Needed because a **filter region is a rectangle in the referencing
+  /// element's user space** (SVG 1.1 §15.7.2), and under a rotation its image
+  /// in device space is a quad rather than a rectangle. Testing a device pixel
+  /// by mapping it *back* into element space keeps the clip an axis-aligned
+  /// comparison and avoids a second polygon clipper.
+  ///
+  /// A singular matrix collapses the plane to a line, so nothing has an inside
+  /// and the caller has to decide what that means rather than divide by zero.
+  /// No transform any version in scope writes is singular — `scale(0)` would
+  /// be, and upstream never emits one.
+  Affine? get inverse {
+    final determinant = a * d - b * c;
+    if (determinant == 0) return null;
+    return Affine(
+      d / determinant,
+      -b / determinant,
+      -c / determinant,
+      a / determinant,
+      (c * f - d * e) / determinant,
+      (b * e - a * f) / determinant,
+    );
+  }
+
   /// Whether this moves points without rotating, scaling or skewing them.
   ///
   /// A pure translation lets an axis-aligned rectangle stay one — which matters,

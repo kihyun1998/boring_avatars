@@ -18,8 +18,11 @@ import 'package:flutter_test/flutter_test.dart';
 /// own group below:
 ///
 /// * the first path's `scale` comes from `properties[2]`, not `properties[1]`;
-/// * `properties[0]`'s placement and `properties[1]`'s scale are computed and
-///   never read, so a mutation to either survives the whole sweep;
+/// * **five** of the fifteen generated numbers reach no attribute at all —
+///   `properties[0]`'s translateX, translateY, rotate and scale, plus
+///   `properties[1]`'s scale — so no rendering comparison at any layer can see
+///   them, and they are checked against upstream's own `getUnit` fixture
+///   instead;
 /// * the `filter` reference is erased by `normalise` on both sides, so the
 ///   sweep says nothing about whether the two paths point at a filter that
 ///   exists.
@@ -293,9 +296,94 @@ void main() {
     );
   });
 
-  group('the values upstream computes and never reads', () {
-    // Three of fifteen generated numbers reach nothing: `properties[0]`'s
-    // translateX / translateY / rotate / scale, and `properties[1]`'s scale.
+  group('the five generated numbers that reach no attribute', () {
+    // **Five** of fifteen reach nothing: `properties[0]`'s translateX,
+    // translateY, rotate and scale, plus `properties[1]`'s scale. (This comment
+    // said "three" and then listed five until the #41 refuting lens counted
+    // them.)
+    //
+    // No rendering comparison at any layer can see them — not the 100-render
+    // byte sweep, not the 1200-render crosscheck, not the goldens — because
+    // they never become an attribute. So they need assertions against
+    // **upstream's own values**, and they are on the sacred surface, where a
+    // wrong number is frozen at publish.
+    //
+    // The lens measured that four of the five had none: `translateX: i == 0 ?
+    // 0 : …` survived all 653 tests. Reproduced before this group was
+    // rewritten. What was here before asserted `translateX.abs() < 8` — and
+    // `getUnit(n, 8, 1)` can only ever return -7…7, so the assertion was
+    // satisfied by every possible value, right or wrong. lessons.md #34's
+    // "tripwire that cannot trip", one rung out.
+    //
+    // `utilities.json` is dumped from upstream's real `getUnit`, keyed by
+    // `range,index` with `@k` meaning the hash multiplied by k — which is
+    // exactly marble's `numFromName * (i + 1)`. Comparing against it is a
+    // comparison with the reference, not a restatement of this port.
+    final utilities =
+        jsonDecode(
+              File('test/fixtures/v1_6_1/utilities.json').readAsStringSync(),
+            )
+            as Map<String, dynamic>;
+    final derived = utilities['derived'] as Map<String, dynamic>;
+
+    /// Upstream's own `getUnit(hash * multiplier, range, index)`.
+    num upstreamUnit(String nameId, String key) {
+      final units =
+          (derived[nameId] as Map<String, dynamic>)['getUnit']
+              as Map<String, dynamic>;
+      expect(units.containsKey(key), isTrue, reason: '$nameId has no "$key"');
+      return units[key] as num;
+    }
+
+    test('all five match upstream getUnit, for every corpus name', () {
+      for (final n in names) {
+        final id = n['id'] as String;
+        final p = marbleProperties(n['value'] as String, const ['#FF0000']);
+        for (var i = 0; i < 3; i++) {
+          final at = i == 0 ? '' : '@${i + 1}';
+          expect(
+            p[i].translateX,
+            upstreamUnit(id, '8,1$at'),
+            reason: '$id[$i].translateX',
+          );
+          expect(
+            p[i].translateY,
+            upstreamUnit(id, '8,2$at'),
+            reason: '$id[$i].translateY',
+          );
+          expect(
+            p[i].rotate,
+            upstreamUnit(id, '360,1$at'),
+            reason: '$id[$i].rotate',
+          );
+          expect(
+            p[i].scale,
+            1.2 + upstreamUnit(id, '4$at') / 10,
+            reason: '$id[$i].scale',
+          );
+        }
+      }
+    });
+
+    test('and the corpus makes element 0 distinguishable from a constant', () {
+      // The assertion above dies on `i == 0 ? 0 : …` only if some name gives
+      // element 0 a non-zero translation. Stated rather than assumed, because
+      // a corpus where every element-0 value happened to be 0 would make the
+      // whole group vacuous again — the #39 "power from corpus membership"
+      // failure.
+      final nonZero = names.where((n) {
+        final p = marbleProperties(n['value'] as String, const ['#FF0000']);
+        return p[0].translateX != 0 ||
+            p[0].translateY != 0 ||
+            p[0].rotate != 0 ||
+            p[0].scale != 1.2;
+      });
+      expect(nonZero, isNotEmpty);
+      expect(nonZero.length, greaterThan(names.length ~/ 2));
+    });
+  });
+
+  group('what those five reach in the drawing — which is nothing', () {
     // They are computed because upstream's `Array.from` callback is a single
     // expression and special-casing an index would invent a structure the
     // reference does not have — the same judgement `bauhaus` records for its
