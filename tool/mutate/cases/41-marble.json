@@ -1,0 +1,276 @@
+{
+  "issue": 41,
+  "what": "marble — the variant, the blur, the overlay blend and the filter region",
+  "test": null,
+  "note": [
+    "`test: null` means the whole suite. Individual cases may narrow it, but the",
+    "default is deliberate: several of these mutants are killed by a file other",
+    "than the obvious one, and a narrowed run would report a survivor.",
+    "",
+    "Group A is layer 1 — the sacred surface. Four of its five entries survived",
+    "the entire suite when they were first written, because the only assertion",
+    "touching those values was a range check the formula's whole codomain",
+    "satisfied.",
+    "",
+    "Group B is layer 2, the emitted document. Group C is the rasterizer.",
+    "Group D deletes whole capabilities rather than perturbing them."
+  ],
+  "cases": [
+    {
+      "group": "A",
+      "name": "properties[0].translateX forced to 0",
+      "file": "lib/src/variants/marble.dart",
+      "from": "      translateX: jsGetUnit(scaled, _size ~/ 10, 1),",
+      "to": "      translateX: i == 0 ? 0 : jsGetUnit(scaled, _size ~/ 10, 1),",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "properties[0].translateY forced to 0",
+      "file": "lib/src/variants/marble.dart",
+      "from": "      translateY: jsGetUnit(scaled, _size ~/ 10, 2),",
+      "to": "      translateY: i == 0 ? 0 : jsGetUnit(scaled, _size ~/ 10, 2),",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "properties[0].rotate forced to a constant",
+      "file": "lib/src/variants/marble.dart",
+      "from": "      rotate: jsGetUnit(scaled, 360, 1),",
+      "to": "      rotate: i == 0 ? 123 : jsGetUnit(scaled, 360, 1),",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "properties[0].scale forced to a constant",
+      "file": "lib/src/variants/marble.dart",
+      "from": "      scale: 1.2 + jsGetUnit(scaled, _size ~/ 20) / 10,",
+      "to": "      scale: i == 0 ? 1.3 : 1.2 + jsGetUnit(scaled, _size ~/ 20) / 10,",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "the scale range SIZE/20 becomes SIZE/10",
+      "file": "lib/src/variants/marble.dart",
+      "from": "      scale: 1.2 + jsGetUnit(scaled, _size ~/ 20) / 10,",
+      "to": "      scale: 1.2 + jsGetUnit(scaled, _size ~/ 10) / 10,",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "rotate loses its index argument, so it never negates",
+      "file": "lib/src/variants/marble.dart",
+      "from": "      rotate: jsGetUnit(scaled, 360, 1),",
+      "to": "      rotate: jsGetUnit(scaled, 360),",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "translateY reads digit 1 instead of digit 2",
+      "file": "lib/src/variants/marble.dart",
+      "from": "      translateY: jsGetUnit(scaled, _size ~/ 10, 2),",
+      "to": "      translateY: jsGetUnit(scaled, _size ~/ 10, 1),",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "the colour index drops the element offset",
+      "file": "lib/src/variants/marble.dart",
+      "from": "      color: jsGetRandomColor(numFromName + i, colors, range),",
+      "to": "      color: jsGetRandomColor(numFromName, colors, range),",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "S-3 'corrected': path 1 scaled by its own element",
+      "file": "lib/src/variants/marble.dart",
+      "from": "                _placement(properties[1], properties[2]),",
+      "to": "                _placement(properties[1], properties[1]),",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "the inline style is dropped from path 2",
+      "file": "lib/src/variants/marble.dart",
+      "from": "              const SvgAttribute('style', 'mix-blend-mode:overlay'),",
+      "to": "",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "the filter id is misspelled at its declaration",
+      "file": "lib/src/variants/marble.dart",
+      "from": "              SvgAttribute('id', 'prefix__filter0_f'),",
+      "to": "              SvgAttribute('id', 'prefix__filter0_g'),",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "colour-interpolation-filters left at the SVG default",
+      "file": "lib/src/variants/marble.dart",
+      "from": "              SvgAttribute('color-interpolation-filters', 'sRGB'),",
+      "to": "              SvgAttribute('color-interpolation-filters', 'linearRGB'),",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "the two blob paths are swapped",
+      "file": "lib/src/variants/marble.dart",
+      "from": "              const SvgAttribute('d', _blobA),",
+      "to": "              const SvgAttribute('d', _blobB),",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "square keeps the corner radius",
+      "file": "lib/src/variants/marble.dart",
+      "from": "              if (!square) const SvgAttribute('rx', _size * 2),",
+      "to": "              const SvgAttribute('rx', _size * 2),",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "the blur radius changes",
+      "file": "lib/src/variants/marble.dart",
+      "from": "                  SvgAttribute('stdDeviation', 7),",
+      "to": "                  SvgAttribute('stdDeviation', 8),",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "the blur sigma ignores the element transform (cost 27/255)",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "    return filter.sigma * scaleX;",
+      "to": "    return filter.sigma;",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "the filter region ignores the element transform",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "    return matrix.transformContour(",
+      "to": "    return Affine.identity.transformContour(",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "the anisotropic-blur refusal is removed",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "    if ((scaleX - scaleY).abs() > 1e-9) {",
+      "to": "    if (false) {",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "the region x default -10% becomes -20%",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "        x: _num(node.attribute('x')) ?? -0.1 * viewWidth,",
+      "to": "        x: _num(node.attribute('x')) ?? -0.2 * viewWidth,",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "the region width default 120% becomes 140%",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "        width: _num(node.attribute('width')) ?? 1.2 * viewWidth,",
+      "to": "        width: _num(node.attribute('width')) ?? 1.4 * viewWidth,",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "the region y default -10% becomes 0%",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "        y: _num(node.attribute('y')) ?? -0.1 * viewHeight,",
+      "to": "        y: _num(node.attribute('y')) ?? 0.0,",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "the region height default 120% becomes 100%",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "        height: _num(node.attribute('height')) ?? 1.2 * viewHeight,",
+      "to": "        height: _num(node.attribute('height')) ?? 1.0 * viewHeight,",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "the three-box size formula loses its rounding term",
+      "file": "lib/src/raster/raster.dart",
+      "from": "    (sigma * 3 * math.sqrt(2 * math.pi) / 4 + 0.5).floor();",
+      "to": "    (sigma * 3 * math.sqrt(2 * math.pi) / 4).floor();",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "the even branch's third box is width d, not d + 1",
+      "file": "lib/src/raster/raster.dart",
+      "from": "      : [(d, d ~/ 2), (d, d ~/ 2 - 1), (d + 1, d ~/ 2)];",
+      "to": "      : [(d, d ~/ 2), (d, d ~/ 2 - 1), (d, d ~/ 2)];",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "the even branch takes the odd branch's offsets",
+      "file": "lib/src/raster/raster.dart",
+      "from": "      : [(d, d ~/ 2), (d, d ~/ 2 - 1), (d + 1, d ~/ 2)];",
+      "to": "      : [(d, d ~/ 2), (d, d ~/ 2), (d + 1, d ~/ 2)];",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "blur reach halved, so the layer truncates",
+      "file": "lib/src/raster/raster.dart",
+      "from": "int blurReach(int d) => d <= 1 ? 0 : (3 * d) ~/ 2 + 1;",
+      "to": "int blurReach(int d) => d <= 1 ? 0 : (3 * d) ~/ 4 + 1;",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "the blend formula loses its backdrop term",
+      "file": "lib/src/raster/raster.dart",
+      "from": "          (1 - ab) * as * cs + ab * as * blended + (1 - as) * ab * cb;",
+      "to": "          (1 - ab) * as * cs + ab * as * cs + (1 - as) * ab * cb;",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "the region coverage is discarded",
+      "file": "lib/src/raster/raster.dart",
+      "from": "          : regionCoverage[py * image.width + px];",
+      "to": "          : 1.0;",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "the blur runs on straight alpha, not premultiplied",
+      "file": "lib/src/raster/raster.dart",
+      "from": "    layer[i] = colour.r / 255 * a + layer[i] * (1 - a);",
+      "to": "    layer[i] = colour.r / 255 + layer[i] * (1 - a);",
+      "expectEdits": 1
+    },
+    {
+      "group": "D",
+      "name": "the blur deleted outright",
+      "file": "lib/src/raster/raster.dart",
+      "from": "  if (d > 1) {",
+      "to": "  if (false) {",
+      "expectEdits": 1
+    },
+    {
+      "group": "D",
+      "name": "the layer is not padded, so off-canvas content is dropped",
+      "file": "lib/src/raster/raster.dart",
+      "from": "  final pad = blurReach(d);",
+      "to": "  final pad = 0;",
+      "expectEdits": 1
+    },
+    {
+      "group": "D",
+      "name": "the vertical blur pass is skipped",
+      "file": "lib/src/raster/raster.dart",
+      "from": "  _boxPass(layer, 4, lh, lw * 4, lw, 4, d); // vertical",
+      "to": "",
+      "expectEdits": 1
+    }
+  ]
+}

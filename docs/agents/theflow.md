@@ -1011,6 +1011,23 @@ Chrome update cannot break. Full description and the measured numbers are in
 Step 4. It reports the variants it did **not** cover by name — today `marble`
 alone, which is not ported.
 
+`tool/mutate/` is the **test-trust gate made re-runnable**. Step 3 requires
+turning a fix off and watching the test go red; until #41 that was done with a
+throwaway script every time, and a commit could say "12 of 12 mutants died"
+with nothing in the tree able to check it. Same rule as `tool/versions`: a
+claim about a measurement whose evidence cannot be re-run is one nobody can
+check. Cases live in `tool/mutate/cases/<issue>-<area>.json` and are literal
+substitutions, never patterns.
+
+It has **four** outcomes — `killed`, `SURVIVED`, `NO MATCH`, `NO TESTS` — and
+the last two are the ones this repo has been burnt by five times. A stale case
+exits non-zero, so it cannot rot quietly. Full description in its README.
+
+```bash
+node tool/mutate/run.mjs cases/41-marble.json          # 32 cases, all killed
+node tool/mutate/run.mjs cases/41-marble.json --only=A # layer 1 only
+```
+
 `tool/milestones/sync.mjs` renders the GitHub milestone descriptions from
 `CLAUDE.md`'s release table. **Run it whenever that table changes.** A milestone
 description has to carry the version list — "see CLAUDE.md" is useless to
