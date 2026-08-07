@@ -69,6 +69,38 @@ both readings are inert: the region contains the mask, so the mask cuts first.
 A wrong row can survive its own ticket. Construct the case that separates the
 readings, or the row stays unfalsified.
 
+### One sentence governed two values and the port applied it to one (#41)
+
+`§15.7.2` says a filter's `userSpaceOnUse` values are in "the user coordinate
+system in place at the time when the filter is referenced". #41's first pass
+read that, applied it to `stdDeviation` — correctly, worth 27/255 — wrote a
+doc-comment quoting the sentence, and then resolved the region's
+`x/y/width/height` in **viewport** space three functions away. One clause, two
+values, one of them honoured.
+
+The completeness pass found it. Nothing else could have: the region is inert
+for `square: false` (the disc mask has already removed everything the region
+would), so three of the four `marble` goldens do not move when it is fixed, and
+the fourth was already committed with the wrong picture in it.
+
+Two things about the *shape* of the miss are worth keeping.
+
+* **An internal inconsistency is a stronger signal than a spec disagreement.**
+  The argument that found it was not "the spec says X" but "this file cites one
+  sentence for one value and ignores it for its neighbour". That is checkable
+  without re-reading the spec at all.
+* **The calibration number went the wrong way, and that was correct.** Fixing
+  the region took `marble-clara-square`'s worst edge from 5/255 to 11 (hard
+  clip) and then 9 (antialiased). The 5 was the *feature not running*. Chrome
+  clips that render by 23 pixels; the port clipped none. A metric improving
+  when you delete a capability is #39's lesson, and this is its mirror — the
+  metric getting worse when you *add* one.
+
+**The rule this earns:** when a change applies a rule to one value, grep for
+the rule's other subjects in the same commit. And when a reference-comparison
+number moves the wrong way after a fix, ask whether the old number was measuring
+the thing at all before treating it as a regression.
+
 ### A filter's units are the element's, not the canvas's (#41)
 
 `marble` declares `stdDeviation="7"` and its blobs carry `scale(1.2)` or

@@ -188,24 +188,16 @@ RasterImage rasterizeScene(
     inherited: Affine.identity,
   );
 
-  // Every filtered shape in the six references the same single `<filter>`, so
-  // there is one region. A scene with two filters whose regions differed would
-  // need the region to travel per shape; it is refused rather than silently
-  // given the first one's.
-  final regions = filters.values.map((f) => f.region).toSet();
-  if (regions.length > 1) {
-    throw UnsupportedSceneError(
-      'the scene declares ${regions.length} different filter regions; only one '
-      'is implemented',
-    );
-  }
-
+  // The region **travels per shape**, so there is no scene-wide one to
+  // reconcile. An earlier revision of this function refused a scene whose two
+  // filters declared different regions; that check existed only because the
+  // region was being resolved once, in viewport space — which was the defect.
+  // See [_Filter.region].
   return rasterizeMaskedShapes(
     width: width,
     height: height,
     shapes: shapes,
     mask: mask,
-    filterRegion: regions.isEmpty ? null : regions.first,
   );
 }
 
@@ -847,6 +839,33 @@ List<RasterShape> _shapesOf(
     return filter.sigma * scaleX;
   }
 
+  /// This element's filter region as a quad in **device** coordinates.
+  ///
+  /// The region is a rectangle in the element's **own** space (§15.7.2 — the
+  /// same sentence that governs [blurSigma]), so the element's `transform`
+  /// carries it: under a rotation the device-space image is a quadrilateral,
+  /// and it is handed over as a contour so the clip can be antialiased by the
+  /// scanline integrator rather than stepped at the pixel centre.
+  ///
+  /// **Applying §15.7.2 to the sigma and not to the region was the defect the
+  /// #41 completeness pass found.** Reproduced in Chrome on three constructions
+  /// with a control, then on the variant itself: `marble-clara-square` really
+  /// is clipped by its own region — Chrome differs from an unclippable region
+  /// by 23 pixels there — and the port was clipping nothing.
+  PathContour? filterRegionQuad(Affine matrix) {
+    final declared = node.attribute('filter') as String?;
+    if (declared == null) return null;
+    final id = RegExp(r'^url\(#(.*)\)$').firstMatch(declared)?.group(1);
+    final filter = filters[id];
+    // A dangling reference already threw in [blurSigma]; reaching here with a
+    // null filter would mean the two disagreed about what they resolved.
+    if (filter == null) return null;
+    final r = filter.region;
+    return matrix.transformContour(
+      rectangleContour(r.x, r.y, r.width, r.height),
+    );
+  }
+
   /// The `mix-blend-mode` this element's inline `style` declares.
   ///
   /// The whole `style` attribute is matched, not searched: `marble` writes
@@ -936,6 +955,7 @@ List<RasterShape> _shapesOf(
       // share one layer rather than take one each.
       final sigma = blurSigma(matrix);
       final mode = blendMode();
+      final clip = filterRegionQuad(matrix);
       if (sigma != null && fill != null && stroke != null) {
         throw UnsupportedSceneError(
           '<path> has a fill, a stroke and a filter; the two would be blurred '
@@ -955,6 +975,7 @@ List<RasterShape> _shapesOf(
             fill,
             blurSigma: sigma,
             blendMode: mode,
+            filterRegion: clip,
           ),
         if (stroke != null)
           RasterPolygon(
@@ -969,6 +990,7 @@ List<RasterShape> _shapesOf(
             stroke,
             blurSigma: sigma,
             blendMode: mode,
+            filterRegion: clip,
           ),
       ];
     case SvgElement.circle:

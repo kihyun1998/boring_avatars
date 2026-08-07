@@ -234,6 +234,49 @@ void main() {
     test('a non-uniform transform is refused rather than averaged', () {
       // A Gaussian is only isotropic under a similarity. Faking it with the
       // mean of two scales would be a plausible wrong picture.
+      //
+      // **This test used to assert nothing.** It checked `returnsNormally` on a
+      // *uniform* `scale(2)` and then compared `gaussianBoxSize(14)` to 26,
+      // and its comment claimed the real case could not be built because
+      // "`parseTransform` has no two-argument `scale`". That was false —
+      // `transform.dart` implements §7.4's two-argument form deliberately, with
+      // a doc-comment about why its default differs from `translate`'s. The
+      // #41 refuting lens deleted the guard outright and the whole suite stayed
+      // green.
+      expect(
+        () => rasterizeScene(
+          scene(
+            shape: const [
+              SvgAttribute('filter', 'url(#f)'),
+              SvgAttribute('d', 'M20 20H60V60H20z'),
+              SvgAttribute('fill', '#FFFFFF'),
+              SvgAttribute('transform', 'scale(2 3)'),
+            ],
+          ),
+          width: 80,
+          height: 80,
+        ),
+        throwsA(isA<UnsupportedSceneError>()),
+      );
+      // A skew would reach it too, if one were ever writable — the guard is on
+      // the two column norms, not on the spelling of the function.
+      expect(
+        () => rasterizeScene(
+          scene(
+            shape: const [
+              SvgAttribute('filter', 'url(#f)'),
+              SvgAttribute('d', 'M20 20H60V60H20z'),
+              SvgAttribute('fill', '#FFFFFF'),
+              SvgAttribute('transform', 'scale(1 2) rotate(30 40 40)'),
+            ],
+          ),
+          width: 80,
+          height: 80,
+        ),
+        throwsA(isA<UnsupportedSceneError>()),
+      );
+      // And the uniform case it used to test still passes, so the guard is not
+      // simply refusing every scale.
       expect(
         () => rasterizeScene(
           scene(
@@ -249,10 +292,6 @@ void main() {
         ),
         returnsNormally,
       );
-      // `parseTransform` has no two-argument `scale`, so the non-uniform case
-      // is built from the matrix the seam would see. If that form ever becomes
-      // writable, this is the guard that has to stay.
-      expect(gaussianBoxSize(7 * 2), 26);
     });
   });
 
