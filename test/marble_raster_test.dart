@@ -489,6 +489,57 @@ void main() {
       expect(asBoundingBox.bytes, isNot(byDefault.bytes));
     });
 
+    test('and each of the four default percentages is pinned', () {
+      // `marble`'s own goldens pin **two** of them. The region clips it at the
+      // top, so `y` and `height` are caught by `marble-clara-square` — but `x`
+      // and `width` land at -8 and 108, both off-canvas, and mutating them to
+      // -20% / 140% survived the whole suite when the #41 refuting lens tried
+      // it. The number the correction of hidden-state #11 turns on was
+      // resting entirely on a Chrome measurement recorded in a comment.
+      //
+      // A translate brings each edge onto the canvas, which is the only way to
+      // reach them: the region moves with the element (§15.7.2), so the same
+      // property that made the region a defect makes it testable.
+      // The shape covers the whole canvas whatever the translate does, so the
+      // only thing that can remove ink is the region itself. A shape with its
+      // own edge nearby would make the test pass for the wrong reason.
+      RasterImage render(String transform) => rasterizeScene(
+        scene(
+          shape: [
+            const SvgAttribute('filter', 'url(#f)'),
+            const SvgAttribute('d', 'M-200 -200H200V200H-200z'),
+            const SvgAttribute('fill', '#FFFFFF'),
+            SvgAttribute('transform', transform),
+          ],
+          sigma: 1,
+          background: null,
+        ),
+        width: 80,
+        height: 80,
+      );
+      int alphaAt(RasterImage i, int x, int y) => i.bytes[(y * 80 + x) * 4 + 3];
+
+      // translate(20 0) puts the region's LEFT edge at -8 + 20 = 12.
+      final left = render('translate(20 0)');
+      expect(alphaAt(left, 5, 40), 0, reason: 'x=5 is left of the region');
+      expect(alphaAt(left, 11, 40), 0, reason: 'x=11 is left of the region');
+      expect(
+        alphaAt(left, 14, 40),
+        greaterThan(0),
+        reason: 'x=14 is inside it',
+      );
+
+      // translate(-40 0) puts the RIGHT edge at -8 + 96 - 40 = 48.
+      final right = render('translate(-40 0)');
+      expect(
+        alphaAt(right, 45, 40),
+        greaterThan(0),
+        reason: 'x=45 is inside the region',
+      );
+      expect(alphaAt(right, 50, 40), 0, reason: 'x=50 is right of it');
+      expect(alphaAt(right, 70, 40), 0);
+    });
+
     test('clips the output — a region that cuts really does cut', () {
       // Inert for `marble`: its region is (-8, -8, 96, 96) and the mask is
       // 0…80, so anything the region would remove the mask has removed
