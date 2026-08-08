@@ -17,9 +17,27 @@ void main() {
       ).allMatches(barrel).map((m) => m.group(0)!).toList();
       expect(exports, <String>[
         "export 'src/avatar.dart' show boringAvatarSvg;",
-        "export 'src/variant.dart';",
-        "export 'src/version.dart';",
+        "export 'src/variant.dart' show BoringAvatarsVariant;",
+        "export 'src/version.dart' show BoringAvatarsVersion;",
       ]);
+    });
+
+    test('every export carries a show clause', () {
+      // The assertion above pins three export *statements*; this pins the
+      // property that makes them a complete list of *names*. Without a `show`,
+      // a re-export added inside one of those libraries reaches the barrel
+      // with this file unchanged — measured, an `export 'scene/scene.dart';`
+      // in `version.dart` put `SvgNode`, `SvgAttribute`, `SvgElement` and
+      // `escapeSvgText` on the public surface and the whole suite stayed
+      // green. Once published, an accidental export is as irreversible as a
+      // deliberate one.
+      final barrel = File('lib/boring_avatars.dart').readAsStringSync();
+      for (final line in RegExp(
+        r'^export .*;',
+        multiLine: true,
+      ).allMatches(barrel).map((m) => m.group(0)!)) {
+        expect(line, contains(' show '), reason: line);
+      }
     });
 
     test('the SVG function takes no default version', () {
@@ -65,7 +83,14 @@ void main() {
     });
 
     test('latest is the newest supported version', () {
+      // Both assertions, because they fail on different things. The literal
+      // catches `latest` moving to a value this release does not ship; the
+      // positional one catches it *failing to move* when a value is added —
+      // which nothing else does. The dispatch's exhaustive switch forces a new
+      // selector to be rendered, but `latest` is a hand-maintained constant
+      // and would sit on the old value with the suite green.
       expect(BoringAvatarsVersion.latest, BoringAvatarsVersion.v1_6_1);
+      expect(BoringAvatarsVersion.latest, BoringAvatarsVersion.values.last);
     });
   });
 
@@ -175,15 +200,37 @@ void main() {
       }
     });
 
-    test('an alias is checked before the renderable set — upstream order', () {
-      // Upstream tests deprecatedVariants first, so a name that is both an
-      // alias and a real variant would resolve as the alias. Neither name
-      // currently collides; this pins the ordering so a future one cannot
-      // silently take the wrong branch.
+    test('no upstream name carries two meanings — what makes one scan safe', () {
+      // **This replaces a test that could not fail.** It was named "an alias is
+      // checked before the renderable set — upstream order" and asserted
+      // `fromUpstreamName('geometric') == beam`, which is true under *any*
+      // iteration order, because `upstreamName` is unique: measured in #59's
+      // completeness pass, `for (final v in values.reversed)` left the whole
+      // suite green. It pinned an ordering the code does not implement.
+      //
+      // Uniqueness is the real condition. Upstream checks its alias map first,
+      // so a name in both sets resolves as the alias; our single scan meets
+      // the renderables first and would answer the other way. Nothing can
+      // observe that while this holds — and the day it stops, this fails and
+      // `fromUpstreamName` has to become two stages.
+      final names = BoringAvatarsVariant.values
+          .map((v) => v.upstreamName)
+          .toList();
+      expect(names.toSet(), hasLength(names.length));
+
+      final aliases = BoringAvatarsVariant.values
+          .where((v) => !BoringAvatarsVariant.renderable.contains(v))
+          .map((v) => v.upstreamName)
+          .toSet();
+      final renderable = BoringAvatarsVariant.renderable
+          .map((v) => v.upstreamName)
+          .toSet();
       expect(
-        BoringAvatarsVariant.fromUpstreamName('geometric'),
-        BoringAvatarsVariant.beam,
+        aliases.intersection(renderable),
+        isEmpty,
+        reason: 'a name in both sets makes the scan order observable',
       );
+      expect(aliases, hasLength(2));
     });
   });
 }

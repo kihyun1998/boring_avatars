@@ -344,6 +344,64 @@ before anyone has calibrated it. A harness whose failure mode is "reports the
 opposite of the truth" has to be able to say "I did not measure anything" —
 and it has to say it in the exit status, not only in the log.
 
+### Closing a fan-out gap on one axis leaves the next axis open (#59)
+
+The entry below records `size` being compared to upstream on `marble` only.
+Widening it per variant closed that — and the completeness pass then measured
+that the fix had moved the hole rather than removed it. With the widened
+section still running **one name, one palette and `square: false`**, two arms
+could be broken with all 677 tests green:
+
+- honour `size` only when the name is `Clara Barton`;
+- drop `size` whenever `square` is set.
+
+Both survive because the second axis never varies *alongside* the first. And
+the **String** half of `size`'s public type was worse: covered on `marble`
+alone, against the package's own 80-render rather than upstream's, with the
+upstream half supplied by a probe that had been deleted after it ran — which is
+two of this repo's own rules at once (a fixture that agrees with itself, and a
+claim whose evidence cannot be re-run).
+
+`sizePassthrough` is now `variant × name × square`, each at both sizes, and
+`sizePassthroughStrings` carries the String half for all six.
+
+**The rule this earns:** the previous entry said the unit is "the prop varies
+on every path that carries it". That was still one axis short. A prop is
+covered where it varies **on a path something else varies on too** — otherwise
+the fixture proves the prop reaches the output, never that it survives contact
+with the rest of the input. Closing a coverage gap is the moment to ask which
+axis the fix *froze*.
+
+### Two lenses predicted nine survivors and all nine survived (#59)
+
+The completeness pass ran as two lenses over the same material with opposite
+jobs — one hunting gaps, one attacking the *evidence*. Between them they
+proposed nine mutations the committed 14-case set was claimed to cover, each
+with a prediction. **All nine survived**, including two the case file's own
+notes said were guarded.
+
+What makes it worth recording is the shape of the miss. Fourteen mutants had
+died an hour earlier, and the conclusion drawn from that was "the dispatch is
+covered". The fourteen were all mutations *I* thought of, and they shared a
+blind spot with the tests I had written moments before — both were built from
+the same mental model of what could go wrong. A green mutation run says the
+tests kill the mutants someone imagined; it cannot say the imagination was
+complete.
+
+Two of the nine then turned out to be **inert rather than defective**, and only
+running them showed which: a re-export leak that a `show` clause had already
+made impossible (measured both ways — `SvgNode` is undefined at the barrel with
+the `show`, and resolves without it), and an iteration-order swap that no unique
+key set can observe. Both were dropped from the permanent case file rather than
+kept, because a case that cannot die makes the runner's non-zero exit
+meaningless — the guard for each moved to the property that *can* fail.
+
+**The rule this earns:** on a surface that is about to be published, the
+mutation set you wrote alongside the tests is not independent evidence about
+those tests. Buy the second opinion, brief it on the *proof* rather than the
+code — and when its findings survive, sort them into "unguarded" and "already
+impossible" by running them, because those two look identical in the report.
+
 ### A prop compared to upstream on one variant is compared on none of the rest (#59)
 
 Third occurrence of #37's rule, and the first where the gap was *created* by a

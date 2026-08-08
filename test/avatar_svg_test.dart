@@ -35,6 +35,8 @@ void main() {
   final renders = svgFixture['renders'] as Map<String, dynamic>;
   final squareRenders = svgFixture['squareRenders'] as Map<String, dynamic>;
   final sizePassthrough = svgFixture['sizePassthrough'] as Map<String, dynamic>;
+  final sizePassthroughStrings =
+      svgFixture['sizePassthroughStrings'] as Map<String, dynamic>;
   final matrixSize = svgFixture['matrixSize'] as int;
 
   /// Generated ids are internal references, erased on **both** sides — see
@@ -168,78 +170,105 @@ void main() {
         );
         compared++;
       }
+      // `compared` increments in both branches, so it can only catch a loop
+      // that ran short — not a section covering five variants. The key sweep
+      // below is what answers that, and `dispatched[parts[0]]!` cannot: it
+      // throws on an *unknown* prefix and says nothing about a missing one.
       expect(compared, squareRenders.length);
       expect(squareRenders, hasLength(60));
+      expect(
+        squareRenders.keys.map((k) => k.split('|').first).toSet(),
+        dispatched.keys.toSet(),
+        reason: 'every variant, not a subset',
+      );
     });
   });
 
   group('size is injected policy and reaches nothing but width/height', () {
-    test('every variant, at both sizes, against upstream', () {
-      // **Every arm, not one.** This section covered `marble` alone until #59,
-      // and the dispatch is what made that a hole rather than a redundancy:
-      // measured here before it was widened, hardcoding `size: 80` on the
-      // `ring`, `beam`, `pixel`, `sunset` or `bauhaus` arm left all 677 tests
-      // green, because the main matrix renders at exactly that number and only
-      // `marble` had a second one to disagree with. Five of six arms could
-      // discard the caller's size in silence.
+    test('every variant × name × square, at both sizes, against upstream', () {
+      // **Two axes, and the second one took two passes to earn.** The section
+      // covered `marble` alone until #59, so hardcoding `size: 80` on any of
+      // the other five arms passed all 677 tests. Widening it per variant
+      // closed that and left the next one open, which the completeness pass
+      // then measured: with one name and `square: false`, an arm honouring
+      // `size` only for `Clara Barton` — or dropping it whenever `square` is
+      // set — was *still* invisible. Both of those now go red.
       //
-      // Same shape as `square` before #37 — a prop the matrix never varies is
-      // a prop nobody has compared to upstream.
+      // The rule underneath, twice over: a prop is not covered because it
+      // varies somewhere, it is covered where it varies on a path something
+      // else varies on too.
+      final palette = (palettes.first['value'] as List).cast<String>();
       var compared = 0;
       for (final variant in BoringAvatarsVariant.renderable) {
-        for (final size in sizes) {
-          expect(
-            render(
-              variant,
-              names.first['value'] as String,
-              (palettes.first['value'] as List).cast<String>(),
-              size: size,
-            ),
-            sizePassthrough['${variant.upstreamName}|$size'] as String,
-            reason: '${variant.upstreamName} at $size',
-          );
-          compared++;
+        for (final id in <String>['upstream-default', 'empty']) {
+          final name =
+              names.firstWhere((n) => n['id'] == id)['value'] as String;
+          for (final size in sizes) {
+            for (final square in <bool>[false, true]) {
+              final key =
+                  '${variant.upstreamName}|$id|$size|${square ? 'sq' : 'rd'}';
+              expect(
+                render(variant, name, palette, size: size, square: square),
+                sizePassthrough[key] as String,
+                reason: key,
+              );
+              compared++;
+            }
+          }
         }
       }
       expect(
         compared,
-        BoringAvatarsVariant.renderable.length * sizes.length,
+        BoringAvatarsVariant.renderable.length * 2 * sizes.length * 2,
         reason: 'a slice that matched nothing would pass the loop above',
       );
       expect(sizePassthrough, hasLength(compared));
     });
 
-    test('a string size passes through verbatim', () {
-      // Measured against upstream 1.6.1 with a throwaway probe (#59): `'100%'`,
-      // `'2rem'` and `'40px'` all land in `width`/`height` unchanged and leave
-      // every other byte identical to `size: 80`. The corpus renders only
-      // numbers, so the *comparison* below is against our own 80 render — what
-      // the probe supplies is the upstream half of the claim.
-      const numeric = 80;
-      final control = render(BoringAvatarsVariant.marble, 'Clara Barton', [
-        '#92A1C6',
-        '#146A7C',
-      ]);
-      for (final size in <String>['100%', '2rem', '40px', '80']) {
-        final actual = render(BoringAvatarsVariant.marble, 'Clara Barton', [
-          '#92A1C6',
-          '#146A7C',
-        ], size: size);
-        expect(actual, contains('width="$size" height="$size"'));
+    test('a string size passes through verbatim, on every variant', () {
+      // The other half of the public parameter's type. Until #59's
+      // completeness pass this was a *throwaway probe* — run once, deleted —
+      // plus a comparison of the package against its own 80-render, on
+      // `marble` alone. Both halves of that are things this repo has written
+      // rules against: a claim whose evidence cannot be re-run, and a fixture
+      // that agrees with itself.
+      //
+      // `a"b` is here because an unrecognised attribute value still goes
+      // through React's escaping: upstream writes `width="a&quot;b"`, so this
+      // is the case where passthrough and serialisation meet.
+      var compared = 0;
+      for (final entry in sizePassthroughStrings.entries) {
+        final parts = entry.key.split('|');
+        final variant = dispatched[parts[0]]!;
         expect(
-          actual.replaceFirst('width="$size" height="$size"', 'width="§"'),
-          control.replaceFirst(
-            'width="$numeric" height="$numeric"',
-            'width="§"',
+          render(
+            variant,
+            names.first['value'] as String,
+            (palettes.first['value'] as List).cast<String>(),
+            size: parts.sublist(1).join('|'),
           ),
-          reason: 'a string size moved something other than width/height',
+          entry.value as String,
+          reason: entry.key,
         );
+        compared++;
       }
+      expect(compared, sizePassthroughStrings.length);
+      expect(
+        sizePassthroughStrings.keys.map((k) => k.split('|').first).toSet(),
+        dispatched.keys.toSet(),
+        reason: 'every variant, not a subset',
+      );
     });
 
     test('anything that is not a number or a string is rejected', () {
       // The scene's own guard is an `assert`, which is stripped in release —
       // so the seam a caller reaches has to reject rather than mis-serialise.
+      //
+      // **`.name`, not just the type.** A bare `isA<ArgumentError>()` is
+      // satisfied by any rejection this function makes, including `beam`'s
+      // palette refusal three groups below — so it cannot tell a guard that
+      // names the wrong argument from one that names the right one. Measured:
+      // changing `'size'` to `'colors'` here survived the whole suite.
       for (final bad in <Object>[
         true,
         <int>[80],
@@ -252,7 +281,7 @@ void main() {
             size: bad,
             version: BoringAvatarsVersion.v1_6_1,
           ),
-          throwsA(isA<ArgumentError>()),
+          throwsA(isA<ArgumentError>().having((e) => e.name, 'name', 'size')),
           reason: '$bad',
         );
       }

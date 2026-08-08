@@ -29,6 +29,15 @@ import 'version.dart';
 /// byte for byte. Hand it to an SVG renderer, write it to a file, or inline it
 /// in a web page.
 ///
+/// **One exception, and it is deliberate.** With
+/// [BoringAvatarsVariant.sunset], a [name] containing `'`, `"`, `(`, `)`, `\`
+/// or a control character produces a gradient reference that differs from
+/// upstream's. Upstream builds that reference out of the name without escaping
+/// it, so the result is not a valid CSS url token and **the browser paints
+/// nothing** — a blank avatar, reproduced in Chrome. This package
+/// percent-encodes the reference so the avatar renders. Every other name, and
+/// every other variant, is byte-identical.
+///
 /// ```dart
 /// final svg = boringAvatarSvg(
 ///   name: 'Clara Barton',

@@ -710,6 +710,23 @@ runtime whether a parameter has a default.
 yes/no rather than grilled. `BoringAvatar` was kept free for the widget the
 module map already reserves it for.
 
+**Every barrel export carries a `show`, and the reason is not the library it
+names.** Without one, a re-export added *inside* an exported library reaches the
+public surface with the barrel unchanged — so the guard in
+`api_surface_test.dart`, which reads the barrel, sees nothing. Measured in #59:
+an `export 'scene/scene.dart';` inside `version.dart` made `SvgNode`,
+`SvgAttribute`, `SvgElement` and `escapeSvgText` importable from
+`package:boring_avatars/boring_avatars.dart` with the whole suite green; with
+the `show` in place the same edit leaves `SvgNode` an undefined class. The test
+therefore pins two things — the exact export list, and that every entry has a
+`show` — because the first alone is satisfied by a line that exports more than
+it says.
+
+**`lib/src/` stays importable, and that is not a contradiction.** `tool/` does
+it deliberately. "Does not leak" means *not reachable from the barrel*, which is
+what a pub.dev consumer is expected to import; Dart offers no stronger
+enforcement short of moving files, and this project has no reason to.
+
 ---
 
 ## Step 4 — proof method per layer
@@ -844,9 +861,25 @@ harmless while `size` was an argument to six separate builders and became a real
 hole the moment #59 put a dispatch in front of them: measured there, hardcoding
 `size: 80` on the `ring`, `beam`, `pixel`, `sunset` or `bauhaus` arm left **all
 677 tests green**, because the main matrix renders at exactly that number.
-`sizePassthrough` is now keyed `<variant>|<size>` and all six mutants die. Same
-sentence as the paragraph above, one level down — the unit is not "the prop
-appears somewhere", it is "the prop varies on every path that carries it".
+
+**Then the completeness pass measured that fixing it had moved the hole, not
+removed it.** With the section widened per variant but still running one name,
+one palette and `square: false`, an arm honouring `size` only for
+`Clara Barton` — or dropping it whenever `square` is set — was *still*
+invisible. So the unit is not "the prop varies on every path that carries it"
+either: it is **the prop varies on a path something else varies on too**.
+`sizePassthrough` is now `<variant>|<name>|<size>|<sq|rd>`, and
+`sizePassthroughStrings` carries the String half of `size`'s public type, which
+`corpus.sizes` (a list of `int`) structurally could not record — until #59 that
+half was a *deleted probe* plus a comparison against the package's own render.
+
+**A prop's fixture section is also the thing that ages when the prop's type
+widens.** `size` became `num | String` at the public seam in #59 and the section
+kept recording integers, which is why `test/fixtures_test.dart` now guards the
+string half by **reading** the emitted attribute rather than rebuilding it from
+the key — React escapes an unrecognised value like any other, so `a"b` arrives
+as `a&quot;b` and a guard that reconstructed the expected text would be
+asserting its own copy of the escaper.
 | **3 raster — regression** | our rasterizer vs **golden images committed to this repo** (raw RGBA under `test/goldens/`, not PNG — no encoder in the loop, so a decoder change cannot move a golden) | **0 diff, no exceptions.** Runs every `flutter test` |
 | **3 raster — parity calibration** | our rasterizer vs a **real Chrome render** | interior/background **0**; antialiased edge pixels **≤1/255**. Run **manually** when the rasterizer changes, not per commit |
 | **widget** | widget test asserting the produced `ui.Image` bytes, observed at the screen | as layer 3 |
