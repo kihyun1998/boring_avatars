@@ -174,22 +174,39 @@ void main() {
   });
 
   group('size is injected policy and reaches nothing but width/height', () {
-    test('upstream renders the same marble at 40 and at 80', () {
+    test('every variant, at both sizes, against upstream', () {
+      // **Every arm, not one.** This section covered `marble` alone until #59,
+      // and the dispatch is what made that a hole rather than a redundancy:
+      // measured here before it was widened, hardcoding `size: 80` on the
+      // `ring`, `beam`, `pixel`, `sunset` or `bauhaus` arm left all 677 tests
+      // green, because the main matrix renders at exactly that number and only
+      // `marble` had a second one to disagree with. Five of six arms could
+      // discard the caller's size in silence.
+      //
+      // Same shape as `square` before #37 — a prop the matrix never varies is
+      // a prop nobody has compared to upstream.
       var compared = 0;
-      for (final size in sizes) {
-        expect(
-          render(
-            BoringAvatarsVariant.marble,
-            names.first['value'] as String,
-            (palettes.first['value'] as List).cast<String>(),
-            size: size,
-          ),
-          sizePassthrough['$size'] as String,
-          reason: 'size $size',
-        );
-        compared++;
+      for (final variant in BoringAvatarsVariant.renderable) {
+        for (final size in sizes) {
+          expect(
+            render(
+              variant,
+              names.first['value'] as String,
+              (palettes.first['value'] as List).cast<String>(),
+              size: size,
+            ),
+            sizePassthrough['${variant.upstreamName}|$size'] as String,
+            reason: '${variant.upstreamName} at $size',
+          );
+          compared++;
+        }
       }
-      expect(compared, sizes.length);
+      expect(
+        compared,
+        BoringAvatarsVariant.renderable.length * sizes.length,
+        reason: 'a slice that matched nothing would pass the loop above',
+      );
+      expect(sizePassthrough, hasLength(compared));
     });
 
     test('a string size passes through verbatim', () {

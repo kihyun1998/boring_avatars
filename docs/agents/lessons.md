@@ -344,6 +344,41 @@ before anyone has calibrated it. A harness whose failure mode is "reports the
 opposite of the truth" has to be able to say "I did not measure anything" —
 and it has to say it in the exit status, not only in the log.
 
+### A prop compared to upstream on one variant is compared on none of the rest (#59)
+
+Third occurrence of #37's rule, and the first where the gap was *created* by a
+later change rather than shipped with the prop.
+
+`sizePassthrough` was added in #33 precisely because "a prop the matrix never
+varies is a prop nobody has compared to upstream". It rendered `marble` at 40
+and at 80. That was enough while `size` was an argument to six separate builders
+with six separate parity files, and stopped being enough the moment #59 put a
+dispatch in front of them — because a dispatch has six places to drop the
+argument and only one of them had a second number to disagree with.
+
+Measured, before it was widened: hardcoding `size: 80` on the `ring`, `beam`,
+`pixel`, `sunset` or `bauhaus` arm left **all 677 tests green**. Five of six arms
+could discard the caller's size in silence. The main matrix renders at exactly
+80, `sizePassthrough` was `marble`-only, and the string-size case was `marble`
+too — so nothing in the suite ever asked the other five to change size.
+
+The fix is #37's, applied one level down: the section is keyed `<variant>|<size>`
+and generated for all six. Regenerating changed **only** that section — `renders`,
+`squareRenders`, `maskIdentifiers`, `derivedIdentifiers` and `utilities.json`
+came back byte-identical, which is also the first independent confirmation that
+the harness reproduces its fixture on a second machine and a second Node major.
+
+`test/fixtures_test.dart`'s guard had to move with it, and that is its own small
+lesson: it asserted that *every* entry strips to one string, which was the whole
+check while the section held one variant and would now be a **failure** — six
+different avatars cannot strip to one. The premise aged, not the assertion.
+
+**The rule this earns:** the unit is not "the prop appears in a fixture", it is
+"the prop varies on every path that carries it". When a change introduces a new
+fan-out over an existing prop — a dispatch, a router, a factory — the prop's
+coverage has to fan out with it, and the way to find out is to hardcode the
+argument on each branch and watch which ones nobody notices.
+
 ### A default nobody can reach is unreachable code, not a convenience (#59)
 
 Nine mutations were run against the new dispatch and eight died. The survivor
