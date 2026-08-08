@@ -523,6 +523,52 @@ below the table.
 | **S-3** | `avatar-marble.js:56` @ v1.6.1 (still `avatar-marble.tsx:59` @ v2.0.x) | the first path takes its colour, translation and rotation from `properties[1]` and its **scale from `properties[2]`** — a copy-paste slip, five neighbouring reads all say `[1]`. Fixing it changes the output on **11 of 20 corpus names**, and on **75% of all hashes** by derivation: `getUnit(2h, 4)` is always even, so element 1's scale can only ever be 1.2 or 1.4, while element 2's `3h mod 4` reaches all four | **reproduce it — the reference is the specification** | 2026-08-07 |
 | **S-1** | `avatar-sunset.js:20,36,41` @ v1.6.1 | builds a gradient id from the caller's name and references it as `url(#…)`. For any name containing `'`, `"`, `(`, `)`, `\` or a control character the reference is not a valid CSS url token, so **the browser paints nothing** and the avatar is blank. Reproduced in Chrome: `O'Brien-Smith, Jr.` → all pixels `0,0,0,0`; `Clara Barton` → the gradient. The corpus name `punctuation` is exactly this case, and an apostrophe in a name is common | **repair it — do not reproduce the blank** | 2026-07-29 |
 | **S-2** | `avatar-beam.js:9,17` + `utilities.js:42` @ v1.6.1 | an **empty palette** makes `getRandomColor` return `undefined`, which `getContrast` calls `.slice(0, 1)` on — a `TypeError`, and no document at all. `beam` is the only one of the six that does this; the other five drop an attribute and render. Measured: 20 of 20 names throw, against 0 of 100 for the rest (hidden-state #8) | **reproduce the failure, in a Dart-idiomatic exception** | 2026-08-06 |
+| **S-4** | `avatar.js:18` @ v1.6.1 — `size = 40`, forwarded untyped to `width={props.size}` | a `size` that is **neither a number nor a string** is not validated anywhere. Measured at 1.6.1: `true` / `false` / `null` make React **drop `width` and `height` entirely** (with a dev-console warning), `[80]` coerces to `width="80"`, and `{}` renders `width="[object Object]"`. This package throws `ArgumentError` for all of them — a crash where upstream degrades, which is the failure mode hidden-state #8 and #15 name | **throw. Do not reproduce the degradation** | 2026-08-08 |
+
+### S-4 — the ruling, as an event
+
+**What the user was shown (2026-08-08):** the measurement below, taken from
+upstream 1.6.1 through the parity harness's own installed copy, beside what this
+package does for the same input.
+
+| `size` | upstream 1.6.1 | this package |
+|---|---|---|
+| `80` (control) | `width="80" height="80"` | same |
+| `true` / `false` / `null` | **`width` and `height` absent**, plus a React dev warning | `ArgumentError` |
+| `[80]` | `width="80"` | `ArgumentError` |
+| `{}` | `width="[object Object]"` | `ArgumentError` |
+| `undefined` | `width="40"` (upstream's own default) | not reachable — `size` is required |
+
+Two options, with what each costs:
+
+| option | what a caller gets | what it costs |
+|---|---|---|
+| throw | a failure naming the argument | a crash where upstream degrades — hidden-state #8's failure mode, in the direction this project has not taken before |
+| reproduce the degradation | upstream's bytes for every input | implementing JS's `String()` coercion **and** React's attribute-dropping rules, to emit `width="[object Object]"` faithfully |
+
+**What they chose:** throw — *"걍 에러 던져 그럼. 그런 상황만 아니면 똑같다는
+거잖아."* Their reasoning is the scope of the divergence, and it is worth
+recording as the ruling's own justification: every input a caller can plausibly
+mean — any number, any CSS length string — is byte-identical, and the divergence
+is confined to values that are not sizes at all.
+
+**Why this is not S-2, which went the other way.** There the *reference itself*
+failed and reproducing the failure was the only thing that matched, because
+upstream emitted no bytes to be identical to. Here upstream emits a perfectly
+good document and we refuse it. The two rulings differ because the question
+does: S-2 asked "do we reproduce a crash", this asks "do we reproduce a
+coercion". Upstream's behaviour here is not a designed degrade — React prints
+`Received true for a non-boolean attribute` precisely to tell the author they
+made a mistake — so reproducing it means reproducing a bug report.
+
+**It is theirs to reverse.** A product judgement about an API's shape, not a
+derivation. A later argument that the port should be faithful above all does
+**not** reopen it; only the user does.
+
+**What it costs.** `boringAvatarSvg` is not byte-identical to upstream for a
+`size` that is neither a `num` nor a `String` — it produces no bytes at all.
+`avatar_svg_test.dart` asserts the throw *and* the argument it names, so a guard
+that rejected something wider, or blamed the wrong parameter, fails.
 
 ### S-3 — the ruling, as an event
 

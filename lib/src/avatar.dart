@@ -70,9 +70,11 @@ import 'version.dart';
 /// * [size] lands on the `<svg>` element's `width` and `height` and reaches
 ///   nothing else — the drawing's own coordinate space is a per-variant
 ///   constant. Pass a [num] for `width="80"` or a [String] for anything CSS
-///   accepts, such as `'100%'`; anything else is an [ArgumentError]. It has no
-///   default on purpose: what an unspecified size should mean is upstream's
-///   own moving target, and this package would rather not answer it for you.
+///   accepts, such as `'100%'`. Anything else is an [ArgumentError]: upstream
+///   would quietly coerce it, and this package would rather tell you. It has
+///   no default on purpose — what an unspecified size should mean is
+///   upstream's own moving target, and this package would rather not answer it
+///   for you.
 /// * [version] names the upstream release to reproduce, and has **no default**.
 ///   That is deliberate: a default of "newest" would silently redraw every
 ///   avatar in your app the day you upgraded this package. Pass
@@ -124,10 +126,19 @@ SvgNode buildAvatarScene({
   required BoringAvatarsVariant variant,
   required bool square,
 }) {
+  // **Upstream does not reject this, and throwing anyway is a ruling** — S-4
+  // in the divergence ledger, decided by the user on 2026-08-08. Measured at
+  // 1.6.1: `true`/`false`/`null` make React drop `width` and `height`
+  // entirely, `[80]` coerces to `width="80"`, and `{}` renders
+  // `width="[object Object]"`. Reproducing that means implementing JS's
+  // `String()` coercion and React's attribute-dropping rules in order to emit
+  // a value React itself warns the author about. Every input a caller can
+  // plausibly mean — any number, any CSS length string — stays byte-identical.
+  //
   // The scene's own check is an `assert`, which is compiled out of a release
-  // build — so the value would reach `SvgAttribute.formattedValue` and fail
-  // there as a cast, naming an internal type at a caller who passed a `bool`.
-  // A public seam rejects, and says which argument.
+  // build — so the value would otherwise reach `SvgAttribute.formattedValue`
+  // and fail there as a cast, naming an internal type at a caller who passed a
+  // `bool`. A public seam rejects, and says which argument.
   if (size is! num && size is! String) {
     throw ArgumentError.value(
       size,
