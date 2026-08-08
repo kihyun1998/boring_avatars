@@ -261,30 +261,35 @@ void main() {
             .cast<String, String>();
         expect(bySize.length, greaterThanOrEqualTo(2));
 
-        // **Grouped by variant since #59.** The section held one variant's
-        // renders from #33 to #59, so every entry stripping to the same string
-        // was the whole check; it now holds all six, and six different avatars
-        // stripping to one string would be the *failure*. The premise aged,
-        // not the assertion — what it asks is still "did `size` reach anything
-        // but the svg element's own width and height".
-        final byVariant = <String, Set<String>>{};
+        // **Grouped by everything except the size itself.** The section held
+        // one variant from #33 to #59, so "every entry strips to one string"
+        // was the whole check; it now varies variant, name and `square` too,
+        // and those renders are *supposed* to differ. What survives unchanged
+        // is the question — did `size` reach anything but the svg element's
+        // own width and height — asked once per (variant, name, square).
+        final byCase = <String, Set<String>>{};
         for (final e in bySize.entries) {
-          final variant = e.key.split('|').first;
+          final parts = e.key.split('|');
           expect(
-            e.key.split('|'),
-            hasLength(2),
-            reason: 'a key is <variant>|<size>',
+            parts,
+            hasLength(4),
+            reason: 'a key is <variant>|<name>|<size>|<sq|rd>',
           );
-          (byVariant[variant] ??= <String>{}).add(
+          (byCase['${parts[0]}|${parts[1]}|${parts[3]}'] ??= <String>{}).add(
             e.value.replaceAll(RegExp(r'(width|height)="\d+"'), r'$1="_"'),
           );
         }
         expect(
-          byVariant,
+          byCase.keys.map((k) => k.split('|').first).toSet(),
           hasLength(6),
           reason: 'every variant carries its own size renders, not just one',
         );
-        for (final e in byVariant.entries) {
+        expect(
+          byCase,
+          hasLength(6 * 2 * 2),
+          reason: 'variant × name × square, each at both sizes',
+        );
+        for (final e in byCase.entries) {
           expect(
             e.value,
             hasLength(1),
@@ -293,6 +298,39 @@ void main() {
                 'attributes',
           );
         }
+      });
+
+      test('a string size is a passthrough too, and no \\d+ strip sees it', () {
+        final json =
+            jsonDecode(File('$dir/svg.json').readAsStringSync())
+                as Map<String, dynamic>;
+        final byString =
+            (json['sizePassthroughStrings'] as Map<String, dynamic>)
+                .cast<String, String>();
+        expect(byString, hasLength(30));
+
+        // The attribute is **read**, not rebuilt from the key: React escapes
+        // the value like any other, so the `a"b` case reaches the document as
+        // `a&quot;b` and a guard that reconstructed it would be asserting its
+        // own copy of the escaper. What matters here is the shape — width and
+        // height carry the same value, and nothing else moved.
+        final stripped = <String>{};
+        for (final e in byString.entries) {
+          final pair = RegExp(
+            r'^<svg [^>]*? width="([^"]*)" height="([^"]*)"',
+          ).firstMatch(e.value);
+          expect(pair, isNotNull, reason: e.key);
+          expect(pair!.group(2), pair.group(1), reason: e.key);
+          stripped.add(
+            '${e.key.split('|').first}::'
+            '${e.value.replaceFirst(pair.group(0)!, '_')}',
+          );
+        }
+        expect(
+          stripped,
+          hasLength(6),
+          reason: 'a string size moved something other than width/height',
+        );
       });
     });
   }

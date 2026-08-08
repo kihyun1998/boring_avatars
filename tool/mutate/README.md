@@ -53,6 +53,20 @@ The runner **caught itself** on the second of those the first time it ran: its
 Exit status is 0 only when everything was killed. A stale case is a failure, so
 that nobody has to notice it in the log.
 
+## What this harness structurally cannot measure
+
+**A compile-time guarantee.** A mutation that fails to compile produces zero
+tests, which the runner reports as `NO TESTS` — correctly, since it measured
+nothing. So a claim of the form *"this cannot be got wrong, the compiler
+refuses it"* can never appear here as a `killed`, and a case file that tried
+would be a permanently red case.
+
+Found in #59, whose exhaustive `switch (version)` is exactly such a claim: a
+future selector value cannot be added without dispatching it. That is true —
+verified separately, a non-exhaustive enum switch *expression* is an error in
+both the analyzer and the CFE — but the evidence is a language property
+asserted by hand, not a dead mutant. Say so when a commit leans on one.
+
 ## What a surviving mutant means
 
 Three questions, from `docs/agents/lessons.md`, in order:

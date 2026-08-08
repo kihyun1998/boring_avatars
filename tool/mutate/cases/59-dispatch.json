@@ -23,7 +23,27 @@
     "a deletion rather than a test: `buildAvatarScene` carried its own",
     "`variant`/`square` defaults, which its only caller always overrides. Both are",
     "now required, and the case targets the public function's default \u2014 the one a",
-    "caller can actually reach."
+    "caller can actually reach.",
+    "",
+    "Group C is the #59 completeness pass's harvest \u2014 every one of these SURVIVED",
+    "the 14-case run and the whole 677-test suite. Two lenses predicted all of",
+    "them green and all nine were. They are kept because each names a distinct",
+    "way for the dispatch to drop an argument that nothing else was watching.",
+    "",
+    "Two mutations were harvested and then **dropped**, because each survives by",
+    "design rather than by neglect \u2014 and a case that cannot die would make the",
+    "runner's non-zero exit meaningless:",
+    "",
+    "  * `export 'scene/scene.dart';` inside version.dart. It leaked the whole",
+    "    scene model onto the barrel before #59's completeness pass; with a `show`",
+    "    on every barrel export it is inert. Measured both ways: with the show,",
+    "    `SvgNode` is an undefined class at the barrel; without it, it resolves.",
+    "    What guards the property is `a barrel export loses its show clause`.",
+    "  * `for (final v in values.reversed)`. A single scan over unique keys is",
+    "    order-independent, so no order is observable \u2014 which is exactly why the",
+    "    ordering test that used to sit in api_surface_test.dart could not fail.",
+    "    What guards it is uniqueness, so `two variants claim the same upstream",
+    "    name` is the case that replaced it."
   ],
   "cases": [
     {
@@ -136,6 +156,70 @@
       "file": "lib/boring_avatars.dart",
       "from": "export 'src/avatar.dart' show boringAvatarSvg;",
       "to": "export 'src/avatar.dart';",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "a String size is coerced away on the ring arm",
+      "file": "lib/src/avatar.dart",
+      "from": "      BoringAvatarsVariant.ring => buildRingScene(\n        name: name,\n        colors: colors,\n        size: size,",
+      "to": "      BoringAvatarsVariant.ring => buildRingScene(\n        name: name,\n        colors: colors,\n        size: size is String ? 80 : size,",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "a String size is coerced away on the bauhaus arm",
+      "file": "lib/src/avatar.dart",
+      "from": "      BoringAvatarsVariant.bauhaus => buildBauhausScene(\n        name: name,\n        colors: colors,\n        size: size,",
+      "to": "      BoringAvatarsVariant.bauhaus => buildBauhausScene(\n        name: name,\n        colors: colors,\n        size: size is String ? 80 : size,",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "size is honoured for one name only, on marble",
+      "file": "lib/src/avatar.dart",
+      "from": "      BoringAvatarsVariant.marble => buildMarbleScene(\n        name: name,\n        colors: colors,\n        size: size,",
+      "to": "      BoringAvatarsVariant.marble => buildMarbleScene(\n        name: name,\n        colors: colors,\n        size: name == 'Clara Barton' ? size : 80,",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "size is dropped whenever square is set, on sunset",
+      "file": "lib/src/avatar.dart",
+      "from": "      BoringAvatarsVariant.sunset => buildSunsetScene(\n        name: name,\n        colors: colors,\n        size: size,",
+      "to": "      BoringAvatarsVariant.sunset => buildSunsetScene(\n        name: name,\n        colors: colors,\n        size: square ? 80 : size,",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "a barrel export loses its show clause",
+      "file": "lib/boring_avatars.dart",
+      "from": "export 'src/variant.dart' show BoringAvatarsVariant;",
+      "to": "export 'src/variant.dart';",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "the size rejection names the wrong argument",
+      "file": "lib/src/avatar.dart",
+      "from": "    throw ArgumentError.value(\n      size,\n      'size',",
+      "to": "    throw ArgumentError.value(\n      size,\n      'colors',",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "latest stops being the newest declared value",
+      "file": "lib/src/version.dart",
+      "from": "  static const BoringAvatarsVersion latest = v1_6_1;",
+      "to": "  static const BoringAvatarsVersion latest = BoringAvatarsVersion.values[0];",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "two variants claim the same upstream name",
+      "file": "lib/src/variant.dart",
+      "from": "  /// Deprecated upstream \u2014 an alias for [beam].\n  geometric('geometric'),",
+      "to": "  /// Deprecated upstream \u2014 an alias for [beam].\n  geometric('marble'),",
       "expectEdits": 1
     }
   ]

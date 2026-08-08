@@ -65,10 +65,24 @@ enum BoringAvatarsVariant {
 
   /// Resolves an upstream `variant` string the way upstream's `avatar.js` does.
   ///
-  /// Aliases are checked first, then the dispatched set, and anything else
-  /// degrades to [fallback] — upstream never throws here, so neither does this.
-  /// That order is upstream's, and it matters if a future release ever gives a
-  /// name both meanings.
+  /// Anything unrecognised degrades to [fallback] — upstream never throws
+  /// here, so neither does this.
+  ///
+  /// **This is one scan, not upstream's two stages, and that is only safe
+  /// because no name is in both sets.** Upstream tests its alias map before
+  /// its dispatched list, so a name carrying both meanings would resolve as
+  /// the alias; here the aliases are declared *last*, so the same name would
+  /// resolve as the renderable — the opposite answer. The condition that makes
+  /// the difference unobservable is the uniqueness of [upstreamName] across
+  /// [values], which `api_surface_test.dart` asserts directly. If a future
+  /// release ever gives one name two meanings, that assertion fails and this
+  /// has to become two stages.
+  ///
+  /// *(The doc here claimed the two-stage order until #59's completeness pass
+  /// measured that the code never had it — and that the test named for the
+  /// ordering passed under `values.reversed`, because unique keys make a
+  /// single scan order-independent. A test that cannot fail was pinning a
+  /// mechanism that did not exist.)*
   static BoringAvatarsVariant fromUpstreamName(String name) {
     for (final v in values) {
       if (v.upstreamName == name) return v.resolved;

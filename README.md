@@ -4,7 +4,8 @@ A bit-exact Dart port of
 [boring-avatars](https://github.com/boringdesigners/boring-avatars).
 
 Given the same name, palette and variant, this package produces the avatar the
-npm package produces — the same numbers, the same SVG, the same bytes.
+npm package produces — the same numbers, the same SVG, the same bytes. One
+deliberate exception is documented under [Where it differs on purpose](#where-it-differs-on-purpose).
 
 Every supported upstream release is reachable at once. npm needs a downgrade to
 render an older version's avatar; here it is a parameter.
@@ -61,6 +62,23 @@ Flutter version and rendering backend — covers what it produces. Today that is
 the SVG document. Its own deterministic rasterizer and a `BoringAvatar` widget
 follow in a later release; until then, the guarantee does not extend to whatever
 renderer you hand the string to.
+
+## Where it differs on purpose
+
+Exactly one input produces different bytes from upstream, and it is a bug fix
+rather than a drift.
+
+With `variant: sunset`, a name containing `'`, `"`, `(`, `)`, `\` or a control
+character makes upstream build a gradient reference that is not a valid CSS url
+token — so the browser resolves nothing and **paints a blank avatar**.
+Reproduced in Chrome: `O'Brien-Smith, Jr.` renders as fully transparent pixels.
+This package percent-encodes that reference, so the avatar renders. The
+gradient's own `id` stays byte-identical to upstream, and so does every other
+name and every other variant.
+
+An apostrophe in a name is common enough that reproducing the blank was judged
+the wrong trade. If you need upstream's exact bytes including its blanks, this
+is the one place you will not get them.
 
 ## An empty palette is not always an error
 

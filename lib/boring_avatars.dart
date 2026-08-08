@@ -11,9 +11,15 @@
 /// the releases each value covers.
 library;
 
-/// `avatar.dart` also holds the scene dispatch, which is **not** public: its
-/// return type is the internal drawing model, and exporting it would promise
-/// every element and ordering rule as API. Hence the `show`.
+/// **Every export names what it carries.** `avatar.dart` also holds the scene
+/// dispatch, whose return type is the internal drawing model — exporting the
+/// library would promise every element and ordering rule as API. The other two
+/// carry a `show` for a reason that is not about them: without one, a
+/// re-export added *inside* `variant.dart` or `version.dart` puts whatever it
+/// names on this surface without a line of this file changing, and the guard
+/// in `api_surface_test.dart` reads this file. Measured — an
+/// `export 'scene/scene.dart';` in `version.dart` shipped the whole scene
+/// model with the suite green.
 export 'src/avatar.dart' show boringAvatarSvg;
-export 'src/variant.dart';
-export 'src/version.dart';
+export 'src/variant.dart' show BoringAvatarsVariant;
+export 'src/version.dart' show BoringAvatarsVersion;

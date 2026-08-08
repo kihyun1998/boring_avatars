@@ -295,25 +295,67 @@ async function dumpSvg(pkg, corpus) {
   }
 
   /**
-   * `size`, for **every variant** — not just one.
+   * `size`, for every variant — and crossed with a second axis, because one
+   * axis was not enough twice running.
    *
-   * This section covered `marble` alone from #33 to #59, which is the same
-   * shape of hole `square` had until #37: a prop compared to upstream on one
-   * variant and to nothing on the other five. It went unnoticed while `size`
-   * was an argument to six separate builders, and became reachable the moment
-   * #59 put a dispatch in front of them — measured there, five of six arms
-   * could drop the caller's `size` entirely with the whole suite green,
-   * because the main matrix renders at `MATRIX_SIZE` and only `marble` had a
-   * second number to disagree with.
+   * The section covered `marble` alone from #33 to #59: a prop compared to
+   * upstream on one variant and to nothing on the other five, which is the
+   * hole `square` had until #37. It went unnoticed while `size` was an
+   * argument to six separate builders and became reachable the moment #59 put
+   * a dispatch in front of them — five of six arms could then drop the
+   * caller's `size` with the whole suite green.
    *
-   * One name and one palette per variant is enough: `size` cannot interact
-   * with the hash, and that is the claim these renders test rather than
-   * assume — if it did, the entry would stop matching the matrix at 80.
+   * Widening it per variant closed that and left the *next* one open, which
+   * the #59 completeness pass then measured: with one name, one palette and
+   * `square: false`, an arm honouring `size` only for `Clara Barton`, or
+   * dropping it whenever `square` is set, still passed all 677 tests. So the
+   * unit is not "the prop varies per variant" — it is "per variant, on a path
+   * where something else varies too".
+   *
+   * Two names (one of them the empty string, whose hash is 0) × two sizes ×
+   * both `square` values. The palette stays at one: `size` cannot interact
+   * with the palette without first interacting with the hash, which the two
+   * names already test.
    */
+  const sizeNames = ['upstream-default', 'empty'];
   const sizePassthrough = {};
   for (const variant of VARIANTS) {
-    for (const size of corpus.sizes) {
-      sizePassthrough[`${variant}|${size}`] = render({
+    for (const name of corpus.names.filter((n) => sizeNames.includes(n.id))) {
+      for (const size of corpus.sizes) {
+        for (const square of [false, true]) {
+          const key = `${variant}|${name.id}|${size}|${square ? 'sq' : 'rd'}`;
+          sizePassthrough[key] = render({
+            variant,
+            name: name.value,
+            colors: corpus.palettes[0].value,
+            size,
+            square,
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * `size` as a **string** — the other half of the public parameter's type.
+   *
+   * `corpus.sizes` is a list of integers, so no section here could ever record
+   * what upstream does with `'100%'`. Until #59's completeness pass that half
+   * was covered by a *throwaway probe*, deleted after it ran, and by a test
+   * comparing the package to its own 80-render on `marble` — which is this
+   * repo's own "a fixture that regenerates itself is not a proof" trap with
+   * the fixture left out entirely, and a claim whose evidence cannot be re-run
+   * is one nobody can check.
+   *
+   * React writes an unrecognised attribute value through the same escaping as
+   * any other, so `'a"b'` is here too: it is the case where the passthrough
+   * and the serialisation meet.
+   */
+  const sizeStrings = ['100%', '2rem', '40px', '80', 'a"b'];
+  const sizePassthroughStrings = {};
+  for (const variant of VARIANTS) {
+    for (const size of sizeStrings) {
+      sizePassthroughStrings[`${variant}|${size}`] = render({
         variant,
         name: corpus.names[0].value,
         colors: corpus.palettes[0].value,
@@ -329,6 +371,7 @@ async function dumpSvg(pkg, corpus) {
     maskIdentifiers,
     derivedIdentifiers,
     sizePassthrough,
+    sizePassthroughStrings,
   };
 }
 
