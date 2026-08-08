@@ -344,6 +344,28 @@ before anyone has calibrated it. A harness whose failure mode is "reports the
 opposite of the truth" has to be able to say "I did not measure anything" —
 and it has to say it in the exit status, not only in the log.
 
+### A default nobody can reach is unreachable code, not a convenience (#59)
+
+Nine mutations were run against the new dispatch and eight died. The survivor
+changed `buildAvatarScene`'s default `variant` from `marble` to `beam` and the
+whole suite stayed green — 677 tests, including a sweep that asserts the default
+variant is `marble` against upstream's own render.
+
+Not a weak test. `boringAvatarSvg` is the function's only caller and it always
+passes `variant` and `square` explicitly, so the internal defaults were a second
+copy of upstream's API defaults that nothing could read. The tempting fix — a
+test calling `buildAvatarScene` without them — would have manufactured a caller
+that does not exist in order to cover code no caller reaches.
+
+Both are now `required`. Upstream's defaults belong on the surface a caller
+meets, which is exactly one place.
+
+**The rule this earns** is `#39`'s third question ("is the code reachable at
+all?") arriving from a new direction: the previous instances were arithmetic no
+*variant* could reach, and this one is a parameter no *caller* can reach. A
+default is easy to read as harmless because it is not a branch — but it is a
+value, and a value nothing reads is the same finding.
+
 ### A concurrent agent in the same worktree invalidates a measurement (#39)
 
 Two completeness lenses ran in parallel against one checkout. One of them left

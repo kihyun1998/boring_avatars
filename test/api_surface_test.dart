@@ -1,7 +1,54 @@
+import 'dart:io';
+
 import 'package:boring_avatars/boring_avatars.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('the barrel', () {
+    test('exports three names and nothing else', () {
+      // A test that only *uses* the surface cannot notice the scene model
+      // leaking out beside it, and once published an accidental export is as
+      // irreversible as a deliberate one. `show` is what keeps the dispatch —
+      // which returns that model — off the public API.
+      final barrel = File('lib/boring_avatars.dart').readAsStringSync();
+      final exports = RegExp(
+        r'^export .*;',
+        multiLine: true,
+      ).allMatches(barrel).map((m) => m.group(0)!).toList();
+      expect(exports, <String>[
+        "export 'src/avatar.dart' show boringAvatarSvg;",
+        "export 'src/variant.dart';",
+        "export 'src/version.dart';",
+      ]);
+    });
+
+    test('the SVG function takes no default version', () {
+      // Not a style check. A default of `latest` would move the day a release
+      // adds a selector value — `0.3.0` changes `pixel`'s colours — silently
+      // redrawing every avatar in an app that upgraded. **Decided by the user
+      // on 2026-08-08**, shown the three options and what each costs; theirs
+      // to reverse, and not reversible by a passing argument alone.
+      //
+      // Asserted against the source because Dart offers no way to ask a
+      // function whether a parameter has a default.
+      final source = File('lib/src/avatar.dart').readAsStringSync();
+      expect(
+        source,
+        contains('required BoringAvatarsVersion version,'),
+        reason: 'version must stay required',
+      );
+      expect(
+        source,
+        isNot(contains('BoringAvatarsVersion version =')),
+        reason: 'a default version would move under callers on upgrade',
+      );
+      // `size` is the same class of promise, recorded in theflow.md: the
+      // 2.0.3/2.0.4 default-size change stays out of the version state only
+      // because the caller always supplies one.
+      expect(source, contains('required Object size,'));
+    });
+  });
+
   group('BoringAvatarsVersion', () {
     test('declares only the upstream versions this release supports', () {
       expect(BoringAvatarsVersion.values, <BoringAvatarsVersion>[

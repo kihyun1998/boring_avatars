@@ -37,7 +37,13 @@ enum BoringAvatarsVersion {
   /// Every upstream release this value reproduces exactly.
   final List<String> upstreamVersions;
 
-  /// The newest supported release — what you get unless you ask for an older
-  /// one.
+  /// The newest supported release.
+  ///
+  /// **This value moves.** It is `v1_6_1` today and becomes whatever the next
+  /// release adds, so an avatar rendered with it can change when you upgrade
+  /// this package — `0.3.0` alone redraws every `pixel` avatar. That is why
+  /// nothing defaults to it: `boringAvatarSvg` requires a `version`, and
+  /// passing `latest` is a deliberate choice to track upstream's newest rather
+  /// than to pin an avatar.
   static const BoringAvatarsVersion latest = v1_6_1;
 }
