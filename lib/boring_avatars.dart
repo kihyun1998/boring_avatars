@@ -11,5 +11,9 @@
 /// the releases each value covers.
 library;
 
+/// `avatar.dart` also holds the scene dispatch, which is **not** public: its
+/// return type is the internal drawing model, and exporting it would promise
+/// every element and ordering rule as API. Hence the `show`.
+export 'src/avatar.dart' show boringAvatarSvg;
 export 'src/variant.dart';
 export 'src/version.dart';

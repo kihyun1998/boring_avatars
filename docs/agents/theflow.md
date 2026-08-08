@@ -152,11 +152,18 @@ every tag from 1.6.1 to 2.0.2. Valid **as long as that stays true**; a release
 that changes the dispatch roster makes resolution version-dependent and this
 seam has to move.
 
-Public surface is the barrel `lib/boring_avatars.dart`.
+Public surface is the barrel `lib/boring_avatars.dart`. As of #59 it exports
+**three** names: the two enums and `boringAvatarSvg`. The third export carries a
+`show` clause — `lib/src/avatar.dart` also holds `buildAvatarScene`, whose return
+type is the scene model, and exporting that would ship every element, attribute
+and ordering rule as public API. `api_surface_test.dart` pins the export list
+literally, because a test that only *uses* the surface cannot see what leaks out
+beside it.
 
 | Module (`lib/src/`) | Layer | Role |
 |---|---|---|
 | `js/` | **1 data** | JS-semantics primitives — `hashCode`, `getNumber`, `jsMod`, `toSigned32`, `getDigit`, `getBoolean`, `getUnit`, `getRandomColor`, `getContrast`. **Sacred.** |
+| `avatar.dart` | **1 dispatch** + public seam | upstream's `avatar.js`: `(version, variant) →` a scene, with the alias/degrade rules delegated to `variant.dart` rather than restated. Plus `boringAvatarSvg`, the only thing the barrel exports |
 | `variants/<name>.dart` | **1 data** + **2 scene** | per-variant value generation and its scene. Flat while one upstream state is supported; a second state that *draws differently* is what would split it. **Sacred.** |
 | `scene/` | **2 scene** | resolved drawing description — paths, transforms, fills, gradients, filters. Backend-neutral. |
 | `svg/` | **2 scene** | scene → SVG string (the byte-parity surface) |
@@ -656,6 +663,42 @@ returns `NoSuchKey` for `boring_avatars`). The SDK-floor constraint, the
 two-consumer signal, and the after-merge downstream loop all assume consumers
 that cannot be seen from here. Re-read them at first publish, not before.
 
+### The public surface — the rulings, as events (#59)
+
+**`version` has no default. Decided by the user on 2026-08-08**, and it is
+theirs to reverse. A product judgement about the API's shape, not a derivation:
+a later argument that a default is friendlier does **not** reopen it.
+
+**What they were shown**, and why the question existed at all: two artifacts in
+this repo required opposite things. `version.dart`'s shipped doc-comment said
+the newest release is *"what you get unless you ask for an older one"* — which
+promises a default of `latest` — while `CLAUDE.md`'s freeze invariant exists
+because changing a selector's output "silently rewrites the profile picture of
+every user of every app that depends on this package". A `latest` default makes
+the *effective* selector move on upgrade, which is that failure by another
+route. Three options, with what each costs:
+
+| option | what a caller gets | what it costs |
+|---|---|---|
+| **required** | an avatar frozen at the version they named | every call site carries a `version:` |
+| `latest` | the shortest call | `0.2.0` silently drops `<title>`; `0.3.0` redraws every `pixel` avatar |
+| `v1_6_1` fixed | a default that never moves | the default is the *oldest* supported release, so a caller who does not think about it gets a `pixel` that differs from today's npm |
+
+**What they chose:** required. `latest` stays on the enum — passing it is now an
+explicit decision to track upstream's newest rather than to pin an avatar, and
+its doc-comment says so instead of promising the default.
+
+**The same reasoning already governs `size`**, which is why it is required too —
+see the ladder's note on 2.0.3/2.0.4, whose default-size change stays out of the
+version state only *because* the caller always supplies one. Both are pinned in
+`api_surface_test.dart` against the source text, since Dart cannot be asked at
+runtime whether a parameter has a default.
+
+**The surface is a top-level function, `boringAvatarSvg`. Decided by the user on
+2026-08-08** from a derived recommendation — an API-shape call, presented for a
+yes/no rather than grilled. `BoringAvatar` was kept free for the widget the
+module map already reserves it for.
+
 ---
 
 ## Step 4 — proof method per layer
@@ -1132,9 +1175,11 @@ scope" above. It emits junk attributes no other version does.
 
 **`0.1.0` ships SVG only.** Decided by the user on 2026-07-29: the public surface
 is a function returning the SVG string, which is what upstream itself produces
-and is a complete product on its own. The widget and its device-pixel
-rasterisation (#58, #59) follow in a later release rather than blocking the first
-one. A Flutter caller therefore needs a third-party SVG renderer for `0.1.0`, and
+and is a complete product on its own — `boringAvatarSvg`, built in #59. The
+widget and the rasteriser scaling it needs (#58) follow in a later release
+rather than blocking the first one. *(This sentence cited #59 as one of the
+deferred items until #59 itself was worked; #59 is the surface `0.1.0` ships,
+not something it defers.)* A Flutter caller therefore needs a third-party SVG renderer for `0.1.0`, and
 the package's determinism guarantee applies to the raster path only — say so in
 the README rather than leaving it implied.
 

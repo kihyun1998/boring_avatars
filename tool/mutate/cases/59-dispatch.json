@@ -1,0 +1,99 @@
+{
+  "issue": 59,
+  "what": "the public SVG surface — the version x variant dispatch and its seam checks",
+  "test": null,
+  "note": [
+    "`test: null` — the whole suite. The point of this ticket's mutations is that",
+    "the *dispatch* is the only new mechanism: every builder underneath it was",
+    "already proved by its own parity file, so a mutation here has to be killed by",
+    "the new sweep and not by a sibling. Narrowing the run would hide which.",
+    "",
+    "Group A is the dispatch itself — what upstream's avatar.js decides. Group B",
+    "is the public seam's own promises: the arguments that have no default, the",
+    "type check the scene model can only assert, and what the barrel exports.",
+    "",
+    "A6 is the one that does not perturb a value but *hardcodes* one, and it is",
+    "the case the main 600-render sweep is blind to by construction: the matrix",
+    "renders at 80, so `size: 80` reproduces it exactly. Only sizePassthrough's",
+    "40 and the string-size case can see it.",
+    "",
+    "A4 caught the run's one survivor, and the fix was a deletion rather than a",
+    "test: `buildAvatarScene` carried its own `variant`/`square` defaults, which",
+    "its only caller always overrides. Both are now required, and A4 targets the",
+    "public function's default — the one a caller can actually reach."
+  ],
+  "cases": [
+    {
+      "group": "A",
+      "name": "ring dispatches to marble's builder",
+      "file": "lib/src/avatar.dart",
+      "from": "      BoringAvatarsVariant.ring => buildRingScene(",
+      "to": "      BoringAvatarsVariant.ring => buildMarbleScene(",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "bauhaus and sunset swap builders",
+      "file": "lib/src/avatar.dart",
+      "from": "      BoringAvatarsVariant.bauhaus => buildBauhausScene(",
+      "to": "      BoringAvatarsVariant.bauhaus => buildSunsetScene(",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "the deprecated aliases are not resolved before dispatch",
+      "file": "lib/src/avatar.dart",
+      "from": "BoringAvatarsVersion.v1_6_1 => switch (variant.resolved) {",
+      "to": "BoringAvatarsVersion.v1_6_1 => switch (variant) {",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "the default variant is beam, not upstream's marble",
+      "file": "lib/src/avatar.dart",
+      "from": "  BoringAvatarsVariant variant = BoringAvatarsVariant.marble,\n  bool square = false,\n}) => emitSvg(",
+      "to": "  BoringAvatarsVariant variant = BoringAvatarsVariant.beam,\n  bool square = false,\n}) => emitSvg(",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "square is dropped on the way to pixel",
+      "file": "lib/src/avatar.dart",
+      "from": "      BoringAvatarsVariant.pixel => buildPixelScene(\n        name: name,\n        colors: colors,\n        size: size,\n        square: square,\n      ),",
+      "to": "      BoringAvatarsVariant.pixel => buildPixelScene(\n        name: name,\n        colors: colors,\n        size: size,\n        square: false,\n      ),",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "size is hardcoded to the matrix size on the way to marble",
+      "file": "lib/src/avatar.dart",
+      "from": "      BoringAvatarsVariant.marble => buildMarbleScene(\n        name: name,\n        colors: colors,\n        size: size,",
+      "to": "      BoringAvatarsVariant.marble => buildMarbleScene(\n        name: name,\n        colors: colors,\n        size: 80,",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "the public seam stops rejecting a size that is neither num nor String",
+      "file": "lib/src/avatar.dart",
+      "from": "  if (size is! num && size is! String) {",
+      "to": "  if (false) {",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "version gains a default, so it moves under callers on upgrade",
+      "file": "lib/src/avatar.dart",
+      "from": "  required BoringAvatarsVersion version,\n  BoringAvatarsVariant variant = BoringAvatarsVariant.marble,\n  bool square = false,\n}) => emitSvg(",
+      "to": "  BoringAvatarsVersion version = BoringAvatarsVersion.latest,\n  BoringAvatarsVariant variant = BoringAvatarsVariant.marble,\n  bool square = false,\n}) => emitSvg(",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "the barrel exports the scene dispatch beside the SVG function",
+      "file": "lib/boring_avatars.dart",
+      "from": "export 'src/avatar.dart' show boringAvatarSvg;",
+      "to": "export 'src/avatar.dart';",
+      "expectEdits": 1
+    }
+  ]
+}
