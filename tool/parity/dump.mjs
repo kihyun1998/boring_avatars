@@ -294,14 +294,32 @@ async function dumpSvg(pkg, corpus) {
     derivedIdentifiers[variant] = perName;
   }
 
+  /**
+   * `size`, for **every variant** — not just one.
+   *
+   * This section covered `marble` alone from #33 to #59, which is the same
+   * shape of hole `square` had until #37: a prop compared to upstream on one
+   * variant and to nothing on the other five. It went unnoticed while `size`
+   * was an argument to six separate builders, and became reachable the moment
+   * #59 put a dispatch in front of them — measured there, five of six arms
+   * could drop the caller's `size` entirely with the whole suite green,
+   * because the main matrix renders at `MATRIX_SIZE` and only `marble` had a
+   * second number to disagree with.
+   *
+   * One name and one palette per variant is enough: `size` cannot interact
+   * with the hash, and that is the claim these renders test rather than
+   * assume — if it did, the entry would stop matching the matrix at 80.
+   */
   const sizePassthrough = {};
-  for (const size of corpus.sizes) {
-    sizePassthrough[`${size}`] = render({
-      variant: 'marble',
-      name: corpus.names[0].value,
-      colors: corpus.palettes[0].value,
-      size,
-    });
+  for (const variant of VARIANTS) {
+    for (const size of corpus.sizes) {
+      sizePassthrough[`${variant}|${size}`] = render({
+        variant,
+        name: corpus.names[0].value,
+        colors: corpus.palettes[0].value,
+        size,
+      });
+    }
   }
 
   return {

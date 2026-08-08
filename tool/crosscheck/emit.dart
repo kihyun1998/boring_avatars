@@ -17,12 +17,9 @@ import 'dart:io';
 
 import 'package:boring_avatars/src/scene/scene.dart';
 import 'package:boring_avatars/src/svg/emitter.dart';
-import 'package:boring_avatars/src/variants/bauhaus.dart';
-import 'package:boring_avatars/src/variants/beam.dart';
-import 'package:boring_avatars/src/variants/marble.dart';
-import 'package:boring_avatars/src/variants/pixel.dart';
-import 'package:boring_avatars/src/variants/ring.dart';
-import 'package:boring_avatars/src/variants/sunset.dart';
+import 'package:boring_avatars/src/avatar.dart';
+import 'package:boring_avatars/src/variant.dart';
+import 'package:boring_avatars/src/version.dart';
 
 /// **Every variant upstream dispatches at 1.6.1** — the full roster, not the
 /// ported subset.
@@ -44,14 +41,7 @@ const upstreamVariants = [
 ///
 /// All six as of #41 — `marble` was the last one missing, and the guard below
 /// is what made adding it here part of that change rather than a later sweep.
-const portedVariants = [
-  'marble',
-  'pixel',
-  'sunset',
-  'ring',
-  'bauhaus',
-  'beam',
-];
+const portedVariants = ['marble', 'pixel', 'sunset', 'ring', 'bauhaus', 'beam'];
 
 /// The size both sides are rendered at.
 ///
@@ -62,50 +52,32 @@ const portedVariants = [
 /// has compared to upstream (#37), which this incidentally does.
 const renderSize = 320;
 
+/// Builds through the package's own dispatch, not a second copy of it.
+///
+/// This switched on the variant string and called the six builders directly
+/// until #59, which is when a dispatch existed to duplicate. The harness's job
+/// is to compare *pictures*, and a mapping it maintains privately is one the
+/// shipped package could disagree with while this printed a pass.
+///
+/// `firstWhere` rather than `fromUpstreamName`: an unrecognised name here is a
+/// broken roster and has to throw, where a caller's unrecognised name degrades
+/// to `marble` because upstream degrades.
 SvgNode build(
   String variant,
   String name,
   List<String> colors, {
   required bool square,
-}) => switch (variant) {
-  'pixel' => buildPixelScene(
-    name: name,
-    colors: colors,
-    size: renderSize,
-    square: square,
+}) => buildAvatarScene(
+  name: name,
+  colors: colors,
+  size: renderSize,
+  version: BoringAvatarsVersion.v1_6_1,
+  variant: BoringAvatarsVariant.values.firstWhere(
+    (v) => v.upstreamName == variant,
+    orElse: () => throw ArgumentError('no builder for "$variant"'),
   ),
-  'ring' => buildRingScene(
-    name: name,
-    colors: colors,
-    size: renderSize,
-    square: square,
-  ),
-  'sunset' => buildSunsetScene(
-    name: name,
-    colors: colors,
-    size: renderSize,
-    square: square,
-  ),
-  'bauhaus' => buildBauhausScene(
-    name: name,
-    colors: colors,
-    size: renderSize,
-    square: square,
-  ),
-  'beam' => buildBeamScene(
-    name: name,
-    colors: colors,
-    size: renderSize,
-    square: square,
-  ),
-  'marble' => buildMarbleScene(
-    name: name,
-    colors: colors,
-    size: renderSize,
-    square: square,
-  ),
-  _ => throw ArgumentError('no builder for "$variant"'),
-};
+  square: square,
+);
 
 void main(List<String> args) {
   if (args.isEmpty) {

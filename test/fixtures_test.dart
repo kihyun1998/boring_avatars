@@ -260,16 +260,39 @@ void main() {
         final bySize = (json['sizePassthrough'] as Map<String, dynamic>)
             .cast<String, String>();
         expect(bySize.length, greaterThanOrEqualTo(2));
-        final stripped = bySize.values
-            .map(
-              (s) => s.replaceAll(RegExp(r'(width|height)="\d+"'), r'$1="_"'),
-            )
-            .toSet();
+
+        // **Grouped by variant since #59.** The section held one variant's
+        // renders from #33 to #59, so every entry stripping to the same string
+        // was the whole check; it now holds all six, and six different avatars
+        // stripping to one string would be the *failure*. The premise aged,
+        // not the assertion — what it asks is still "did `size` reach anything
+        // but the svg element's own width and height".
+        final byVariant = <String, Set<String>>{};
+        for (final e in bySize.entries) {
+          final variant = e.key.split('|').first;
+          expect(
+            e.key.split('|'),
+            hasLength(2),
+            reason: 'a key is <variant>|<size>',
+          );
+          (byVariant[variant] ??= <String>{}).add(
+            e.value.replaceAll(RegExp(r'(width|height)="\d+"'), r'$1="_"'),
+          );
+        }
         expect(
-          stripped,
-          hasLength(1),
-          reason: 'size reached the drawing, not just the svg attributes',
+          byVariant,
+          hasLength(6),
+          reason: 'every variant carries its own size renders, not just one',
         );
+        for (final e in byVariant.entries) {
+          expect(
+            e.value,
+            hasLength(1),
+            reason:
+                '${e.key}: size reached the drawing, not just the svg '
+                'attributes',
+          );
+        }
       });
     });
   }

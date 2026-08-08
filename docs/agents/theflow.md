@@ -8,13 +8,24 @@ gates to run. Per-incident evidence lives in [`lessons.md`](lessons.md).
 Identity & invariants live in `CLAUDE.md`. `CONTEXT.md` / `docs/adr/` do not
 exist yet — created lazily.
 
-**Environment:** Claude Code and the user share the same Windows machine. On
-`PATH`: Flutter 3.41.9, Node v26.4.0, npm 11.17.0 — run `flutter test` /
+**Environment:** Claude Code and the user share one machine, and **which one
+varies** — Windows (Flutter 3.41.9, Node v26.4.0, npm 11.17.0) through #58, and
+macOS (Flutter 3.44.8, Node v24.11.1) as of #59. Measure rather than assume:
+`flutter --version`, `node --version`. Either way, run `flutter test` /
 `analyze` / `dart format` and the Node parity harness directly (do not ask). The
 exception is anything that opens a window (`flutter run`) — ask the user to drive
 and say what to look for. **There are no CI gates**: the Step 7 gates are the
 only gates and they run here. The one GitHub Actions workflow this repo has is a
 *watcher*, not a gate (see Step 7).
+
+**Line endings are a property of the checkout, not of the repo.** `.gitattributes`
+declares `* text=auto` and the index is LF for all 80 text files — measured with
+`git ls-files --eol`. The worktree is what differs: CRLF under Windows'
+`core.autocrlf=true`, which is where `lessons.md`'s two CRLF incidents came from,
+and LF on macOS. So "the tree is CRLF" is a *machine* fact and was recorded here
+as a repo one until #59. `tool/mutate/run.mjs` already does the right thing —
+it reads the file's own ending — and a mutation pattern typed from the wrong
+assumption comes back `NO MATCH`, which is the outcome that exists for it.
 
 ---
 
@@ -825,6 +836,17 @@ carried a `sizePassthrough` section since #33 for exactly this reason; `square`
 did not until **#37**, and until then `pixel` had shipped with `square`
 asserted only against itself *and a golden committed for it*. `svg.json` now
 carries `squareRenders` — six variants × two names × five palettes.
+
+**And "has its own renders" is per *variant*, which took a third incident to
+learn.** `sizePassthrough` held `marble` alone from #33 to #59, so five of the
+six were compared to upstream at one size and to nothing at a second. It was
+harmless while `size` was an argument to six separate builders and became a real
+hole the moment #59 put a dispatch in front of them: measured there, hardcoding
+`size: 80` on the `ring`, `beam`, `pixel`, `sunset` or `bauhaus` arm left **all
+677 tests green**, because the main matrix renders at exactly that number.
+`sizePassthrough` is now keyed `<variant>|<size>` and all six mutants die. Same
+sentence as the paragraph above, one level down — the unit is not "the prop
+appears somewhere", it is "the prop varies on every path that carries it".
 | **3 raster — regression** | our rasterizer vs **golden images committed to this repo** (raw RGBA under `test/goldens/`, not PNG — no encoder in the loop, so a decoder change cannot move a golden) | **0 diff, no exceptions.** Runs every `flutter test` |
 | **3 raster — parity calibration** | our rasterizer vs a **real Chrome render** | interior/background **0**; antialiased edge pixels **≤1/255**. Run **manually** when the rasterizer changes, not per commit |
 | **widget** | widget test asserting the produced `ui.Image` bytes, observed at the screen | as layer 3 |
