@@ -4,11 +4,12 @@ A bit-exact Dart port of
 [boring-avatars](https://github.com/boringdesigners/boring-avatars).
 
 Given the same name, palette and variant, this package produces the avatar the
-npm package produces — the same numbers, the same SVG, the same bytes. One
-deliberate exception is documented under [Where it differs on purpose](#where-it-differs-on-purpose).
+npm package produces — the same numbers, the same SVG, the same bytes. Two
+deliberate exceptions are documented under [Where it differs on purpose](#where-it-differs-on-purpose).
 
-Every supported upstream release is reachable at once. npm needs a downgrade to
-render an older version's avatar; here it is a parameter.
+Every supported upstream release is reachable at once — npm needs a downgrade to
+render an older version's avatar, here it is a parameter. `0.1.0` supports the
+first of them; the rest arrive as additional selector values.
 
 ## Usage
 
@@ -41,6 +42,27 @@ upstream release:
 | `variant` | the style, defaulting to `marble` as upstream does |
 | `square` | drops the mask's corner radius |
 
+## Supported upstream releases
+
+| Selector | Reproduces upstream |
+|---|---|
+| `BoringAvatarsVersion.v1_6_1` | `1.6.1`, `1.6.2`, `1.6.3` |
+
+That is everything `0.1.0` supports. **Later releases of this package add
+selector values; they never change one.** A shipped selector's output is frozen
+— an avatar you render today renders identically on every future version of this
+package — so support grows by addition only.
+
+Upstream releases share a selector when **a caller gets the same thing out of
+them**, not when their source happens to match. `1.6.1`, `1.6.2` and `1.6.3`
+collapse into one value because all three were measured to render byte-identical
+documents, not because the code looked similar.
+
+**These are upstream's git tags, not its npm versions.** The two disagree: npm
+`1.2.1`, for instance, republished 0.1.4-era code. When you pin a version here,
+you are naming a tag in
+[the upstream repository](https://github.com/boringdesigners/boring-avatars/tags).
+
 ### `version` has no default, on purpose
 
 `BoringAvatarsVersion.latest` moves as this package adds releases, and upstream
@@ -65,8 +87,10 @@ renderer you hand the string to.
 
 ## Where it differs on purpose
 
-Exactly one input produces different bytes from upstream, and it is a bug fix
-rather than a drift.
+Two inputs do not reproduce upstream. Everything else does — including
+upstream's own bugs, which are reproduced rather than corrected.
+
+### A `sunset` name containing quotes or brackets
 
 With `variant: sunset`, a name containing `'`, `"`, `(`, `)`, `\` or a control
 character makes upstream build a gradient reference that is not a valid CSS url
@@ -80,6 +104,26 @@ An apostrophe in a name is common enough that reproducing the blank was judged
 the wrong trade. If you need upstream's exact bytes including its blanks, this
 is the one place you will not get them.
 
+### A `size` that is not a size
+
+`size` accepts a `num` (`80` → `width="80"`) or a `String` (`'100%'`). Anything
+else throws an `ArgumentError` naming the argument. Upstream instead coerces,
+because React does:
+
+| `size` | upstream 1.6.1 | this package |
+|---|---|---|
+| `80`, `'100%'` | `width="80"`, `width="100%"` | identical |
+| `true`, `false`, `null` | `width` and `height` **absent**, plus a React console warning | `ArgumentError` |
+| `[80]` | `width="80"` | `ArgumentError` |
+| `{}` | `width="[object Object]"` | `ArgumentError` |
+
+Reproducing that would mean reproducing JavaScript's `String()` coercion and
+React's attribute-dropping rules in order to emit `width="[object Object]"`
+faithfully — and React prints that warning precisely to tell the author they
+made a mistake, so the behaviour being reproduced is a bug report. Every value a
+caller can plausibly mean by "size" is byte-identical; the divergence is
+confined to values that are not sizes at all.
+
 ## An empty palette is not always an error
 
 Upstream degrades rather than validating, and it degrades *differently* per
@@ -90,5 +134,14 @@ degraded would be an image upstream has never produced.
 
 ## Status
 
-Pre-release. Supported upstream versions, the version matrix and the npm-vs-git
-caveat are documented at first publish.
+`0.1.0` ships the SVG document for upstream `1.6.1`–`1.6.3`. What follows, in
+order: the remaining upstream releases as new selector values, then the
+deterministic rasterizer and the `BoringAvatar` widget.
+
+The emitted documents are pinned by the test suite against fixtures generated
+from the real npm package — 600 of them, across six variants, twenty names and
+five palettes, plus square and size variations. The two divergences above were
+measured rather than reasoned about — the blank `sunset` avatar in Chrome, the
+`size` coercions by rendering upstream itself. Both the parity harness and the
+browser tooling live in the repository, so any of it can be re-measured rather
+than taken on trust.

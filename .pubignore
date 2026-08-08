@@ -2,6 +2,14 @@
 # stops being consulted. So everything .gitignore excludes has to be repeated
 # here, or it ships. (A single `flutter test` run leaves a 44 MB .dill under
 # build/, which is exactly how this was caught.)
+#
+# The dot-prefixed entries below are belt-and-braces: measured in #42, pub skips
+# dot-directories on its own — a planted `.claude/worktrees/probe/junk.txt` did
+# not reach the archive, while a control `stray_control.txt` in the same run
+# did. They stay because the rule above is worth keeping mechanically checkable
+# (`.pubignore` ⊇ `.gitignore`), and because that skip is pub's behaviour rather
+# than a promise. The entries that actually do the work are the non-dot ones —
+# build/, node_modules/, coverage/, migrate_working_dir/, *.log.
 
 # --- mirrors .gitignore ---
 *.class
@@ -29,6 +37,7 @@ migrate_working_dir/
 
 node_modules/
 .playwright-mcp/
+.claude/worktrees/
 
 # --- tracked in git, but not published ---
 docs/
