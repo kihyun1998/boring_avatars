@@ -1388,6 +1388,122 @@ argument is not re-made from scratch.)*
 undone. Confirm the result with
 `curl -s https://pub.dev/api/packages/boring_avatars` rather than assuming it.
 
+#### The widget's execution model — the ruling, as an event
+
+**The rasterisation leaves `build()`, `compute()` is the mechanism, and `0.1.0`
+does not wait for the web half. Decided by the user on 2026-08-10**, and it is
+theirs to reverse.
+
+**What reopened it.** #80's completeness pass measured that `rasterAvatarImage`
+contains **no `await` at all** — `async` and `unawaited` had moved only the
+decode, and the decode was never the cost. The widget therefore shipped doing
+the one thing #80's own body had excluded *by measurement*: a synchronous raster
+inside `build()`. The doc-comment at `cf92d5d` recorded that hole rather than
+closing it, which left the no-ceiling derivation conditional on a fix that did
+not exist.
+
+**What they were shown.** Three options against a 16.7 ms frame, with
+`rasterizeScene`'s wall-clock (measured in #80, after warm-up):
+
+| variant | 80 px | 120 px | 210 px |
+|---|---|---|---|
+| `marble` | 22 ms | 43 ms | 124 ms |
+| `beam` | 14 ms (at 36) | 83 ms | 206 ms |
+| `pixel` | 3 ms | 20 ms | 57 ms |
+
+| | buys | costs |
+|---|---|---|
+| **A — off the UI thread** | the frame back on native | an isolate hop; **nothing on web** |
+| **B — yield once, then run** | nothing measurable | — |
+| **C — accept it, document the cost** | `0.1.0` ships now | the ticket's own premise stays falsified |
+
+**They rejected C first, before the mechanism was chosen** — the sequence
+matters, because C was the agent's standing recommendation at the time and its
+argument (that a later fix is additive, so choosing C forecloses nothing) still
+stands unrefuted. It lost on priority, not on logic, which is exactly the kind
+of call that is theirs and not derivable.
+
+**B was then eliminated by reading the SDK, not by taste**, when they pushed
+back that it looked weak. `compute`'s two implementations, read at Flutter
+3.41.9:
+
+- `_isolates_io.dart:22` — `return Isolate.run<R>(() => callback(message), …)`.
+  On native, `compute` **is** A; nothing is lost by not calling `Isolate.run`
+  directly.
+- `_isolates_web.dart:19-20` — `await null; return callback(message)`. That is a
+  **microtask**, and the microtask queue drains before the browser paints, so it
+  yields nothing to the platform and the callback runs on the main thread. On
+  web, `compute` degrades precisely to B, and B's own measurement is that the
+  stall is unchanged in length.
+
+**So `compute` was chosen for what the SDK already carries**: the web branch is
+Flutter's to maintain rather than a first platform `import` in `lib/`, and no
+size threshold is needed — 3 ms off the frame beats 3 ms on it — which is what
+keeps the package from inventing a policy it says it never invents.
+
+**Then measured in a browser, because a source reading is not a measurement.**
+A throwaway Flutter web app rasterised `marble` twice at each size — directly
+and through `compute` — while a plain `setInterval` *outside Dart entirely*
+recorded every tick it missed. A blocked main thread cannot tick, so the gap it
+misses **is** the block. Chrome 151, release builds:
+
+| physical px | dart2js direct | dart2js `compute` | WasmGC direct | WasmGC `compute` |
+|---|---|---|---|---|
+| 120 | 168 ms | 147 ms | 368 ms | 365 ms |
+| 240 | 522 ms | 530 ms | 1315 ms | 1275 ms |
+| 480 | 1990 ms | 1982 ms | 5061 ms | 5159 ms |
+
+In all twelve runs the missed gap matched Dart's own stopwatch to within 8 ms,
+and Chrome's Long Tasks API reported each as a **single** long task of the same
+length. `compute` moves nothing on web — measured, not inferred.
+
+Two facts nobody had asked for came out of the same run:
+
+- **Web is ~4x slower than native at the same size.** `marble` at 120 physical
+  pixels is 43 ms native (#80) and 168 ms under dart2js.
+- **`--wasm` is not the escape hatch it looks like.** WasmGC ran this code
+  **2.2–2.6x slower than dart2js** at every size. Whatever the cause, "build for
+  wasm" cannot be offered as the web answer without re-measuring it — and it was
+  never checked before this run.
+
+So the web limitation is larger than the SDK reading alone implied: a
+320-logical avatar at a 1.5 device pixel ratio freezes the tab for **two
+seconds** under dart2js and **five** under WasmGC. It does not move the ruling —
+nothing here is made worse by shipping, which is the ground the "do not wait"
+half rests on — but it raises what the unchosen web fix is worth.
+
+**Its validity condition, and the first work item.** The one objection that
+survives is that **nobody has measured isolate spawn plus buffer transfer**.
+The mechanism is therefore recorded as *chosen but not yet earned*: the first
+commit under this ruling is a throwaway probe at both ends (`pixel` at 80, the
+3 ms case, and `marble` at 210, the 124 ms case). If spawn cost swamps the small
+case, this entry is what gets amended, and the banded rasteriser below moves up.
+
+**What this does not decide.** The **web fix is unchosen.** Two candidates were
+enumerated and neither was ruled on, because neither is needed to ship:
+
+- **Banded rasterisation** — split the scanline walk into bands and yield
+  between them, which is what the browser ecosystem does by hand (time slicing)
+  and the only candidate that fixes web *and* native. Rows are independent by
+  construction, so bands do not move a byte. It restructures `lib/src/raster/`,
+  which is where #58's completeness pass found the missed gradient axis and five
+  mutation gaps — the most expensive evidence surface in the repo. It sits
+  *under* `compute` and does not replace it.
+- **The browser's own SVG renderer**, via a platform view on web. Uniquely
+  available to this package because the goldens *are* Chrome's output, so
+  upstream fidelity would be higher, not lower. Costs a `lib/` platform branch,
+  and cross-browser byte-identity is unmeasured.
+
+A general-purpose web-worker path was rejected outright, not deferred: Flutter
+web has no isolate equivalent, so it means compiling the rasteriser a second
+time as a separate entry point — two copies of the geometry, which is the
+divergence seed `CLAUDE.md` names.
+
+**What it costs.** `0.1.0` gains a probe, a mechanism change to the widget, and
+a documented web limitation; it does not gain a web fix. Web callers keep
+today's behaviour exactly — this ruling makes nothing worse there, which is the
+ground the "do not wait" half rests on.
+
 ### Downstream loop
 
 **N/A — nothing is published.** At first publish, derive consumers on the spot
