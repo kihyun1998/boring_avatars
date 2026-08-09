@@ -68,6 +68,18 @@ class BoringAvatar extends StatefulWidget {
   /// A number, not [boringAvatarSvg]'s `num`-or-`String`: `'100%'` has no basis
   /// before layout, and a size taken from `BoxConstraints` would only be known
   /// at layout time and so could not be memoised on this widget's fields.
+  ///
+  /// **There is no upper bound, and that is a decision rather than an
+  /// oversight.** Cost is O(area) — roughly 86 bytes of `Float64` per output
+  /// pixel on the filtered path, so `marble` at 1024 physical pixels a side
+  /// takes about 2.4 s and an 86 MiB layer, and 2048 is four times that again.
+  /// A ceiling was considered and rejected: this package refuses input it
+  /// **cannot honour** (a `size` that is not a size, a non-uniform scale), and
+  /// a large avatar is one it can honour, only slowly. Deciding how slow is too
+  /// slow is the caller's budget, and size is theirs to inject.
+  ///
+  /// Multiply by the device pixel ratio before judging: a 512-logical avatar on
+  /// a 3x display is 1536 physical.
   final double size;
 
   /// Which upstream release to reproduce. Required, and it has no default —
