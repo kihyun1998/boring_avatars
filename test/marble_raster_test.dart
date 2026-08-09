@@ -540,6 +540,52 @@ void main() {
       expect(alphaAt(right, 70, 40), 0);
     });
 
+    test('and the region scales with the device, not with the viewport', () {
+      // #58 made the target size independent of the viewBox, which puts a
+      // second reading of the same numbers in play: the region's default is
+      // -10%/120% *of the viewBox*, and resolving it against the device size
+      // instead makes it `scale` times too big. Nothing else catches that —
+      // every region in the six is wider than its mask, so an over-large one
+      // clips exactly as much as a correct one, which is nothing. Measured:
+      // both that mutation and swapping the viewBox's two numbers survived the
+      // whole suite before this test existed.
+      //
+      // Same construction as the test above, at 2x. The region's left edge is
+      // at user 12, so it is at device 24 — and a region resolved against the
+      // 160-pixel target would put it at 32, leaving x=28 empty.
+      RasterImage renderAt(int side) => rasterizeScene(
+        scene(
+          shape: const [
+            SvgAttribute('filter', 'url(#f)'),
+            SvgAttribute('d', 'M-200 -200H200V200H-200z'),
+            SvgAttribute('fill', '#FFFFFF'),
+            SvgAttribute('transform', 'translate(20 0)'),
+          ],
+          sigma: 1,
+          background: null,
+        ),
+        width: side,
+        height: side,
+      );
+      int alphaAt(RasterImage i, int side, int x, int y) =>
+          i.bytes[(y * side + x) * 4 + 3];
+
+      final two = renderAt(160);
+      expect(
+        alphaAt(two, 160, 20, 80),
+        0,
+        reason: 'device x=20 is left of the region, which starts at 24',
+      );
+      expect(
+        alphaAt(two, 160, 28, 80),
+        greaterThan(0),
+        reason:
+            'device x=28 is inside it — a region resolved against the '
+            'target rather than the viewBox would start at 32 and leave this '
+            'empty',
+      );
+    });
+
     test('clips the output — a region that cuts really does cut', () {
       // Inert for `marble`: its region is (-8, -8, 96, 96) and the mask is
       // 0…80, so anything the region would remove the mask has removed

@@ -283,9 +283,26 @@ void main() {
       }
     });
 
-    test('a viewBox that does not match the target is refused, not cropped', () {
-      // ring's viewBox is 90 wide. Rendering it at 80 used to crop in silence.
-      expectRejected(wrap(const [], viewBox: '0 0 90 90'));
+    test('a viewBox that does not match the target is scaled, not cropped', () {
+      // Until #58 this asserted a *refusal*: `ring`'s 90-unit viewBox drawn at
+      // 80 used to crop in silence, and throwing was the honest answer while
+      // no scale existed. It exists now, and 4/90 is a perfectly good uniform
+      // one — so the same input that had to throw has to draw.
+      expect(
+        () => rasterizeScene(
+          wrap(const [], viewBox: '0 0 90 90'),
+          width: 4,
+          height: 4,
+        ),
+        returnsNormally,
+      );
+    });
+
+    test('a non-uniform target is refused, because the blur would be too', () {
+      // What replaces the old refusal. `blurSigma` reads the matrix's column
+      // norms and a Gaussian is only isotropic under a similarity, so `sx !=
+      // sy` would silently pick one of two blurs.
+      expectRejected(wrap(const [], viewBox: '0 0 8 4'));
     });
 
     test('a luminance mask that is not white is refused', () {
