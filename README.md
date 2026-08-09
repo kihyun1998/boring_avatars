@@ -74,16 +74,32 @@ you actually want.
 
 ## Drawing it in Flutter
 
-**Flutter cannot draw an SVG on its own.** To show this string in a Flutter app
-you need a third-party renderer such as
-[`flutter_svg`](https://pub.dev/packages/flutter_svg) — and the pixels are then
-that package's, not this one's.
+```dart
+BoringAvatar(
+  name: 'Clara Barton',
+  colors: const ['#92A1C6', '#146A7C', '#F0AB3D', '#C271B4', '#C20D90'],
+  size: 80,
+  version: BoringAvatarsVersion.v1_6_1,
+  variant: BoringAvatarsVariant.beam,
+)
+```
 
-This package's determinism guarantee — the same bytes on every platform, GPU,
-Flutter version and rendering backend — covers what it produces. Today that is
-the SVG document. Its own deterministic rasterizer and a `BoringAvatar` widget
-follow in a later release; until then, the guarantee does not extend to whatever
-renderer you hand the string to.
+`BoringAvatar` draws through this package's own rasterizer, at the display's
+physical pixel size. **It does not use `flutter_svg`, and it does not draw on a
+`Canvas`.** Measured: `flutter_svg` does not clamp `rx` the way SVG 1.1 §9.4
+requires, so the circular mask every variant relies on comes out square, and it
+has no `<filter>` at all, so `marble` loses its blur. A `Canvas` would make the
+output depend on Skia-vs-Impeller, GPU, platform and Flutter version — which is
+the whole reason this package rasterises in software.
+
+So the determinism guarantee — the same bytes on every platform, GPU, Flutter
+version and rendering backend — covers the widget as well as the SVG string.
+
+**`colors` is narrower on the widget.** `boringAvatarSvg` hands a colour to the
+document and a browser draws it, so `'red'` works there. The rasterizer reads
+`#RRGGBB` and nothing else yet, and rather than draw a blank avatar for a colour
+it cannot read, the widget rejects it and names the argument. Later releases
+widen what is accepted; a palette that works today keeps working.
 
 ## Where it differs on purpose
 
@@ -134,9 +150,8 @@ degraded would be an image upstream has never produced.
 
 ## Status
 
-`0.1.0` ships the SVG document for upstream `1.6.1`–`1.6.3`. What follows, in
-order: the remaining upstream releases as new selector values, then the
-deterministic rasterizer and the `BoringAvatar` widget.
+`0.1.0` ships the SVG string and the widget, for upstream `1.6.1`–`1.6.3`.
+What follows: the remaining upstream releases, each as a new selector value.
 
 The emitted documents are pinned by the test suite against fixtures generated
 from the real npm package — 600 of them, across six variants, twenty names and

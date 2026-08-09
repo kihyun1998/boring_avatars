@@ -19,6 +19,12 @@ First release. Reproduces upstream `boring-avatars` **1.6.1, 1.6.2 and 1.6.3**
   paints a blank avatar; this package renders it), and a `size` that is neither
   a `num` nor a `String` (upstream drops the attributes; this package throws).
 
-This release ships the SVG document only. A deterministic rasterizer and a
-`BoringAvatar` widget follow in a later release; until then, drawing the string
-in Flutter needs a third-party SVG renderer and those pixels are that package's.
+* `BoringAvatar` draws the same avatar as a widget, rasterised in software at
+  the display's physical pixel size. Not through `flutter_svg` — measured, it
+  does not clamp `rx` per SVG 1.1 §9.4, so the circular mask comes out square,
+  and it has no `<filter>`, so `marble` loses its blur. Not through `Canvas`
+  either, which would make the pixels depend on Skia-vs-Impeller, GPU, platform
+  and Flutter version.
+* The widget's `colors` is narrower than the SVG function's: the rasterizer
+  reads `#RRGGBB` and nothing else yet, and rather than draw a blank for a
+  colour it cannot read, the widget throws and names the argument.
