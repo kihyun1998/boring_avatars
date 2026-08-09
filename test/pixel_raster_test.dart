@@ -562,7 +562,10 @@ void main() {
     final cases = goldenCasesFor('pixel');
 
     test('the roster is not empty, and it is pixel\'s', () {
-      expect(cases, hasLength(3));
+      // Four since #80: `pixel-clara-square` was the one square golden the six
+      // variants were missing, and the widget's "both square states" proof
+      // could not reach that cell without it.
+      expect(cases, hasLength(4));
     });
 
     cases.forEach((key, value) {
