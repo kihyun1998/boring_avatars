@@ -718,8 +718,13 @@ The core is **three layers with declared seams**, all inside this package:
   decoration, caching policy, and whether the caller wants pixels or an SVG
   string.
 
-**The consumer seam is in-repo** (`lib/src/widget/` reaching the core through
-the barrel) — plus, once published, real pub.dev dependents.
+**The consumer seam is in-repo** (`lib/src/widget/`) — plus, once published,
+real pub.dev dependents. It reaches the core through **sibling `src/` imports**,
+not through the barrel: `buildAvatarScene` is deliberately unexported and
+`rasterizeScene` is not exported at all, so the barrel is the surface a
+*dependent* imports and not the one this package's own consumer layer uses. Same
+arrangement `tool/` already has, and for the same reason. *(This sentence said
+"through the barrel" until #80, which is a route that does not exist.)*
 
 **Layer 1 is frozen on publish.** Once a version selector ships, its values are
 a contract: changing them silently rewrites every existing user's avatar
