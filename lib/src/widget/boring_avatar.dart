@@ -78,6 +78,12 @@ class BoringAvatar extends StatefulWidget {
   /// a large avatar is one it can honour, only slowly. Deciding how slow is too
   /// slow is the caller's budget, and size is theirs to inject.
   ///
+  /// **That argument has a hole, and it is recorded rather than papered over.**
+  /// The rasterisation currently runs inside `build()` — see #80 — so "slow" is
+  /// not a cost the caller can budget around, it is a frozen UI thread for the
+  /// duration. The reasoning above holds once the work is off the frame; until
+  /// then, treat the numbers as a hard warning rather than a trade-off.
+  ///
   /// Multiply by the device pixel ratio before judging: a 512-logical avatar on
   /// a 3x display is 1536 physical.
   final double size;
