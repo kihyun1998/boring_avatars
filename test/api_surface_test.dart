@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('the barrel', () {
-    test('exports three names and nothing else', () {
+    test('exports four names and nothing else', () {
       // A test that only *uses* the surface cannot notice the scene model
       // leaking out beside it, and once published an accidental export is as
       // irreversible as a deliberate one. `show` is what keeps the dispatch —
@@ -17,6 +17,7 @@ void main() {
       ).allMatches(barrel).map((m) => m.group(0)!).toList();
       expect(exports, <String>[
         "export 'src/avatar.dart' show boringAvatarSvg;",
+        "export 'src/widget/boring_avatar.dart' show BoringAvatar;",
         "export 'src/variant.dart' show BoringAvatarsVariant;",
         "export 'src/version.dart' show BoringAvatarsVersion;",
       ]);
@@ -64,6 +65,31 @@ void main() {
       // 2.0.3/2.0.4 default-size change stays out of the version state only
       // because the caller always supplies one.
       expect(source, contains('required Object size,'));
+    });
+
+    test('and neither does the widget', () {
+      // **The guard above reads `avatar.dart` and only that**, so a
+      // `BoringAvatar({BoringAvatarsVersion version = ...})` passed the whole
+      // suite until #80 — the 2026-08-08 ruling was unenforced the moment a
+      // second public surface appeared. Measured before this test existed.
+      final source = File(
+        'lib/src/widget/boring_avatar.dart',
+      ).readAsStringSync();
+      expect(
+        source,
+        contains('required this.version,'),
+        reason: 'version must stay required on the widget too',
+      );
+      expect(
+        source,
+        isNot(contains('this.version =')),
+        reason: 'a default version would move under callers on upgrade',
+      );
+      // `size` is a `double` here rather than the SVG surface's num-or-String:
+      // `'100%'` has no basis before layout, and a size read from constraints
+      // could not be memoised on the widget's fields.
+      expect(source, contains('required this.size,'));
+      expect(source, contains('final double size;'));
     });
   });
 

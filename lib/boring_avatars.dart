@@ -21,5 +21,6 @@ library;
 /// `export 'scene/scene.dart';` in `version.dart` shipped the whole scene
 /// model with the suite green.
 export 'src/avatar.dart' show boringAvatarSvg;
+export 'src/widget/boring_avatar.dart' show BoringAvatar;
 export 'src/variant.dart' show BoringAvatarsVariant;
 export 'src/version.dart' show BoringAvatarsVersion;
