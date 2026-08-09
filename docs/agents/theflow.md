@@ -1217,7 +1217,7 @@ only there.** Below is what each one has to *do* — the mapping is not repeated
 
 | Release | The work that earns it |
 |---|---|
-| `0.1.0` | everything: harness, primitives, scene, all six variants, the public SVG surface |
+| `0.1.0` | everything: harness, primitives, scene, all six variants, the public SVG surface, **the rasteriser's arbitrary scale (#58), the `BoringAvatar` widget (#80) and the example (#78)** |
 | `0.2.0` | the `<title>` gate (hidden-state #16) — **one change** |
 | `0.3.0` | `pixel`'s second colour-index path — **one change**, and the only one in scope where the drawing moves |
 
@@ -1274,7 +1274,8 @@ matter more now, not less, because each release covers more versions:
 **`1.11.0` is not in the table, and that is deliberate** — see "The states in
 scope" above. It emits junk attributes no other version does.
 
-**`0.1.0` ships SVG only.** Decided by the user on 2026-07-29: the public surface
+**`0.1.0` ships SVG only. — SUPERSEDED 2026-08-09; see the reversal below.**
+Decided by the user on 2026-07-29: the public surface
 is a function returning the SVG string, which is what upstream itself produces
 and is a complete product on its own — `boringAvatarSvg`, built in #59. The
 widget and the rasteriser scaling it needs (#58) follow in a later release
@@ -1283,6 +1284,77 @@ deferred items until #59 itself was worked; #59 is the surface `0.1.0` ships,
 not something it defers.)* A Flutter caller therefore needs a third-party SVG renderer for `0.1.0`, and
 the package's determinism guarantee applies to the raster path only — say so in
 the README rather than leaving it implied.
+
+#### The reversal — the ruling, as an event
+
+**`0.1.0` ships the widget too. Decided by the user on 2026-08-09**, and it is
+theirs to reverse. The 2026-07-29 ruling above is kept rather than deleted:
+what it was decided *against* is the point of this entry.
+
+**Why it was reopened at all.** Not by a better argument — by a measurement the
+earlier decision could not have seen. The 07-29 ruling accepted one cost
+knowingly: a Flutter caller reaches for a third-party SVG renderer, and those
+pixels are not ours. What nobody had checked is whether they are even the right
+*picture*. #78's probe checked.
+
+**What they were shown.** Our SVG through `flutter_svg`, rasterised at each
+golden's own size and compared to the golden the suite pins:
+
+| variant | differing | distinct colours (golden / flutter_svg) |
+|---|---|---|
+| `marble` | 89.0% | 2411 / 177 |
+| `beam` | 28.8% | 48 / 35 |
+| `pixel` | 22.2% | 164 / 6 |
+| `sunset` | 23.8% | 225 / 156 |
+| `ring` | 31.7% | 282 / 393 |
+| `bauhaus` | 27.8% | 305 / 187 |
+
+In every row the pixels that are transparent in the golden and painted by
+`flutter_svg` came to *exactly* that variant's transparent-pixel count — 1236
+for the 80×80 trio, 1572 for `ring`, 220 for `beam` — and the opposite
+direction was zero. The mask was not applying at all.
+
+**Isolated to one attribute.** A hand-written mask with `rx="40"` masks
+correctly; ours does not, and ours says `rx="160"` because upstream writes
+`rx={size * 2}`:
+
+```
+rx= 40   1241 transparent px      a circle
+rx= 80   3021 transparent px      a degenerate shape
+rx=160   no mask — the rect stayed square      ← what we emit
+rx=999   no mask — the rect stayed square
+```
+
+SVG 1.1 §9.4 clamps `rx` to half the width, so the shape *is* a circle in a
+browser — which is why our goldens hold one, and what `tool/crosscheck` puts
+against upstream's own render at a bar of zero differing pixels.
+`flutter_svg` does not clamp. `<mask>` itself is fine: `mask-type` and
+`maskUnits` make no difference, only the clamp does.
+
+`marble` loses a second thing. `vector_graphics_compiler`'s parser has no
+`filter` in its element table, and the sole occurrence of "filter" in its 2449
+lines is the attribute name `'color-interpolation-filters'`; an unhandled
+element prints once and is skipped, so the Gaussian blur vanishes.
+`mix-blend-mode: overlay` *is* supported, which is why the blend survives and
+only the blur is gone.
+
+**What they chose:** put the widget in `0.1.0`. Their reason was the direction,
+not the schedule — *"매력적이겠지만 맞는 방향으로 가야함"*, said against the
+alternative of publishing the finished SVG-only release now and shipping the
+widget as `0.2.0`. Recording that is the point: the rejected option was cheaper
+and was rejected on purpose, so proposing it again needs a new fact, not a new
+argument.
+
+**What it costs.** The first publish waits on #58 → #80 → #78, and #80 has no
+design yet — the widest unknown in the chain. `0.2.0`'s `<title>` gate and
+`0.3.0`'s `pixel` path move out by the same amount.
+
+**What this does not decide.** Nothing about building a general-purpose SVG
+renderer. The rasteriser stays narrow and refuses what it cannot draw, which is
+what makes the determinism claim provable; a renderer that must accept arbitrary
+input cannot refuse, and would degrade silently — which is the failure that
+produced this entry. Whether to report the `rx` clamp to `flutter_svg` is a
+separate, unfiled question.
 
 **"Supporting a version" is a verification claim, not necessarily new rendering
 code.** `0.2.0` and `0.3.0` each change one thing; the rest of what earns them is
