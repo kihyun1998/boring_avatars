@@ -52,6 +52,20 @@ final Map<String, (SvgNode, int)> goldenCases = {
     buildPixelScene(name: 'Alice', colors: ['#000000', '#FFFFFF'], size: 80),
     80,
   ),
+  // **`pixel` had no square golden until #80.** Its square case was asserted
+  // inline in `pixel_raster_test.dart` but never committed, so the widget's
+  // "six variants x both square states" proof had one cell it could not reach —
+  // and nothing said so, because a missing golden is invisible to a roster that
+  // only checks the files it already lists against the cases it already has.
+  'pixel-clara-square': (
+    buildPixelScene(
+      name: 'Clara Barton',
+      colors: goldenDefaultPalette,
+      size: 80,
+      square: true,
+    ),
+    80,
+  ),
   'pixel-empty-name': (
     buildPixelScene(name: '', colors: ['#FF0000'], size: 80),
     80,

@@ -5,6 +5,13 @@ repository: https://github.com/kihyun1998/boring_avatars
 issue_tracker: https://github.com/kihyun1998/boring_avatars/issues
 
 environment:
+  # **No `flutter:` constraint, and that is checked rather than omitted.** The
+  # newest Flutter API this package uses is `MediaQuery.devicePixelRatioOf`,
+  # which first shipped in **3.10.0** (commit 73cb7c2fc5e, verified against the
+  # SDK's own history) — far below whatever Flutter carries Dart 3.11.5, so the
+  # Dart constraint already dominates and a Flutter line would be decoration.
+  # Valid **as long as nothing newer than 3.10 is reached for**; the template's
+  # `>=1.17.0` was removed in #42 for being a floor that was simply false.
   sdk: ^3.11.5
 
 dependencies:

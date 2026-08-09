@@ -12,6 +12,7 @@ import 'support/golden_cases.dart';
 /// `BoringAvatar` — the consumer seam (#80).
 void main() {
   _bytesOnScreen();
+  _noLeak();
 
   const palette = ['#92A1C6', '#146A7C', '#F0AB3D', '#C271B4', '#C20D90'];
 
@@ -113,8 +114,8 @@ void main() {
 ///
 /// **Why only the `clara-*` cases.** `goldenCases` holds *built scenes*, not the
 /// inputs they were built from, so `alice-pair`, `empty-name`, `hangul` and
-/// `empty-palette` cannot be reproduced from here. The eleven `clara-*` entries
-/// share one pair. Putting the inputs beside the cases would reach the rest and
+/// `empty-palette` cannot be reproduced from here. The twelve `clara-*` entries
+/// share one pair, and they are the whole six-by-two grid. Putting the inputs beside the cases would reach the rest and
 /// is a refactor of a file six raster tests and the golden generator share.
 void _bytesOnScreen() {
   const claraPalette = ['#92A1C6', '#146A7C', '#F0AB3D', '#C271B4', '#C20D90'];
@@ -124,11 +125,13 @@ void _bytesOnScreen() {
   test('the sweep below is not empty and is every clara case', () {
     // A `where` that matched nothing would make every case below vanish
     // silently rather than fail.
-    expect(clara, hasLength(11));
+    expect(clara, hasLength(12));
     expect(
       clara.where((k) => k.endsWith('-square')),
-      hasLength(5),
-      reason: 'pixel-clara-square does not exist — see #80',
+      hasLength(6),
+      reason:
+          'six variants, both square states — pixel-clara-square was the '
+          'missing one and #80 generated it',
     );
   });
 
@@ -170,4 +173,50 @@ void _bytesOnScreen() {
       expect(worst, 0, reason: 'worst premultiplied channel delta');
     });
   }
+}
+
+/// The hand-off does not leak a `ui.Image` (#80).
+///
+/// `ui.Image.onCreate` and `onDispose` are static hooks the engine calls, so
+/// the count needs no framework support.
+///
+/// **This proves the function, not the widget, and the gap is deliberate.**
+/// A widget-level leak test would have to pump one, and a raster started from
+/// `build()` never completes under the test binding — the same zone wall the
+/// byte proof above documents. So what is asserted here is that an image
+/// obtained from [rasterAvatarImage] is releasable and released; that the
+/// *widget* releases the ones it holds across a rebuild and an unmount is
+/// still unproven, and is tracked on #80 rather than quietly assumed.
+void _noLeak() {
+  testWidgets('every image the hand-off creates can be released', (
+    tester,
+  ) async {
+    var created = 0, disposed = 0;
+    final priorCreate = ui.Image.onCreate;
+    final priorDispose = ui.Image.onDispose;
+    ui.Image.onCreate = (_) => created++;
+    ui.Image.onDispose = (_) => disposed++;
+    addTearDown(() {
+      ui.Image.onCreate = priorCreate;
+      ui.Image.onDispose = priorDispose;
+    });
+
+    await tester.runAsync(() async {
+      for (var i = 0; i < 3; i++) {
+        final image = await rasterAvatarImage(
+          name: 'Clara Barton',
+          colors: const ['#92A1C6', '#146A7C'],
+          pixels: 40,
+          version: BoringAvatarsVersion.v1_6_1,
+          variant: BoringAvatarsVariant.pixel,
+          square: false,
+        );
+        image.dispose();
+      }
+    });
+
+    // A hook that never fired would leave both at zero and pass a `==`.
+    expect(created, 3, reason: 'the hooks did not fire');
+    expect(disposed, created, reason: 'an image outlived its caller');
+  });
 }
