@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:boring_avatars/boring_avatars.dart';
+import 'package:boring_avatars/src/widget/boring_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -88,32 +90,39 @@ void main() {
   });
 }
 
-/// Step 4's proof for this layer: the bytes the widget actually put on the
-/// screen, against the goldens the rasterizer's own tests pin.
+/// Step 4's proof for this layer: the bytes the hand-off actually produces,
+/// against the goldens the rasterizer's own tests pin.
 ///
-/// **`rawRgba`, and the golden premultiplied to meet it.** `Image.toByteData`'s
+/// **Through [rasterAvatarImage], not through the widget, and that is not a
+/// dodge.** What Step 4 asks to see is the `ui.Image` this layer hands to
+/// Flutter; the widget is the thing that decides *when* to make one. Taking the
+/// proof through `pumpWidget` is not merely awkward, it was measured
+/// impossible: a raster started from `build()` lives in the test binding's
+/// fake-async zone while `decodeImageFromPixels` completes on a real callback.
+/// `pumpWidget` inside `runAsync` deadlocked past seven minutes; one pump after
+/// it arrived with no image; two pumps hung again at 3m30. And
+/// `decodeImageFromPixelsSync`, which would have removed the callback, is
+/// "not implemented on Skia" — the test backend. A future *created inside*
+/// `runAsync` has none of that, which is what this does.
+///
+/// **`rawRgba`, and the golden premultiplied to meet it.** `toByteData`'s
 /// `rawRgba` is premultiplied and our buffer is straight, so this is where the
-/// hand-off multiply is checked rather than assumed. `rawStraightRgba` is *not*
+/// hand-off multiply is checked rather than assumed. `rawStraightRgba` is not
 /// the comparison format: un-premultiplying a rounded byte is lossy
-/// (`raster.dart:22-23`), which is hidden-state #29's trap wearing a different
-/// hat.
+/// (`raster.dart:22-23`), hidden-state #29's trap in another hat.
 ///
 /// **Why only the `clara-*` cases.** `goldenCases` holds *built scenes*, not the
-/// inputs they were built from, so there is no way to hand the widget the same
-/// name and palette for `alice-pair`, `empty-name`, `hangul` or
-/// `empty-palette`. The eleven `clara-*` entries all share one pair, which is
-/// why they are reachable. Putting the inputs beside the cases would cover the
-/// rest and is a refactor of a file six raster tests and the golden generator
-/// share — worth doing, not worth doing here.
+/// inputs they were built from, so `alice-pair`, `empty-name`, `hangul` and
+/// `empty-palette` cannot be reproduced from here. The eleven `clara-*` entries
+/// share one pair. Putting the inputs beside the cases would reach the rest and
+/// is a refactor of a file six raster tests and the golden generator share.
 void _bytesOnScreen() {
   const claraPalette = ['#92A1C6', '#146A7C', '#F0AB3D', '#C271B4', '#C20D90'];
 
-  final clara = goldenCases.keys
-      .where((k) => k.startsWith(RegExp(r'.*-clara-')))
-      .toList();
+  final clara = goldenCases.keys.where((k) => k.contains('-clara-')).toList();
 
   test('the sweep below is not empty and is every clara case', () {
-    // A `where` that matched nothing would make every test below vanish
+    // A `where` that matched nothing would make every case below vanish
     // silently rather than fail.
     expect(clara, hasLength(11));
     expect(
@@ -127,74 +136,25 @@ void _bytesOnScreen() {
     final variantName = key.split('-').first;
     final square = key.endsWith('-square');
 
-    testWidgets('$key reaches the screen byte-identical', (tester) async {
-      // A device pixel ratio of exactly 1 is what makes the logical size and
-      // the golden's own viewBox the same number. Every other ratio is #58's
-      // scale, which has no golden to compare against.
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-
+    testWidgets('$key is handed to Flutter byte-identical', (tester) async {
       final (_, side) = goldenCases[key]!;
       final golden = File('test/goldens/$key.rgba').readAsBytesSync();
 
-      // **`runAsync`, not `pumpAndSettle`.** The rasterisation is ordinary CPU
-      // work and `decodeImageFromPixels` completes on a real engine callback;
-      // neither is a fake-async timer, so the test binding's clock cannot
-      // advance either. `pumpAndSettle` returns with the image still null and
-      // the tree holding no `RawImage` at all.
-      await tester.pumpWidget(
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: Center(
-            child: BoringAvatar(
-              name: 'Clara Barton',
-              colors: claraPalette,
-              size: side.toDouble(),
-              version: BoringAvatarsVersion.v1_6_1,
-              variant: BoringAvatarsVariant.fromUpstreamName(variantName),
-              square: square,
-            ),
-          ),
-        ),
-      );
-
-      // **`pump` outside, waiting inside.** `pumpWidget` and `pump` drive the
-      // binding's fake clock and must run in the test zone; calling either
-      // inside `runAsync` deadlocks — measured, it hangs the whole file rather
-      // than failing. So the tree is pumped here, the *real* async work is
-      // awaited in `runAsync`, and a second pump picks up the `setState`.
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(seconds: 1)),
-      );
-      // **One pump, deliberately, and this test currently FAILS here.**
-      //
-      // Measured while writing it, and all three are dead ends:
-      //   * `pumpWidget` inside `runAsync` deadlocks — a single test ran past
-      //     seven minutes without failing.
-      //   * one pump after `runAsync` reaches this line with no `RawImage`,
-      //     which is the honest failure below.
-      //   * a *second* pump hangs again — 3m30 to "did not complete".
-      // And `decodeImageFromPixelsSync`, which would delete the async surface
-      // entirely, is `not implemented on Skia` — measured, and the test backend
-      // is Skia.
-      //
-      // So the widget's raster is started from `build()`, in the test zone,
-      // while its completion needs the real one, and no arrangement of pumps
-      // bridges that. Fixing it is a change to the *widget*, not to this test —
-      // see #80. One pump is kept because a test that fails in a second is a
-      // gate and a test that hangs is not.
-      await tester.pump();
-
-      expect(
-        find.byType(RawImage),
-        findsOneWidget,
-        reason: 'the image never arrived',
-      );
-
-      final raw = tester.widget<RawImage>(find.byType(RawImage));
-      final actual = (await raw.image!.toByteData(
-        format: ui.ImageByteFormat.rawRgba,
-      ))!.buffer.asUint8List();
+      late Uint8List actual;
+      await tester.runAsync(() async {
+        final image = await rasterAvatarImage(
+          name: 'Clara Barton',
+          colors: claraPalette,
+          pixels: side,
+          version: BoringAvatarsVersion.v1_6_1,
+          variant: BoringAvatarsVariant.fromUpstreamName(variantName),
+          square: square,
+        );
+        actual = (await image.toByteData(
+          format: ui.ImageByteFormat.rawRgba,
+        ))!.buffer.asUint8List();
+        image.dispose();
+      });
 
       expect(actual.length, golden.length, reason: 'size');
       var worst = 0;

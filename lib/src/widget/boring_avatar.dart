@@ -149,6 +149,63 @@ class _AvatarKey {
   );
 }
 
+/// Scene → pixels → a `ui.Image`, with nothing of the widget in it.
+///
+/// **Extracted so the hand-off can be proved.** Step 4 asks this layer for the
+/// produced image's bytes against the goldens, and that proof cannot be taken
+/// through the widget: a raster started from `build()` lives in the test
+/// binding's fake-async zone while `decodeImageFromPixels` completes on a real
+/// callback, and no arrangement of pumps bridges the two — measured, all three
+/// arrangements either hang or never arrive, and `decodeImageFromPixelsSync`
+/// is "not implemented on Skia", which is the test backend. A future *created
+/// inside* `runAsync` has no such problem, and that is exactly what a caller of
+/// this function does.
+///
+/// It is library-private in the sense that matters: the barrel does not export
+/// it, so it is not API. The tests reach it by sibling import, as `tool/` does.
+Future<ui.Image> rasterAvatarImage({
+  required String name,
+  required List<String> colors,
+  required int pixels,
+  required BoringAvatarsVersion version,
+  required BoringAvatarsVariant variant,
+  required bool square,
+}) async {
+  final scene = buildAvatarScene(
+    name: name,
+    colors: colors,
+    size: pixels,
+    version: version,
+    variant: variant,
+    square: square,
+  );
+  final raster = rasterizeScene(scene, width: pixels, height: pixels);
+
+  // **`PixelFormat.rgba8888` is premultiplied and our buffer is straight.**
+  // Straight is the deliberate choice — a browser hands back straight bytes, so
+  // a premultiplied buffer would differ from Chrome on every antialiased pixel
+  // — and `raster.dart:22` already records that the cost is "one multiply at
+  // the Flutter hand-off". This is that multiply.
+  final premultiplied = Uint8List(raster.bytes.length);
+  for (var i = 0; i < raster.bytes.length; i += 4) {
+    final a = raster.bytes[i + 3];
+    premultiplied[i] = (raster.bytes[i] * a + 127) ~/ 255;
+    premultiplied[i + 1] = (raster.bytes[i + 1] * a + 127) ~/ 255;
+    premultiplied[i + 2] = (raster.bytes[i + 2] * a + 127) ~/ 255;
+    premultiplied[i + 3] = a;
+  }
+
+  final completer = Completer<ui.Image>();
+  ui.decodeImageFromPixels(
+    premultiplied,
+    pixels,
+    pixels,
+    ui.PixelFormat.rgba8888,
+    completer.complete,
+  );
+  return completer.future;
+}
+
 class _BoringAvatarState extends State<BoringAvatar> {
   _AvatarKey? _drawn;
   ui.Image? _image;
@@ -185,39 +242,14 @@ class _BoringAvatarState extends State<BoringAvatar> {
   }
 
   Future<void> _raster(_AvatarKey key) async {
-    final scene = buildAvatarScene(
+    final image = await rasterAvatarImage(
       name: key.name,
       colors: key.colors,
-      size: key.pixels,
+      pixels: key.pixels,
       version: key.version,
       variant: key.variant,
       square: key.square,
     );
-    final raster = rasterizeScene(scene, width: key.pixels, height: key.pixels);
-
-    // **`PixelFormat.rgba8888` is premultiplied and our buffer is straight.**
-    // Straight is the deliberate choice — a browser hands back straight bytes,
-    // so a premultiplied buffer would differ from Chrome on every antialiased
-    // pixel — and `raster.dart` already records that the cost is "one multiply
-    // at the Flutter hand-off". This is that multiply.
-    final premultiplied = Uint8List(raster.bytes.length);
-    for (var i = 0; i < raster.bytes.length; i += 4) {
-      final a = raster.bytes[i + 3];
-      premultiplied[i] = (raster.bytes[i] * a + 127) ~/ 255;
-      premultiplied[i + 1] = (raster.bytes[i + 1] * a + 127) ~/ 255;
-      premultiplied[i + 2] = (raster.bytes[i + 2] * a + 127) ~/ 255;
-      premultiplied[i + 3] = a;
-    }
-
-    final completer = Completer<ui.Image>();
-    ui.decodeImageFromPixels(
-      premultiplied,
-      key.pixels,
-      key.pixels,
-      ui.PixelFormat.rgba8888,
-      completer.complete,
-    );
-    final image = await completer.future;
 
     // Unmounted, or the inputs moved on while this was in flight: the arriving
     // image is nobody's and has to be released rather than assigned.
