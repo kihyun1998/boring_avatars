@@ -155,28 +155,37 @@ const _maskShapeAttributes = {'x', 'y', 'width', 'height', 'rx', 'fill'};
 
 /// Rasterises [root] at [width] × [height] device pixels.
 ///
-/// Throws [UnsupportedSceneError] when the scene's `viewBox` does not match
-/// those dimensions — scaling is a real capability and `ring` will need it
-/// (its viewBox is 90 wide), so silently cropping is not an option.
+/// The target need not match the scene's `viewBox`: the two are related by a
+/// **uniform** device scale, derived rather than passed. `ring` draws in 90
+/// units and `beam` in 36, and a widget turns logical pixels into physical
+/// ones by a device pixel ratio that is not required to be an integer — so an
+/// integer-only scale would be no scale at all.
+///
+/// Throws [UnsupportedSceneError] for a non-positive target, a `viewBox` with
+/// no extent, or a target whose two axes scale differently. The last is not
+/// pedantry: [_ShapeAttributes.blurSigma] reads the matrix's column norms
+/// because a Gaussian is isotropic only under a similarity, so a non-uniform
+/// scale would silently pick one of two blurs.
 RasterImage rasterizeScene(
   SvgNode root, {
   required int width,
   required int height,
 }) {
-  _checkViewBox(root, width, height);
+  final view = _resolveScale(root, width, height);
 
   final maskNode = _firstOfKind(root, SvgElement.mask);
   if (maskNode == null) {
     throw UnsupportedSceneError('the scene has no <mask>');
   }
-  final mask = _readMask(maskNode);
+  final mask = _readMask(maskNode, view.scale);
   // The paint servers are read before the shapes, because a shape's `fill` can
   // reference one — `sunset` paints both its halves that way.
-  final paints = _readPaintServers(root);
-  // The viewBox has already been checked to equal the target, so user units
-  // and device pixels are the same number here. The day #58 lands a scale,
-  // this is one of the places that has to take it.
-  final filters = _readFilters(root, width.toDouble(), height.toDouble());
+  final paints = _readPaintServers(root, view.scale);
+  // **The viewBox, not the target.** A filter region is in user units — §15.7.2
+  // again — and [_ShapeAttributes.filterRegionQuad] maps it through the same
+  // matrix that carries the device scale. Handing the device size to this
+  // resolver and then scaling the result would apply the scale twice.
+  final filters = _readFilters(root, view.viewWidth, view.viewHeight);
   final shapes = <RasterShape>[];
   _collectShapes(
     root,
@@ -185,7 +194,21 @@ RasterImage rasterizeScene(
     maskId: maskNode.attribute('id') as String?,
     paints: paints,
     filters: filters,
-    inherited: Affine.identity,
+    inherited: Affine.scaling(view.scale, view.scale),
+    // **Pre-scaled by the device scale, and by nothing else.** Flattening
+    // happens in user units and the matrix multiplies the resulting error, so
+    // a chord that sat `1/4096` inside its arc sits `scale × 1.3` device
+    // pixels inside it once `marble`'s own `scale(1.3)` has applied too.
+    // Dividing here holds the *device* error at the constant the tolerance was
+    // chosen for, and at `scale == 1` it changes nothing — which is what keeps
+    // every committed golden byte-identical.
+    //
+    // The variant's own scale is deliberately left out. Folding that in as
+    // well would be exact and would move every golden for no visible gain,
+    // which is the trade `_shapesOf`'s circle arm already records; what
+    // changes with #58 is only that the *device* factor is unbounded, so it is
+    // the one that has to be divided out.
+    flatness: defaultFlatness / view.scale,
   );
 
   // The region **travels per shape**, so there is no scene-wide one to
@@ -201,7 +224,30 @@ RasterImage rasterizeScene(
   );
 }
 
-void _checkViewBox(SvgNode root, int width, int height) {
+/// The device scale mapping the scene's `viewBox` onto a `width` × `height`
+/// target, and the viewBox that the scene's user units are in.
+///
+/// **The scale is derived, never passed.** A caller handing over both a size
+/// and a factor can contradict itself; deriving it means the two cannot
+/// disagree, and it is what makes the non-uniform case detectable at all.
+///
+/// **A non-uniform scale is refused rather than averaged.** Two of this file's
+/// readers need the transform to be a *similarity*: [_ShapeAttributes.blurSigma]
+/// takes the matrix's column norms and says so — a Gaussian is only isotropic
+/// under one — and [_ShapeAttributes.filterRegionQuad] maps the region through
+/// the same matrix. Letting `sx != sy` through would silently pick one of two
+/// blurs, which is the class of quiet wrong picture this seam exists to stop.
+({double scale, double viewWidth, double viewHeight}) _resolveScale(
+  SvgNode root,
+  int width,
+  int height,
+) {
+  if (width <= 0 || height <= 0) {
+    throw UnsupportedSceneError(
+      'the target is ${width}x$height; a raster needs a positive size',
+    );
+  }
+
   final viewBox = root.attribute('viewBox');
   if (viewBox is! String) {
     throw UnsupportedSceneError('the root <svg> has no viewBox');
@@ -213,19 +259,42 @@ void _checkViewBox(SvgNode root, int width, int height) {
   if (parts[0] != 0 || parts[1] != 0) {
     throw UnsupportedSceneError('a non-zero viewBox origin needs a transform');
   }
-  if (parts[2] != width || parts[3] != height) {
+
+  final viewWidth = parts[2]!;
+  final viewHeight = parts[3]!;
+  if (!viewWidth.isFinite ||
+      !viewHeight.isFinite ||
+      viewWidth <= 0 ||
+      viewHeight <= 0) {
     throw UnsupportedSceneError(
-      'viewBox is ${parts[2]}x${parts[3]} but the target is ${width}x$height; '
-      'scaling is not implemented',
+      'viewBox is ${viewWidth}x$viewHeight; there is nothing to scale from',
     );
   }
+
+  final sx = width / viewWidth;
+  final sy = height / viewHeight;
+  if (sx != sy) {
+    throw UnsupportedSceneError(
+      'viewBox is ${viewWidth}x$viewHeight but the target is ${width}x$height, '
+      'which scales x by $sx and y by $sy; a non-uniform scale is not '
+      'implemented',
+    );
+  }
+  return (scale: sx, viewWidth: viewWidth, viewHeight: viewHeight);
 }
 
 /// Reads the `<mask>`'s single rect into a mask description.
 ///
 /// Everything is looked up by name — `x`, `y`, `width`, `height`, `rx` — so a
 /// call site that writes them in a different order rasterises identically.
-RoundedRectMask _readMask(SvgNode maskNode) {
+///
+/// [scale] converts the mask's user units to device pixels. It is applied at
+/// the end rather than to the attributes as they are read, because the region
+/// check below compares the region against the shape and both have to be in
+/// the same space to mean anything. Scaling the four numbers is enough: the
+/// radius is `min(rx, w / 2, h / 2)`, and a `min` of scaled inputs is the
+/// scaled `min`.
+RoundedRectMask _readMask(SvgNode maskNode, double scale) {
   // `pixel` declares mask-type="alpha"; the other five declare nothing, which
   // in SVG means a *luminance* mask. Every mask shape in the six is filled
   // #FFFFFF, where luminance and alpha both come to 1 — so the distinction is
@@ -303,7 +372,15 @@ RoundedRectMask _readMask(SvgNode maskNode) {
     }
   }
 
-  return shape;
+  return scale == 1
+      ? shape
+      : RoundedRectMask(
+          x: shape.x * scale,
+          y: shape.y * scale,
+          width: shape.width * scale,
+          height: shape.height * scale,
+          rx: shape.radius * scale,
+        );
 }
 
 /// Collects the shapes that are actually drawn — the ones under the masked
@@ -323,6 +400,7 @@ void _collectShapes(
   required Map<String, RasterPaint> paints,
   required Map<String, _Filter> filters,
   required Affine inherited,
+  required double flatness,
 }) {
   // `<mask>` is read by _readMask and `<defs>` by _readPaintServers — neither
   // is drawn where it sits. Both are validated there, not skipped: reading
@@ -361,7 +439,7 @@ void _collectShapes(
         'content is rasterised',
       );
     }
-    out.addAll(_shapesOf(node, paints, filters, inherited));
+    out.addAll(_shapesOf(node, paints, filters, inherited, flatness));
     return;
   }
 
@@ -402,6 +480,7 @@ void _collectShapes(
       paints: paints,
       filters: filters,
       inherited: matrix,
+      flatness: flatness,
     );
   }
 }
@@ -411,7 +490,7 @@ void _collectShapes(
 /// `<defs>` holds nothing that is drawn where it sits, which made it tempting
 /// to skip — and skipping it is why every `sunset` render came out blank before
 /// #40: the shapes referenced paint that had never been read.
-Map<String, RasterPaint> _readPaintServers(SvgNode root) {
+Map<String, RasterPaint> _readPaintServers(SvgNode root, double scale) {
   final out = <String, RasterPaint>{};
 
   void walk(SvgNode node) {
@@ -439,7 +518,7 @@ Map<String, RasterPaint> _readPaintServers(SvgNode root) {
         if (id is! String) {
           throw UnsupportedSceneError('a <linearGradient> has no id');
         }
-        out[id] = _readLinearGradient(child);
+        out[id] = _readLinearGradient(child, scale);
       }
       return;
     }
@@ -602,7 +681,19 @@ Map<String, _Filter> _readFilters(
   return out;
 }
 
-LinearGradientPaint _readLinearGradient(SvgNode node) {
+/// [scale] converts the gradient's user units to device pixels.
+///
+/// **This is not optional and the compiler cannot say so.**
+/// [LinearGradientPaint.colourAt] projects the *device* pixel centre
+/// (`px + 0.5`) onto the `x1,y1 -> x2,y2` axis, so an axis left in user units
+/// puts the whole ramp in the top-left `1/scale` of the image and every pixel
+/// outside it clamps to an end stop. Measured when #58 first landed without
+/// this: `sunset` at 2x, box-filtered back to 1:1, came back **108/255** off
+/// across whole interior rows while the shapes themselves were exactly where
+/// they belonged. Nothing else in the file reads a length this way — the
+/// shapes go through the matrix and the mask is scaled at construction — which
+/// is precisely why this one was missed.
+LinearGradientPaint _readLinearGradient(SvgNode node, double scale) {
   // `objectBoundingBox` — the SVG default — would reinterpret x1/y1/x2/y2 as
   // fractions of the shape's box. All six variants declare user space, and
   // reading the numbers under the other meaning silently rescales the paint.
@@ -654,10 +745,10 @@ LinearGradientPaint _readLinearGradient(SvgNode node) {
   }
 
   return LinearGradientPaint(
-    x1: _num(node.attribute('x1')) ?? 0,
-    y1: _num(node.attribute('y1')) ?? 0,
-    x2: _num(node.attribute('x2')) ?? 0,
-    y2: _num(node.attribute('y2')) ?? 0,
+    x1: (_num(node.attribute('x1')) ?? 0) * scale,
+    y1: (_num(node.attribute('y1')) ?? 0) * scale,
+    x2: (_num(node.attribute('x2')) ?? 0) * scale,
+    y2: (_num(node.attribute('y2')) ?? 0) * scale,
     stops: stops,
   );
 }
@@ -686,6 +777,7 @@ List<RasterShape> _shapesOf(
   Map<String, RasterPaint> paints,
   Map<String, _Filter> filters,
   Affine inherited,
+  double flatness,
 ) {
   /// The paint the [attribute] names — `fill` or `stroke`.
   ///
@@ -922,7 +1014,15 @@ List<RasterShape> _shapesOf(
         return [
           RasterPolygon([
             matrix.transformContour(
-              roundedRectContour(x, y, width, height, rx, ry),
+              roundedRectContour(
+                x,
+                y,
+                width,
+                height,
+                rx,
+                ry,
+                flatness: flatness,
+              ),
             ),
           ], fill),
         ];
@@ -969,7 +1069,7 @@ List<RasterShape> _shapesOf(
         if (fill != null)
           RasterPolygon(
             [
-              for (final contour in parsePath(d))
+              for (final contour in parsePath(d, flatness: flatness))
                 matrix.transformContour(contour),
             ],
             fill,
@@ -981,9 +1081,16 @@ List<RasterShape> _shapesOf(
           RasterPolygon(
             [
               for (final contour in strokePathOutline(
-                parsePathSubpaths(d),
+                parsePathSubpaths(d, flatness: flatness),
                 width: strokeWidth(),
                 cap: strokeCap(),
+                // The joint and cap discs are curves too. Until #58's
+                // completeness pass they were the one flattening in the file
+                // that never saw the device scale: constant segment count, so
+                // the device error grew linearly and crossed the 1/255 bar at
+                // about 25x — a 900-pixel `beam`, which its 36-unit viewBox
+                // reaches at an ordinary avatar size.
+                flatness: flatness,
               ))
                 matrix.transformContour(contour),
             ],
@@ -1017,6 +1124,7 @@ List<RasterShape> _shapesOf(
               _num(node.attribute('cx')) ?? 0,
               _num(node.attribute('cy')) ?? 0,
               required('r'),
+              flatness: flatness,
             ),
           ),
         ], fill),

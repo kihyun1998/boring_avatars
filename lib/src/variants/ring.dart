@@ -14,8 +14,10 @@
 ///   one each time rather than re-hashing.
 /// * **The drawing space is 90, not 80.** Every other variant in the six uses an
 ///   80-unit viewBox; `ring` uses 90. `size` still only reaches `width` and
-///   `height`, so the two numbers are independent — and the rasterizer, which
-///   refuses a target that does not match the viewBox, renders `ring` at 90×90.
+///   `height`, so the two numbers are independent. The rasterizer used to
+///   refuse any target that was not 90×90; since #58 it scales, so `ring`'s
+///   goldens are 90×90 because that is its 1:1 size, not because it is the
+///   only size reachable.
 library;
 
 import '../js/utilities.dart';

@@ -213,9 +213,10 @@ void main() {
     });
 
     test('the drawing space is 90 wide, whatever the display size', () {
-      // `ring` is the first variant whose viewBox is not its display size, and
-      // the rasterizer refuses a target that does not match the viewBox — so
-      // this constant is the one that decides what "a ring golden" is.
+      // `ring` is the first variant whose viewBox is not its display size.
+      // The rasterizer refused any other target until #58 and now scales to
+      // it, so this constant no longer decides what is *renderable* — but it
+      // still decides what 1:1 means, which is what "a ring golden" is.
       expect(
         emitSvg(
           buildRingScene(

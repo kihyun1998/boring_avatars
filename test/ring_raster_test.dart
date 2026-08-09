@@ -576,17 +576,25 @@ void main() {
   });
 
   group('the scene seam still refuses what it cannot draw', () {
-    test('a target that does not match the 90-unit viewBox throws', () {
-      // `ring` is the first variant whose drawing space is not 80, so this is
-      // the first time the check can fail for a real scene rather than a
-      // synthetic one.
+    test('the 90-unit viewBox now draws at 80, which is why #58 existed', () {
+      // **This test used to assert the opposite**, and the flip is the point.
+      // `ring` is the only variant whose drawing space is not 80, so it was
+      // the first real scene the old check could refuse — and a caller asking
+      // for an 80-pixel `ring` avatar, which is the ordinary request, got an
+      // exception. Nothing about the scene changed; the rasterizer grew the
+      // capability the refusal was standing in for.
+      final image = rasterizeScene(
+        buildRingScene(name: 'Clara Barton', colors: palette, size: 80),
+        width: 80,
+        height: 80,
+      );
+      expect(image.width, 80);
+      expect(image.height, 80);
+      // A scale that produced an empty canvas would satisfy the sizes above.
       expect(
-        () => rasterizeScene(
-          buildRingScene(name: 'Clara Barton', colors: palette, size: 80),
-          width: 80,
-          height: 80,
-        ),
-        throwsA(isA<UnsupportedSceneError>()),
+        image.bytes.any((b) => b != 0),
+        isTrue,
+        reason: 'the 8/9 scale drew nothing at all',
       );
     });
   });

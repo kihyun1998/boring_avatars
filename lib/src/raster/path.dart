@@ -457,6 +457,7 @@ List<PathContour> strokePathOutline(
   List<PathSubpath> subpaths, {
   required double width,
   required StrokeCap cap,
+  double flatness = defaultFlatness,
 }) {
   if (width <= 0) return const [];
   final radius = width / 2;
@@ -470,7 +471,7 @@ List<PathContour> strokePathOutline(
   // positive. So the discs are reversed to match. Measured: without this a
   // straight round-capped stroke loses exactly the two cap discs.
   PathContour disc(double cx, double cy) {
-    final circle = flattenCircle(cx, cy, radius);
+    final circle = flattenCircle(cx, cy, radius, flatness: flatness);
     final points = List<double>.filled(circle.points.length, 0);
     for (var i = 0; i < circle.length; i++) {
       final j = circle.length - 1 - i;

@@ -1,0 +1,99 @@
+{
+  "issue": 58,
+  "what": "the rasterizer drawing at a size the viewBox does not state",
+  "test": null,
+  "note": [
+    "`test: null` means the whole suite, and here that is load-bearing twice",
+    "over. The additive invariant this ticket is most likely to break lives in",
+    "the six `*_raster_test.dart` golden comparisons, not in",
+    "`raster_scale_test.dart` — a narrowed run would report a 1:1 regression",
+    "as a survivor.",
+    "",
+    "Group A removes the scale from one place at a time. Every one of these is",
+    "a *silently wrong picture* rather than a crash, which is the class this",
+    "seam exists to stop.",
+    "",
+    "A3 is the one that earned this file. The gradient axis was the only",
+    "length in the rasterizer that is neither carried by the matrix nor scaled",
+    "at construction, so it was missed on the first pass and the suite was",
+    "green. `sunset` at 2x came back 108/255 off across whole interior rows",
+    "with every shape exactly where it belonged.",
+    "",
+    "Group B removes a refusal. A non-uniform scale is not a wrong number, it",
+    "is a Gaussian that is no longer isotropic — `blurSigma` reads the",
+    "matrix's column norms and would silently take one of two blurs.",
+    "",
+    "A5 used to mutate `scale: sx` to `scale: sy` as well. That half was dropped",
+    "rather than kept: the guard three lines above throws unless `sx == sy`, so",
+    "the two are provably the same value wherever the return is reached, and a",
+    "case that cannot die makes the runner's non-zero exit mean nothing. Same",
+    "judgement as the two #41 mutants that were retired for surviving by design.",
+    "What is left is the swap, which is *not* inert — it feeds the filter",
+    "region's -10%/120% default, and only a non-square viewBox can tell."
+  ],
+  "cases": [
+    {
+      "group": "A",
+      "name": "A1 — the shape matrix loses the device scale",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "    inherited: Affine.scaling(view.scale, view.scale),",
+      "to": "    inherited: Affine.identity,"
+    },
+    {
+      "group": "A",
+      "name": "A2 — the mask is not scaled",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "  return scale == 1\n      ? shape\n      : RoundedRectMask(",
+      "to": "  return scale != 0\n      ? shape\n      : RoundedRectMask("
+    },
+    {
+      "group": "A",
+      "name": "A3 — the gradient axis stays in user units",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "    x1: (_num(node.attribute('x1')) ?? 0) * scale,",
+      "to": "    x1: (_num(node.attribute('x1')) ?? 0),"
+    },
+    {
+      "group": "A",
+      "name": "A4 — the filter region is resolved against the device size",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "  final filters = _readFilters(root, view.viewWidth, view.viewHeight);",
+      "to": "  final filters = _readFilters(root, width.toDouble(), height.toDouble());"
+    },
+    {
+      "group": "A",
+      "name": "A5 — the viewBox’s two numbers are swapped",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "  return (scale: sx, viewWidth: viewWidth, viewHeight: viewHeight);",
+      "to": "  return (scale: sx, viewWidth: viewHeight, viewHeight: viewWidth);"
+    },
+    {
+      "group": "B",
+      "name": "B1 — a non-uniform target is accepted",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "  if (sx != sy) {",
+      "to": "  if (sx != sy && false) {"
+    },
+    {
+      "group": "B",
+      "name": "B2 — a non-positive target is accepted",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "  if (width <= 0 || height <= 0) {",
+      "to": "  if (width < 0 || height < 0) {"
+    },
+    {
+      "group": "B",
+      "name": "B3 — a viewBox with no extent is accepted",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "      viewWidth <= 0 ||\n      viewHeight <= 0) {",
+      "to": "      viewWidth < 0 ||\n      viewHeight < 0) {"
+    },
+    {
+      "group": "A",
+      "name": "A6 — the stroke outline's discs lose the scaled tolerance",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "                flatness: flatness,\n              ))\n                matrix.transformContour(contour),",
+      "to": "              ))\n                matrix.transformContour(contour),"
+    }
+  ]
+}
