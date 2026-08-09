@@ -166,6 +166,23 @@ void _bytesOnScreen() {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(seconds: 1)),
       );
+      // **One pump, deliberately, and this test currently FAILS here.**
+      //
+      // Measured while writing it, and all three are dead ends:
+      //   * `pumpWidget` inside `runAsync` deadlocks — a single test ran past
+      //     seven minutes without failing.
+      //   * one pump after `runAsync` reaches this line with no `RawImage`,
+      //     which is the honest failure below.
+      //   * a *second* pump hangs again — 3m30 to "did not complete".
+      // And `decodeImageFromPixelsSync`, which would delete the async surface
+      // entirely, is `not implemented on Skia` — measured, and the test backend
+      // is Skia.
+      //
+      // So the widget's raster is started from `build()`, in the test zone,
+      // while its completion needs the real one, and no arrangement of pumps
+      // bridges that. Fixing it is a change to the *widget*, not to this test —
+      // see #80. One pump is kept because a test that fails in a second is a
+      // gate and a test that hangs is not.
       await tester.pump();
 
       expect(
