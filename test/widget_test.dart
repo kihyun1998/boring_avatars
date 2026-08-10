@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:boring_avatars/boring_avatars.dart';
 import 'package:boring_avatars/src/widget/boring_avatar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderImage;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/golden_cases.dart';
@@ -16,7 +17,7 @@ import 'support/golden_cases.dart';
 /// the raster lives in the fake-async zone while `compute` and
 /// `decodeImageFromPixels` complete on real callbacks, and all three pump
 /// arrangements were measured shut (see [_bytesOnScreen] below for the numbers).
-/// Three behaviours therefore have no test here and are verified by reading:
+/// Four behaviours therefore have no test here and are verified by reading:
 ///
 /// - `_rasterFailed` — that a failed raster is reported through
 ///   `FlutterError.reportError` and that the **stale image is dropped**, so a
@@ -135,6 +136,87 @@ void main() {
         ),
       );
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('a parent tighter than `size` puts Flutter\'s sampler back in', () {
+    // **Measured, because the README makes a claim next to it.** The
+    // determinism guarantee is about the image this package *produces*: drawn
+    // at the box's own physical size and handed over with `FilterQuality.none`,
+    // so nothing resamples it. A parent that squeezes the box is a different
+    // thing, and it is outside the package — but "outside the package" is worth
+    // nothing as an assertion if the boundary was never located.
+    //
+    // `rendering/image.dart:352` is where it happens:
+    // `BoxConstraints.tightFor(width: _width, height: _height).enforce(constraints)`
+    // — `enforce` lets the *parent* win, so a 240-pixel image asked to live in
+    // 20 logical pixels lays out at 20 and is drawn scaled. There is no identity
+    // fast path in `paintImage`; it always goes through `drawImageRect`.
+
+    testWidgets('the widget yields its own size to a tighter parent', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        wrap(
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: BoringAvatar(
+              name: 'Clara Barton',
+              colors: palette,
+              size: 240,
+              version: BoringAvatarsVersion.v1_6_1,
+              variant: BoringAvatarsVariant.pixel,
+            ),
+          ),
+        ),
+      );
+      // Not 240. The widget asks; the parent decides.
+      expect(tester.getSize(find.byType(BoringAvatar)), const Size(20, 20));
+    });
+
+    testWidgets('and a real image in that box is drawn scaled, not clipped', (
+      tester,
+    ) async {
+      late final ui.Image image;
+      await tester.runAsync(() async {
+        image = await rasterAvatarImage(
+          name: 'Clara Barton',
+          colors: palette,
+          pixels: 240,
+          version: BoringAvatarsVersion.v1_6_1,
+          variant: BoringAvatarsVariant.pixel,
+          square: false,
+        );
+      });
+      addTearDown(image.dispose);
+
+      // The image already exists, so this pump has no zone to bridge — which is
+      // why this case is testable when the widget's own raster is not.
+      await tester.pumpWidget(
+        wrap(
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: RawImage(
+              image: image,
+              width: 240,
+              height: 240,
+              filterQuality: FilterQuality.none,
+            ),
+          ),
+        ),
+      );
+
+      final render = tester.renderObject<RenderImage>(find.byType(RawImage));
+      expect(image.width, 240, reason: 'the image really is 240 physical');
+      expect(
+        render.size,
+        const Size(20, 20),
+        reason:
+            '240 physical pixels into a 20-logical box is a 12:1 downscale, '
+            'and that resampling is Flutter\'s, not ours',
+      );
     });
   });
 
