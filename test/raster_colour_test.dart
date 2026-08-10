@@ -52,7 +52,13 @@ void main() {
         // left is what a hex parser genuinely cannot read: a keyword, a
         // function, a padded string, and nothing at all. #64 is where those
         // answers change; `raster_alpha_test.dart` holds the ones that moved.
-        for (final value in ['red', 'rgb(255,0,0)', ' #FF0000', '']) {
+        // **`red`, `rgb(255,0,0)` and ` #FF0000` left this list in #63**, which
+        // finished the `<color>` grammar: 148 names, the four functions,
+        // `transparent`, `currentColor`, and CSS's own trimming. What is left
+        // is what no grammar admits — a shape that looks like a function and
+        // is not, a name that is not a name, and nothing at all. #64 decides
+        // what these *draw*; this only says they were not read.
+        for (final value in ['zzz', 'rgb(255,0)', 'hsv(0,100%,50%)', '']) {
           final declaration = readColourDeclaration(value);
           expect(declaration, isA<UnreadableColour>(), reason: value);
           expect((declaration as UnreadableColour).text, value);
@@ -61,21 +67,22 @@ void main() {
     );
 
     test(
-      'the keyword is matched exactly, and that is a recorded condition',
+      'the keyword is matched loosely, which #63 measured before changing',
       () {
-        // CSS keywords are ASCII case-insensitive and tolerate surrounding
-        // whitespace; upstream writes exactly `none`, lower case and unpadded,
-        // everywhere it writes it — 204 times on a drawn element and once on
-        // the root `<svg>` of every render. Matching exactly is therefore
-        // free today — every spelling below already drew nothing as an
-        // unreadable value, and still does. Valid **as long as the only writer
-        // of these scenes is this package's own emitter**; a caller-supplied
-        // scene would make the loose spellings reachable, and #63 — which has
-        // to settle case folding for 148 named colours — is where that lands.
-        for (final value in ['NONE', 'None', ' none', 'none ']) {
+        // **The validity condition this test used to carry came due.** It said
+        // matching `none` exactly was free while this package's emitter was
+        // the only writer of these scenes, and named #63 as where a loose
+        // match would land. #63 rendered the spellings in Chrome: `NONE`,
+        // `None` and ` none ` all paint nothing, exactly as `none` does, so
+        // the strict match was a divergence waiting for a caller to write one.
+        //
+        // The answer these spellings produce is unchanged — nothing is drawn
+        // either way — which is why this could sit unresolved for four tickets
+        // and why only a measurement, not a golden, could settle it.
+        for (final value in ['none', 'NONE', 'None', ' none', 'none ']) {
           expect(
             readColourDeclaration(value),
-            isA<UnreadableColour>(),
+            isA<NoneColour>(),
             reason: value,
           );
         }
@@ -143,9 +150,20 @@ void main() {
     test('unreadable draws nothing — today', () {
       // #64 is where this answer changes: Chrome paints nothing for an
       // unreadable `fill`, so the answer is already right, but it is right
-      // for the wrong reason until the notation is actually learned (#62,
-      // #63). What this ticket fixes is that it is now a *separate* reason.
-      expect(centre('red'), [0, 0, 0, 0]);
+      // for the wrong reason until the notation is actually learned.
+      //
+      // **`red` used to stand here and no longer can** — #63 taught the parser
+      // the 148 names, so it is a colour now and the witness has to be
+      // something no grammar admits.
+      expect(centre('zzz'), [0, 0, 0, 0]);
+    });
+
+    test('and a name the parser has learned draws that colour', () {
+      // The other half, which the shortened list above cannot state: `red`
+      // moved from "unreadable" to "read", and a caller gets the colour.
+      expect(centre('red'), [255, 0, 0, 255]);
+      expect(centre('rgb(255 0 0)'), [255, 0, 0, 255]);
+      expect(centre('transparent'), [0, 0, 0, 0]);
     });
   });
 
@@ -213,7 +231,11 @@ void main() {
     });
 
     test('unreadable draws nothing — today', () {
-      expect(centre('red'), [0, 0, 0, 0]);
+      expect(centre('zzz'), [0, 0, 0, 0]);
+    });
+
+    test('and a stroke takes a learned name like a fill does', () {
+      expect(centre('red'), [255, 0, 0, 255]);
     });
   });
 
@@ -325,14 +347,34 @@ void main() {
       // Chrome paints black here, not nothing, and #64 is where that answer
       // is taken. Until then the seam refuses rather than guessing, which is
       // the rule the whole rasterizer is built on.
+      //
+      // `red` was the witness until #63 taught the parser its 148 names; the
+      // value has to be one no grammar admits now.
       expect(
         () => rasterizeScene(
-          scene(const [SvgAttribute('stop-color', 'red')]),
+          scene(const [SvgAttribute('stop-color', 'zzz')]),
           width: 8,
           height: 8,
         ),
         throwsA(isA<UnsupportedSceneError>()),
       );
+    });
+
+    test('and a learned name reaches the gradient', () {
+      // The path #62 widened and #63 fills: a `<stop>` now takes any CSS
+      // colour, not only a hex one.
+      //
+      // Sampled on the **top row**, because this gradient runs down to a black
+      // second stop — the first draft of this test read the middle and got
+      // 112, which is the interpolation doing its job. t is 0.5/8 here, so the
+      // red channel is 255 - 255/16 = 239.06.
+      final image = rasterizeScene(
+        scene(const [SvgAttribute('stop-color', 'red')]),
+        width: 8,
+        height: 8,
+      );
+      final i = 4 * 4;
+      expect(image.bytes.sublist(i, i + 4), [239, 0, 0, 255]);
     });
   });
 }

@@ -12,6 +12,8 @@ library;
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'named_colours.dart';
+
 /// An RGBA buffer, four bytes a pixel, row-major, **straight (not
 /// premultiplied) alpha**.
 ///
@@ -204,15 +206,18 @@ final class UnreadableColour extends ColourDeclaration {
 /// `stop-color` share this and diverge afterwards, which is the only way the
 /// divergence can be argued about.
 ///
-/// The keyword is matched exactly. CSS keywords are ASCII case-insensitive and
-/// tolerate surrounding whitespace, so `NONE` and ` none ` are `none` to a
-/// browser and are `unreadable` here — which costs nothing today, since both
-/// answers are "draw nothing" and upstream writes exactly `none`, lower case
-/// and unpadded, everywhere it writes it: 204 times on a drawn element (all of
-/// them `beam`'s) and once on the root `<svg>` of every render. Valid **as long
-/// as the only writer of these scenes is this package's own emitter**. #63 has
-/// to settle case folding for 148 named colours and is where a loose match
-/// belongs if one is ever wanted.
+/// **The keyword is matched loosely as of #63, and that was measured before it
+/// was changed.** CSS keywords are ASCII case-insensitive and tolerate
+/// surrounding whitespace; this row previously matched `none` exactly and
+/// recorded the looseness as a validity condition, naming #63 as the place a
+/// loose match belongs "if one is ever wanted". It is: rendered in Chrome,
+/// `NONE`, `None` and ` none ` all paint nothing, exactly as `none` does — so
+/// the strict match was a divergence waiting for a caller to write one.
+///
+/// It costs nothing to have been strict until now, because upstream writes
+/// exactly `none`, lower case and unpadded, everywhere it writes it: 204 times
+/// on a drawn element (all of them `beam`'s) and once on the root `<svg>` of
+/// every render.
 ///
 /// The enumeration behind that is closed rather than sampled. Across every
 /// rendered section of the fixture, `fill`, `stroke` and `stop-color` take
@@ -220,8 +225,8 @@ final class UnreadableColour extends ColourDeclaration {
 /// `url(#…)` — on a `fill` only — and an upper-case six-digit `#RRGGBB`.
 ColourDeclaration readColourDeclaration(String? declared) {
   if (declared == null) return const AbsentColour();
-  if (declared == 'none') return const NoneColour();
-  final colour = parseHexColour(declared);
+  if (_cssNormalise(declared) == 'none') return const NoneColour();
+  final colour = parseCssColour(declared);
   return colour == null ? UnreadableColour(declared) : ParsedColour(colour);
 }
 
@@ -276,6 +281,205 @@ RasterColour? parseHexColour(String? hex) {
     (v >> 8) & 0xFF,
     v & 0xFF,
   );
+}
+
+/// CSS whitespace — the five ASCII characters, and **not** Dart's `trim()`.
+///
+/// `trim()` also removes U+00A0 and the Unicode space separators, which CSS
+/// does not: trimming them would make this parser *accept* strings a browser
+/// rejects, which is the direction that produces a picture the reference does
+/// not. Erring the other way only produces a refusal.
+bool _isCssSpace(int unit) =>
+    unit == 0x20 ||
+    unit == 0x09 ||
+    unit == 0x0A ||
+    unit == 0x0C ||
+    unit == 0x0D;
+
+/// Trimmed and lower-cased **in ASCII only**, which is what CSS means by
+/// case-insensitive.
+///
+/// `String.toLowerCase` is Unicode-aware, and that is a divergence rather than
+/// a bonus: U+212A KELVIN SIGN lower-cases to `k`, so `blac\u{212A}` would
+/// match `black` here and match nothing in a browser.
+String _cssNormalise(String value) {
+  var start = 0;
+  var end = value.length;
+  while (start < end && _isCssSpace(value.codeUnitAt(start))) {
+    start++;
+  }
+  while (end > start && _isCssSpace(value.codeUnitAt(end - 1))) {
+    end--;
+  }
+  final out = StringBuffer();
+  for (var i = start; i < end; i++) {
+    final unit = value.codeUnitAt(i);
+    out.writeCharCode(unit >= 0x41 && unit <= 0x5A ? unit + 0x20 : unit);
+  }
+  return out.toString();
+}
+
+/// Every `<color>` this rasterizer reads: hex, the 148 named colours,
+/// `transparent`, `currentColor`, and the `rgb()` / `rgba()` / `hsl()` /
+/// `hsla()` functions.
+///
+/// **ADR-0001's R1 in one function.** What is a valid `<color>` is the
+/// property's grammar, so this answers the grammar and nothing above it —
+/// `none` is a `<paint>` alternative rather than a colour and is read before
+/// this, by [readColourDeclaration].
+///
+/// `currentColor` resolves to **black**, and that is measured rather than
+/// assumed: rendered in a document where no ancestor declares `color`, Chrome
+/// paints `0,0,0,255`, which is `color`'s initial value arriving through the
+/// same inheritance R2 uses. Valid **as long as nothing this package emits
+/// declares `color`** — nothing does, and a variant that started to would make
+/// this wrong silently, because the rasterizer does not read the root.
+RasterColour? parseCssColour(String? value) {
+  if (value == null) return null;
+  final v = _cssNormalise(value);
+  if (v.isEmpty) return null;
+  if (v.startsWith('#')) return parseHexColour(v);
+  if (v == 'transparent') return const RasterColour(0, 0, 0, 0);
+  if (v == 'currentcolor') return const RasterColour(0, 0, 0);
+  final named = namedColours[v];
+  if (named != null) {
+    return RasterColour(
+      (named >> 16) & 0xFF,
+      (named >> 8) & 0xFF,
+      named & 0xFF,
+    );
+  }
+  return _parseColourFunction(v);
+}
+
+/// A finite double, or `null`. `double.tryParse` accepts `Infinity` and `NaN`,
+/// which would survive every clamp below and reach the buffer as a byte nobody
+/// chose.
+double? _cssNumber(String s) {
+  if (s.isEmpty) return null;
+  final n = double.tryParse(s);
+  return n == null || !n.isFinite ? null : n;
+}
+
+/// `rgb()`, `rgba()`, `hsl()`, `hsla()` — measured, not read from a summary.
+///
+/// The grammar this accepts is exactly what Chrome accepted in #63's probe:
+/// either separator (`a, b, c` or `a b c`, the latter taking its alpha after a
+/// `/`), either value form for `rgb` (all three percentages or all three
+/// numbers, **never mixed** — `rgb(100%,0,0)` is invalid there), percentages
+/// required for `hsl`'s saturation and lightness (`hsl(0,100,50)` is invalid),
+/// alpha as a number or a percentage, and every value clamped rather than
+/// refused (`rgb(300,-20,0)` is `255,0,0`; an alpha of `-1` is 0 and `150%` is
+/// 1).
+RasterColour? _parseColourFunction(String v) {
+  final open = v.indexOf('(');
+  if (open < 0 || !v.endsWith(')')) return null;
+  final name = v.substring(0, open);
+  final isRgb = name == 'rgb' || name == 'rgba';
+  if (!isRgb && name != 'hsl' && name != 'hsla') return null;
+
+  var body = v.substring(open + 1, v.length - 1);
+  List<String> parts;
+  if (body.contains(',')) {
+    // The legacy comma form has no `/` alternative; accepting both would take
+    // a string Chrome refuses.
+    if (body.contains('/')) return null;
+    parts = body.split(',').map(_cssNormalise).toList();
+  } else {
+    var alpha = '';
+    final slash = body.indexOf('/');
+    if (slash >= 0) {
+      alpha = _cssNormalise(body.substring(slash + 1));
+      body = body.substring(0, slash);
+      if (alpha.isEmpty) return null;
+    }
+    parts = [
+      for (final p in body.split(RegExp(r'[ \t\n\f\r]+')))
+        if (p.isNotEmpty) p,
+      if (alpha.isNotEmpty) alpha,
+    ];
+  }
+  if (parts.length != 3 && parts.length != 4) return null;
+  if (parts.any((p) => p.isEmpty)) return null;
+
+  final a = parts.length == 4 ? _cssAlpha(parts[3]) : 255;
+  if (a == null) return null;
+
+  if (isRgb) {
+    final percent = parts[0].endsWith('%');
+    // All three or none: a browser refuses the mixture rather than coercing it.
+    if (parts.take(3).any((p) => p.endsWith('%') != percent)) return null;
+    final channels = <int>[];
+    for (final p in parts.take(3)) {
+      final n = _cssNumber(percent ? p.substring(0, p.length - 1) : p);
+      if (n == null) return null;
+      channels.add((percent ? n * 255 / 100 : n).round().clamp(0, 255));
+    }
+    return RasterColour(channels[0], channels[1], channels[2], a);
+  }
+
+  final h = _cssHue(parts[0]);
+  if (h == null) return null;
+  if (!parts[1].endsWith('%') || !parts[2].endsWith('%')) return null;
+  final s = _cssNumber(parts[1].substring(0, parts[1].length - 1));
+  final l = _cssNumber(parts[2].substring(0, parts[2].length - 1));
+  if (s == null || l == null) return null;
+  return _hslToRgb(h, (s / 100).clamp(0.0, 1.0), (l / 100).clamp(0.0, 1.0), a);
+}
+
+/// A hue in degrees, from any of CSS's four angle units.
+///
+/// **`grad` is tested before `rad` and that ordering is load-bearing** — `grad`
+/// ends with `rad`, so the other order reads `200grad` as the number `200g`
+/// and refuses a valid colour. All four are measured: `3.14159rad` and
+/// `200grad` both render cyan, `0.5turn` likewise, and `1.5708rad` comes out a
+/// shade *past* 90° because 1.5708 is larger than π/2 — which is the case that
+/// separates a wrong conversion from a rounding difference.
+double? _cssHue(String s) {
+  for (final (suffix, factor) in const [
+    ('deg', 1.0),
+    ('grad', 0.9),
+    ('rad', 180 / math.pi),
+    ('turn', 360.0),
+  ]) {
+    if (s.endsWith(suffix)) {
+      final n = _cssNumber(s.substring(0, s.length - suffix.length));
+      return n == null ? null : n * factor;
+    }
+  }
+  return _cssNumber(s);
+}
+
+/// 0–255 from a number in 0–1 or a percentage, clamped rather than refused.
+int? _cssAlpha(String s) {
+  final percent = s.endsWith('%');
+  final n = _cssNumber(percent ? s.substring(0, s.length - 1) : s);
+  if (n == null) return null;
+  return ((percent ? n / 100 : n).clamp(0.0, 1.0) * 255).round();
+}
+
+/// CSS Color 4 §7.1's conversion, with the hue wrapped first.
+///
+/// Negative and out-of-range hues wrap rather than clamp — measured:
+/// `hsl(-120…)` is blue and `hsl(480…)` is green, which are 240° and 120°.
+/// Dart's `%` is already non-negative for a positive divisor, unlike JS's, so
+/// no sign correction is needed here (hidden-state #2 is about the other
+/// direction).
+RasterColour _hslToRgb(double hue, double s, double l, int a) {
+  final h = hue % 360;
+  final c = (1 - (2 * l - 1).abs()) * s;
+  final x = c * (1 - ((h / 60) % 2 - 1).abs());
+  final m = l - c / 2;
+  final (r, g, b) = switch (h) {
+    < 60 => (c, x, 0.0),
+    < 120 => (x, c, 0.0),
+    < 180 => (0.0, c, x),
+    < 240 => (0.0, x, c),
+    < 300 => (x, 0.0, c),
+    _ => (c, 0.0, x),
+  };
+  int byte(double channel) => ((channel + m) * 255).round().clamp(0, 255);
+  return RasterColour(byte(r), byte(g), byte(b), a);
 }
 
 /// Per-pixel coverage of a rounded rectangle, in the range 0–1.

@@ -25,12 +25,18 @@ First release. Reproduces upstream `boring-avatars` **1.6.1, 1.6.2 and 1.6.3**
   and it has no `<filter>`, so `marble` loses its blur. Not through `Canvas`
   either, which would make the pixels depend on Skia-vs-Impeller, GPU, platform
   and Flutter version.
-* The widget's `colors` is narrower than the SVG function's: the rasterizer
-  reads **hex** — `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, in either case — and
-  nothing else yet, and rather than draw a blank for a colour it cannot read,
-  the widget throws and names the argument. A palette colour may carry its own
-  transparency; its alpha multiplies the shape's coverage, as a browser does
-  with the same document.
+* The widget's `colors` is narrower than the SVG function's, which takes any CSS
+  colour. The rasterizer reads hex (`#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`),
+  the **148 CSS named colours**, `transparent`, `currentColor`, and
+  `rgb()` / `rgba()` / `hsl()` / `hsla()` — either separator, percentages or
+  0–255, alpha as a number or a percentage, hue in `deg` / `grad` / `rad` /
+  `turn`. Keywords are ASCII case-insensitive and tolerate surrounding
+  whitespace. Rather than draw a blank for anything outside that grammar, the
+  widget throws and names the argument.
+* A palette colour may carry its own transparency, and its alpha multiplies the
+  shape's coverage, as a browser does with the same document.
+* The named-colour table is generated from the CSS Color 4 specification and
+  cross-checked against a real Chrome render — 148 of 148 agree.
 * **The drawing happens off the frame.** A background isolate on native; on the
   web, where Flutter has no isolate to offer, the rasterizer yields the thread
   between bands instead. Your app stays responsive while an avatar draws, and

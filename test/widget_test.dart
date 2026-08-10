@@ -47,24 +47,20 @@ void main() {
   );
 
   group('the palette this surface accepts is narrower, and it says so', () {
-    // **Derived, not chosen.** `boringAvatarSvg` passes a colour through to the
-    // document and a browser draws it, so `red` works there. The rasterizer
-    // reads `#RRGGBB` and nothing else yet (#62/#63 widen it), and measured on
-    // the branch: `red` makes five variants draw a **blank** and `sunset`
-    // throw. A blank is the "plausible wrong picture" `scene_raster.dart`'s
-    // header names as the thing that seam exists to stop, and hidden-state #20
-    // records that the narrow set is a **gap** rather than a contract — its own
-    // premise was measured false in #62.
-    //
-    // So the widget rejects at the seam and names the argument, which is what
+    // **Derived, not chosen.** A colour the raster path cannot read would draw
+    // a **blank** avatar rather than fail — the "plausible wrong picture"
+    // `scene_raster.dart`'s header names as the thing that seam exists to stop
+    // — so the widget rejects at the seam and names the argument, which is what
     // `avatar.dart:141` already does for `size` (S-4) and what S-2 does for an
     // empty `beam` palette.
     //
-    // **#62 performed the first widening, and it was additive as promised**:
-    // `#F00` and `#FF000080` moved out of this list and into the group below,
-    // and no palette that worked before stopped working. `#63` takes `red` and
-    // `rgb(…)` next.
-    for (final bad in const ['red', 'rgb(255,0,0)', '#FF000', '']) {
+    // **The gap this guarded is now closed, in two additive steps.** #62 took
+    // the hex forms and #63 the rest of the `<color>` grammar — the 148 named
+    // colours, `transparent`, `currentColor`, `rgb()`/`rgba()`/`hsl()`/`hsla()`
+    // — so what stays refused is only what no grammar admits. Hidden-state #20
+    // called the narrow set a *gap* rather than a contract, and it was: no
+    // palette that worked at any point stopped working.
+    for (final bad in const ['zzz', 'rgb(255,0)', 'hsv(0,100%,50%)', '']) {
       testWidgets('"$bad" is refused, naming colors', (tester) async {
         await tester.pumpWidget(
           wrap(
@@ -105,7 +101,21 @@ void main() {
     // which is the behaviour a caller actually gets. A build that widened
     // `parseHexColour` and forgot to widen this guard would pass the list above
     // and fail here.
-    for (final good in const ['#F00', '#f00', '#FF000080', '#F008', '#FF00']) {
+    for (final good in const [
+      '#F00',
+      '#f00',
+      '#FF000080',
+      '#F008',
+      '#FF00',
+      'red',
+      'REBECCAPURPLE',
+      ' transparent ',
+      'currentColor',
+      'rgb(255, 0, 0)',
+      'rgba(255 0 0 / 50%)',
+      'hsl(120, 100%, 25%)',
+      'hsla(0 100% 50% / 0.5)',
+    ]) {
       testWidgets('"$good" is accepted, because a browser draws it', (
         tester,
       ) async {
