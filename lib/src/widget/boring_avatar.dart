@@ -157,15 +157,26 @@ class _AvatarKey {
   final BoringAvatarsVariant variant;
   final bool square;
 
-  @override
-  bool operator ==(Object other) =>
-      other is _AvatarKey &&
+  /// Whether [other] is the **same picture**, at whatever resolution.
+  ///
+  /// Everything except [pixels], and the split is the point. Of the six inputs,
+  /// five decide *what is drawn* — a different `name`, palette, `variant`,
+  /// `version` or `square` is a different avatar — and only `pixels` decides how
+  /// finely the same avatar is drawn.
+  ///
+  /// That is what lets an already-drawn image be judged: pixels made for another
+  /// `name` are a picture of somebody else, while pixels made for the same one at
+  /// a smaller size are the right picture at the wrong resolution.
+  bool sameDrawingAs(_AvatarKey other) =>
       other.name == name &&
-      other.pixels == pixels &&
       other.version == version &&
       other.variant == variant &&
       other.square == square &&
       _sameColours(other.colors, colors);
+
+  @override
+  bool operator ==(Object other) =>
+      other is _AvatarKey && other.pixels == pixels && sameDrawingAs(other);
 
   static bool _sameColours(List<String> a, List<String> b) {
     if (a.length != b.length) return false;
@@ -355,6 +366,29 @@ class _BoringAvatarState extends State<BoringAvatar> {
 
   void _sync(_AvatarKey key) {
     if (key == _wanted) return;
+
+    // **A different picture must not keep the old one on screen while it draws.**
+    //
+    // This surface already refuses that on failure — a widget whose fields say
+    // `beam` must stop drawing the `pixel` it used to be — and until now the
+    // success path did the same thing for as long as a raster takes, which used
+    // to be one frame and is now hundreds of milliseconds. A recycled list row
+    // would show the previous person's face under the new person's name.
+    //
+    // **Resolution is the exception, and it is what keeps this usable.** When
+    // only `pixels` moved, the image on screen is the right avatar drawn too
+    // coarsely, not somebody else's; blanking it would make every size change
+    // and every ratio change flash.
+    //
+    // No `setState`: this runs inside `build`, where one is illegal and none is
+    // needed — the build below reads `_image` after this returns.
+    final settled = _settled;
+    final stale = _image;
+    if (stale != null && (settled == null || !key.sameDrawingAs(settled))) {
+      _image = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) => stale.dispose());
+    }
+
     _wanted = key;
     // A raster already running will pick this up when it lands: it re-reads
     // `_wanted` rather than closing over the key it started with.
