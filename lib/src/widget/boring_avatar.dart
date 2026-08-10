@@ -18,6 +18,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/widgets.dart';
 
 import '../avatar.dart';
@@ -71,18 +72,23 @@ class BoringAvatar extends StatefulWidget {
   ///
   /// **There is no upper bound, and that is a decision rather than an
   /// oversight.** Cost is O(area) — roughly 86 bytes of `Float64` per output
-  /// pixel on the filtered path, so `marble` at 1024 physical pixels a side
-  /// takes about 2.4 s and an 86 MiB layer, and 2048 is four times that again.
-  /// A ceiling was considered and rejected: this package refuses input it
-  /// **cannot honour** (a `size` that is not a size, a non-uniform scale), and
-  /// a large avatar is one it can honour, only slowly. Deciding how slow is too
-  /// slow is the caller's budget, and size is theirs to inject.
+  /// pixel on the filtered path, so a large `marble` costs seconds and tens of
+  /// megabytes. A ceiling was considered and rejected: this package refuses
+  /// input it **cannot honour** (a `size` that is not a size, a non-uniform
+  /// scale), and a large avatar is one it can honour, only slowly. Deciding how
+  /// slow is too slow is the caller's budget, and size is theirs to inject.
   ///
-  /// **That argument has a hole, and it is recorded rather than papered over.**
-  /// The rasterisation currently runs inside `build()` — see #80 — so "slow" is
-  /// not a cost the caller can budget around, it is a frozen UI thread for the
-  /// duration. The reasoning above holds once the work is off the frame; until
-  /// then, treat the numbers as a hard warning rather than a trade-off.
+  /// **That argument used to have a hole, and the hole is now closed.** It
+  /// assumed the caller could budget around "slow", which was false while the
+  /// raster ran inside `build()` and froze the thread for the duration. It no
+  /// longer does: the drawing goes through an isolate on native and yields
+  /// between bands on web, so a slow avatar is a *late* avatar rather than a
+  /// stalled application. Cost is still real, and still the caller's to weigh.
+  ///
+  /// **Web is the expensive platform**, measured in #80: the same drawing runs
+  /// roughly 4x slower there than on native, and building for WebAssembly made
+  /// it slower still rather than faster. The frame survives either way; the
+  /// avatar simply takes longer to arrive.
   ///
   /// Multiply by the device pixel ratio before judging: a 512-logical avatar on
   /// a 3x display is 1536 physical.
@@ -167,7 +173,71 @@ class _AvatarKey {
   );
 }
 
+/// Everything the drawing needs, as one value an isolate can carry.
+///
+/// Primitives and enums only — no `ui.Image`, no closure over the widget. That
+/// is not a style choice: it is what makes the type a legal `compute` message.
+typedef _RasterRequest = ({
+  String name,
+  List<String> colors,
+  int pixels,
+  BoringAvatarsVersion version,
+  BoringAvatarsVariant variant,
+  bool square,
+});
+
+/// Scene → pixels → premultiplied bytes. **Top-level, because `compute` needs
+/// a target it can name rather than a closure it would have to capture.**
+///
+/// Async because [rasterizeSceneAsync] is: the raster hands the loop back
+/// between bands, which is what keeps a frame alive on web where `compute` has
+/// no isolate to hide the work in. `ComputeCallback` is
+/// `FutureOr<R> Function(M)`, so a future here is legal rather than a
+/// workaround.
+Future<Uint8List> _rasterBytes(_RasterRequest request) async {
+  final scene = buildAvatarScene(
+    name: request.name,
+    colors: request.colors,
+    size: request.pixels,
+    version: request.version,
+    variant: request.variant,
+    square: request.square,
+  );
+  final raster = await rasterizeSceneAsync(
+    scene,
+    width: request.pixels,
+    height: request.pixels,
+  );
+
+  // **`PixelFormat.rgba8888` is premultiplied and our buffer is straight.**
+  // Straight is the deliberate choice — a browser hands back straight bytes, so
+  // a premultiplied buffer would differ from Chrome on every antialiased pixel
+  // — and `raster.dart:22` already records that the cost is "one multiply at
+  // the Flutter hand-off". This is that multiply, and it rides along to
+  // whichever thread drew the pixels rather than making a second pass here.
+  final premultiplied = Uint8List(raster.bytes.length);
+  for (var i = 0; i < raster.bytes.length; i += 4) {
+    final a = raster.bytes[i + 3];
+    premultiplied[i] = (raster.bytes[i] * a + 127) ~/ 255;
+    premultiplied[i + 1] = (raster.bytes[i + 1] * a + 127) ~/ 255;
+    premultiplied[i + 2] = (raster.bytes[i + 2] * a + 127) ~/ 255;
+    premultiplied[i + 3] = a;
+  }
+  return premultiplied;
+}
+
 /// Scene → pixels → a `ui.Image`, with nothing of the widget in it.
+///
+/// **The split is not arbitrary — it is where an isolate boundary can go.**
+/// A `ui.Image` is an engine resource and cannot cross one, so the drawing goes
+/// through [compute] and the decode stays on the calling thread. Measured in
+/// #80: the hop costs 0.3 ms and does not grow with the buffer, so there is no
+/// size below which it is not worth taking, and therefore no threshold for this
+/// package to invent.
+///
+/// On web `compute` has no isolate to offer and runs `_rasterBytes` on the main
+/// thread — which is why the raster bands and yields on its own rather than
+/// relying on the hop.
 ///
 /// **Extracted so the hand-off can be proved.** Step 4 asks this layer for the
 /// produced image's bytes against the goldens, and that proof cannot be taken
@@ -189,29 +259,14 @@ Future<ui.Image> rasterAvatarImage({
   required BoringAvatarsVariant variant,
   required bool square,
 }) async {
-  final scene = buildAvatarScene(
+  final premultiplied = await compute(_rasterBytes, (
     name: name,
     colors: colors,
-    size: pixels,
+    pixels: pixels,
     version: version,
     variant: variant,
     square: square,
-  );
-  final raster = rasterizeScene(scene, width: pixels, height: pixels);
-
-  // **`PixelFormat.rgba8888` is premultiplied and our buffer is straight.**
-  // Straight is the deliberate choice — a browser hands back straight bytes, so
-  // a premultiplied buffer would differ from Chrome on every antialiased pixel
-  // — and `raster.dart:22` already records that the cost is "one multiply at
-  // the Flutter hand-off". This is that multiply.
-  final premultiplied = Uint8List(raster.bytes.length);
-  for (var i = 0; i < raster.bytes.length; i += 4) {
-    final a = raster.bytes[i + 3];
-    premultiplied[i] = (raster.bytes[i] * a + 127) ~/ 255;
-    premultiplied[i + 1] = (raster.bytes[i + 1] * a + 127) ~/ 255;
-    premultiplied[i + 2] = (raster.bytes[i + 2] * a + 127) ~/ 255;
-    premultiplied[i + 3] = a;
-  }
+  ), debugLabel: 'boring_avatars raster');
 
   final completer = Completer<ui.Image>();
   ui.decodeImageFromPixels(
@@ -260,14 +315,20 @@ class _BoringAvatarState extends State<BoringAvatar> {
   }
 
   Future<void> _raster(_AvatarKey key) async {
-    final image = await rasterAvatarImage(
-      name: key.name,
-      colors: key.colors,
-      pixels: key.pixels,
-      version: key.version,
-      variant: key.variant,
-      square: key.square,
-    );
+    final ui.Image image;
+    try {
+      image = await rasterAvatarImage(
+        name: key.name,
+        colors: key.colors,
+        pixels: key.pixels,
+        version: key.version,
+        variant: key.variant,
+        square: key.square,
+      );
+    } catch (error, stack) {
+      _rasterFailed(key, error, stack);
+      return;
+    }
 
     // Unmounted, or the inputs moved on while this was in flight: the arriving
     // image is nobody's and has to be released rather than assigned.
@@ -285,6 +346,43 @@ class _BoringAvatarState extends State<BoringAvatar> {
     }
   }
 
+  /// A raster that threw, handled where it can be seen.
+  ///
+  /// **Two separate failures were possible here, and both were live.** The
+  /// error vanished into the zone — `avatar.dart` promises an `ArgumentError`
+  /// for `beam` with an empty palette and this surface threw nothing — and the
+  /// *previous* avatar stayed on screen, so a widget whose fields said `beam`
+  /// kept drawing the `pixel` it used to be. Silently, and forever.
+  ///
+  /// So: report it where the framework's error machinery can see it, and drop
+  /// the stale image, because showing the wrong avatar is the plausible wrong
+  /// picture this package's seams exist to refuse.
+  ///
+  /// `_drawn` stays latched at the failing key on purpose. Retrying the same
+  /// input that just threw would report the same error every frame; a *different*
+  /// input is a different key and does try again.
+  void _rasterFailed(_AvatarKey key, Object error, StackTrace stack) {
+    if (!mounted || key != _drawn) return;
+
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stack,
+        library: 'boring_avatars',
+        context: ErrorDescription(
+          'rasterising a BoringAvatar (${key.variant.name}, '
+          '${key.pixels}x${key.pixels} physical)',
+        ),
+      ),
+    );
+
+    final stale = _image;
+    if (stale != null) {
+      setState(() => _image = null);
+      WidgetsBinding.instance.addPostFrameCallback((_) => stale.dispose());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     _checkPalette();
@@ -294,13 +392,32 @@ class _BoringAvatarState extends State<BoringAvatar> {
     // when a keyboard appears or the text scale moves, and each of those would
     // cost a full re-rasterisation.
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final pixels = (widget.size * dpr).round();
-    if (pixels <= 0) {
+
+    // **Checked before the arithmetic, not after.** `.round()` on a non-finite
+    // double throws `UnsupportedError: Infinity or NaN toInt`, which names an
+    // internal conversion the caller never wrote and no argument at all — and
+    // an unbounded `BoxConstraints.maxWidth` hands over exactly that value in
+    // perfectly ordinary code. S-4's rule is that a public seam rejects what it
+    // cannot honour and says which argument; this is the seam, and running the
+    // multiply first was a counterexample to it.
+    if (!widget.size.isFinite || widget.size <= 0) {
       throw ArgumentError.value(
         widget.size,
         'size',
-        'must be positive; $dpr device pixels per logical pixel makes this '
-            '$pixels physical',
+        'must be a finite, positive number of logical pixels',
+      );
+    }
+    final pixels = (widget.size * dpr).round();
+    if (pixels < 1) {
+      // A separate message, because a separate thing is wrong: the size *is*
+      // positive and the device is what makes it vanish. "must be positive" was
+      // simply untrue here, and a message that misdescribes the input sends the
+      // reader to the wrong argument.
+      throw ArgumentError.value(
+        widget.size,
+        'size',
+        'is positive but rounds to $pixels physical pixels at a device pixel '
+            'ratio of $dpr; there is no image that small',
       );
     }
 
