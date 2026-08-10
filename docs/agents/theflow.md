@@ -1597,6 +1597,40 @@ even n = 8 overshoots the 4 ms slice, and the coarsening would hurt exactly
 where responsiveness matters most. Recorded so the next reader does not
 re-derive it, and so the number is a decision rather than a discovery.
 
+**And it was verified in a browser, which is the only place the claim was ever
+about.** Everything up to that point was unit-level — a `Timer.run` getting its
+turn proves the loop yields, not that a tab stays responsive. Same witness as
+the original measurement, a `setInterval` outside Dart, reporting the **worst
+single gap** per phase in Chrome:
+
+| physical px | before (one block) | after (banded) |
+|---|---|---|
+| 120 | 213 ms | **17 ms** |
+| 240 | 731 ms | **17 ms** |
+| 480 | **2362 ms** | **17 ms** |
+
+Flat in the size, and Chrome's Long Tasks API agrees independently: long tasks
+appear in every blocking phase and in **none** of the banded ones.
+
+**The web tax is far larger than native's, and it moved the default.** Total
+wall time at 480 px went 2629 ms → 10130 ms at the 4 ms slice this shipped with
+— because every yield on web is a `setTimeout(0)` the browser clamps to about
+4 ms, so a slice *at* the clamp spends most of its time waiting rather than
+drawing. Swept:
+
+| slice | total | worst stall |
+|---|---|---|
+| 4 ms | 10130 ms | 28 ms |
+| **8 ms** | **5450 ms** | **23 ms** |
+| 16 ms | 5144 ms | 32 ms |
+| 33 ms | 3407 ms | 47 ms |
+| 100 ms | 2310 ms | 110 ms |
+
+8 ms strictly dominates 16 ms — the only such pair on the curve — so it is the
+default, at a 2.1x tax. The reasoned choice (4 ms, "comfortably inside a frame")
+was the worst value on the curve, which is the entry's own argument for
+measuring defaults rather than deriving them.
+
 **And the earlier "unverified" note is partly discharged.** In this quieter run
 `pixel` @80 measured 3.5 ms against #80's recorded 3 ms and `marble` @80 25.8 ms
 against 22 ms — close enough to say the record was not wrong, only re-measured
