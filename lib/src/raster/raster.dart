@@ -570,21 +570,55 @@ RasterImage rasterizeMaskedShapes({
   required RoundedRectMask mask,
 }) {
   final image = RasterImage(width, height);
+  for (final _ in rasterizeMaskedShapesSteps(
+    image: image,
+    shapes: shapes,
+    mask: mask,
+  )) {
+    // Drained here; a caller that wants the thread back drives it itself.
+  }
+  return image;
+}
+
+/// The same drawing, as a sequence a caller can stop between.
+///
+/// **This is the only implementation** — [rasterizeMaskedShapes] drains it, so
+/// the synchronous path and the banded one cannot draw different pictures. That
+/// is deliberate and it is what makes byte-identity structural rather than
+/// something a test has to keep re-establishing: a `yield` moves control, not a
+/// number, and every loop below runs in the order it always ran.
+///
+/// **A step is a band, never a pixel.** The unit is one row of the image, one
+/// row of a filter layer, or one line of a box pass — small enough that a caller
+/// on a 60 Hz frame budget can stop in time, large enough that the generator's
+/// own per-`yield` cost stays in the noise.
+///
+/// The caller decides how long to run before yielding, and *what to yield with*.
+/// On the web that second choice is the whole thing: a microtask (`await null`)
+/// drains before the browser paints and buys nothing — measured in #80, which is
+/// how Flutter's own web `compute` manages to move no work at all.
+Iterable<void> rasterizeMaskedShapesSteps({
+  required RasterImage image,
+  required List<RasterShape> shapes,
+  required RoundedRectMask mask,
+}) sync* {
+  final width = image.width;
+  final height = image.height;
 
   for (final shape in shapes) {
     final paint = shape.fill;
     if (paint == null) continue; // no fill attribute — nothing is drawn
 
     if (shape.needsLayer) {
-      _drawThroughLayer(image, shape, paint);
+      yield* _drawThroughLayerSteps(image, shape, paint);
       continue;
     }
 
     switch (shape) {
       case RasterRect():
-        _fillRect(image, shape, paint);
+        yield* _fillRectSteps(image, shape, paint);
       case RasterPolygon():
-        _fillPolygon(image, shape, paint);
+        yield* _fillPolygonSteps(image, shape, paint);
     }
   }
 
@@ -612,9 +646,8 @@ RasterImage rasterizeMaskedShapes({
       }
       image.bytes[i + 3] = alpha;
     }
+    yield null;
   }
-
-  return image;
 }
 
 /// SVG 1.1 §15.17's box size for a Gaussian of standard deviation [sigma].
@@ -643,7 +676,7 @@ int blurReach(int d) => d <= 1 ? 0 : (3 * d) ~/ 2 + 1;
 /// how many there are; [lines] and [lineStride] walk the other axis. Values
 /// outside the buffer are **transparent black**, which is what the filter
 /// region's "everything outside is transparent" amounts to for the source.
-void _boxPass(
+Iterable<void> _boxPassSteps(
   Float64List source,
   int channels,
   int count,
@@ -651,7 +684,7 @@ void _boxPass(
   int lines,
   int lineStride,
   int d,
-) {
+) sync* {
   if (d <= 1) return;
   final scratch = Float64List(count);
   final result = Float64List(count);
@@ -704,6 +737,7 @@ void _boxPass(
         source[base + i * stride] = scratch[i];
       }
     }
+    yield null;
   }
 }
 
@@ -720,11 +754,11 @@ void _boxPass(
 /// wherever any coverage survives. It is also why the colour space does not
 /// matter here — measured, an sRGB and a linearRGB blur of a single flat colour
 /// agree, because only the alpha varies and alpha is not gamma-encoded.
-void _drawThroughLayer(
+Iterable<void> _drawThroughLayerSteps(
   RasterImage image,
   RasterShape shape,
   RasterPaint paint,
-) {
+) sync* {
   final sigma = shape.blurSigma;
   final d = sigma == null ? 0 : gaussianBoxSize(sigma);
   final pad = blurReach(d);
@@ -765,24 +799,27 @@ void _drawThroughLayer(
         'package builds; only <path> carries a filter or a style',
       );
     case RasterPolygon():
-      _coverPolygon(shape, lw, lh, pad, put, paint);
+      yield* _coverPolygonSteps(shape, lw, lh, pad, put, paint);
   }
 
   if (d > 1) {
-    _boxPass(layer, 4, lw, 4, lh, lw * 4, d); // horizontal
-    _boxPass(layer, 4, lh, lw * 4, lw, 4, d); // vertical
+    yield* _boxPassSteps(layer, 4, lw, 4, lh, lw * 4, d); // horizontal
+    yield* _boxPassSteps(layer, 4, lh, lw * 4, lw, 4, d); // vertical
   }
 
   // The region is a quad in device space, so its coverage comes from the same
   // scanline integrator every other shape uses — one implementation, not two.
   final region = shape.filterRegion;
-  final regionCoverage = region == null
-      ? null
-      : polygonCoverage(
-          width: image.width,
-          height: image.height,
-          polygon: RasterPolygon([region], null),
-        );
+  Float64List? regionCoverage;
+  if (region != null) {
+    regionCoverage = Float64List(image.width * image.height);
+    yield* polygonCoverageSteps(
+      width: image.width,
+      height: image.height,
+      polygon: RasterPolygon([region], null),
+      out: regionCoverage,
+    );
+  }
 
   for (var py = 0; py < image.height; py++) {
     for (var px = 0; px < image.width; px++) {
@@ -813,6 +850,7 @@ void _drawThroughLayer(
         shape.blendMode,
       );
     }
+    yield null;
   }
 }
 
@@ -821,29 +859,46 @@ void _drawThroughLayer(
 /// The contours are translated by [pad] and run through the same integrator the
 /// unfiltered path uses, so a filtered shape and an unfiltered one cannot
 /// disagree about coverage — there is one implementation, not two.
-void _coverPolygon(
+Iterable<void> _coverPolygonSteps(
   RasterPolygon polygon,
   int lw,
   int lh,
   int pad,
   void Function(int, int, RasterColour, double) put,
   RasterPaint paint,
-) {
+) sync* {
   final shifted = RasterPolygon([
     for (final contour in polygon.contours)
       PathContour([
         for (var i = 0; i < contour.points.length; i++) contour.points[i] + pad,
       ]),
   ], polygon.fill);
-  final coverage = polygonCoverage(width: lw, height: lh, polygon: shifted);
-  for (var i = 0; i < coverage.length; i++) {
-    if (coverage[i] <= 0) continue;
-    final px = (i % lw) - pad, py = (i ~/ lw) - pad;
-    put(px, py, paint.colourAt(px, py), coverage[i]);
+  final coverage = Float64List(lw * lh);
+  yield* polygonCoverageSteps(
+    width: lw,
+    height: lh,
+    polygon: shifted,
+    out: coverage,
+  );
+  // Row-major, which is the order the flat walk this replaced already used —
+  // `i % lw` and `i ~/ lw` visit exactly these pixels in exactly this sequence.
+  for (var ly = 0; ly < lh; ly++) {
+    final base = ly * lw;
+    for (var lx = 0; lx < lw; lx++) {
+      final c = coverage[base + lx];
+      if (c <= 0) continue;
+      final px = lx - pad, py = ly - pad;
+      put(px, py, paint.colourAt(px, py), c);
+    }
+    yield null;
   }
 }
 
-void _fillRect(RasterImage image, RasterRect rect, RasterPaint paint) {
+Iterable<void> _fillRectSteps(
+  RasterImage image,
+  RasterRect rect,
+  RasterPaint paint,
+) sync* {
   final width = image.width;
   final height = image.height;
   final x0 = rect.x.floor().clamp(0, width);
@@ -869,6 +924,7 @@ void _fillRect(RasterImage image, RasterRect rect, RasterPaint paint) {
       if (colOverlap <= 0) continue;
       image.blend(px, py, paint.colourAt(px, py), rowOverlap * colOverlap);
     }
+    yield null;
   }
 }
 
@@ -888,16 +944,26 @@ void _fillRect(RasterImage image, RasterRect rect, RasterPaint paint) {
 /// boundary; a fractional one would take the 0.5-level worst case above.
 const int _slicesPerRow = 256;
 
-void _fillPolygon(RasterImage image, RasterPolygon polygon, RasterPaint paint) {
-  final coverage = polygonCoverage(
+Iterable<void> _fillPolygonSteps(
+  RasterImage image,
+  RasterPolygon polygon,
+  RasterPaint paint,
+) sync* {
+  final coverage = Float64List(image.width * image.height);
+  yield* polygonCoverageSteps(
     width: image.width,
     height: image.height,
     polygon: polygon,
+    out: coverage,
   );
-  for (var i = 0; i < coverage.length; i++) {
-    if (coverage[i] <= 0) continue;
-    final px = i % image.width, py = i ~/ image.width;
-    image.blend(px, py, paint.colourAt(px, py), coverage[i]);
+  for (var py = 0; py < image.height; py++) {
+    final base = py * image.width;
+    for (var px = 0; px < image.width; px++) {
+      final c = coverage[base + px];
+      if (c <= 0) continue;
+      image.blend(px, py, paint.colourAt(px, py), c);
+    }
+    yield null;
   }
 }
 
@@ -914,6 +980,30 @@ Float64List polygonCoverage({
   required RasterPolygon polygon,
 }) {
   final out = Float64List(width * height);
+  for (final _ in polygonCoverageSteps(
+    width: width,
+    height: height,
+    polygon: polygon,
+    out: out,
+  )) {
+    // Drained here.
+  }
+  return out;
+}
+
+/// [polygonCoverage], as a sequence with one step per scanline.
+///
+/// **This is where the time goes**, which is why it is the finest-grained of the
+/// generators: every row integrates [_slicesPerRow] slices against the active
+/// edge list, so a single row of a large target is already milliseconds. Writing
+/// into a caller-supplied [out] rather than returning one is what lets it be a
+/// generator at all — `sync*` has no return value.
+Iterable<void> polygonCoverageSteps({
+  required int width,
+  required int height,
+  required RasterPolygon polygon,
+  required Float64List out,
+}) sync* {
   final row = Float64List(width);
 
   final edges = <_Edge>[];
@@ -931,7 +1021,7 @@ Float64List polygonCoverage({
       maxY = math.max(maxY, math.max(ay, by));
     }
   }
-  if (edges.isEmpty) return out;
+  if (edges.isEmpty) return;
 
   edges.sort((a, b) => a.top.compareTo(b.top));
 
@@ -977,9 +1067,8 @@ Float64List polygonCoverage({
     for (var px = 0; px < width; px++) {
       if (row[px] > 0) out[py * width + px] = row[px] / _slicesPerRow;
     }
+    yield null;
   }
-
-  return out;
 }
 
 /// Adds the covered length of `[xa, xb)` to each pixel column it touches.

@@ -171,57 +171,118 @@ RasterImage rasterizeScene(
   required int width,
   required int height,
 }) {
-  final view = _resolveScale(root, width, height);
-
-  final maskNode = _firstOfKind(root, SvgElement.mask);
-  if (maskNode == null) {
-    throw UnsupportedSceneError('the scene has no <mask>');
+  final job = SceneRaster(root, width: width, height: height);
+  for (final _ in job.steps()) {
+    // Drained on this thread; see [rasterizeSceneAsync] for the other driver.
   }
-  final mask = _readMask(maskNode, view.scale);
-  // The paint servers are read before the shapes, because a shape's `fill` can
-  // reference one — `sunset` paints both its halves that way.
-  final paints = _readPaintServers(root, view.scale);
-  // **The viewBox, not the target.** A filter region is in user units — §15.7.2
-  // again — and [_ShapeAttributes.filterRegionQuad] maps it through the same
-  // matrix that carries the device scale. Handing the device size to this
-  // resolver and then scaling the result would apply the scale twice.
-  final filters = _readFilters(root, view.viewWidth, view.viewHeight);
-  final shapes = <RasterShape>[];
-  _collectShapes(
-    root,
-    shapes,
-    insideMask: false,
-    maskId: maskNode.attribute('id') as String?,
-    paints: paints,
-    filters: filters,
-    inherited: Affine.scaling(view.scale, view.scale),
-    // **Pre-scaled by the device scale, and by nothing else.** Flattening
-    // happens in user units and the matrix multiplies the resulting error, so
-    // a chord that sat `1/4096` inside its arc sits `scale × 1.3` device
-    // pixels inside it once `marble`'s own `scale(1.3)` has applied too.
-    // Dividing here holds the *device* error at the constant the tolerance was
-    // chosen for, and at `scale == 1` it changes nothing — which is what keeps
-    // every committed golden byte-identical.
-    //
-    // The variant's own scale is deliberately left out. Folding that in as
-    // well would be exact and would move every golden for no visible gain,
-    // which is the trade `_shapesOf`'s circle arm already records; what
-    // changes with #58 is only that the *device* factor is unbounded, so it is
-    // the one that has to be divided out.
-    flatness: defaultFlatness / view.scale,
-  );
+  return job.image;
+}
 
-  // The region **travels per shape**, so there is no scene-wide one to
-  // reconcile. An earlier revision of this function refused a scene whose two
-  // filters declared different regions; that check existed only because the
-  // region was being resolved once, in viewport space — which was the defect.
-  // See [_Filter.region].
-  return rasterizeMaskedShapes(
-    width: width,
-    height: height,
-    shapes: shapes,
-    mask: mask,
-  );
+/// [rasterizeScene] without holding the thread for the whole drawing.
+///
+/// **The yield has to be a macrotask, and `Duration.zero` is what makes it one.**
+/// `await null` schedules a *microtask*, and the microtask queue drains before
+/// the browser gets to paint — so a version written that way would run every band
+/// back to back and fix nothing. That is not a hypothetical: it is exactly how
+/// Flutter's own web `compute` manages to move no work at all
+/// (`_isolates_web.dart:19-20`), measured in #80.
+///
+/// [slice] is how long to draw before giving the loop back. It is a *time*
+/// rather than a band count on purpose — the same row costs whatever the device
+/// costs, so a count that fits a 60 Hz frame on one machine misses on another.
+///
+/// **This composes with `compute`** rather than competing with it:
+/// `ComputeCallback` is `FutureOr<R> Function(M)`, so on native an isolate runs
+/// this and the yields are free, while on web it runs on the main thread and the
+/// yields are the entire point. One code path, no platform branch.
+Future<RasterImage> rasterizeSceneAsync(
+  SvgNode root, {
+  required int width,
+  required int height,
+  Duration slice = const Duration(milliseconds: 4),
+}) async {
+  final job = SceneRaster(root, width: width, height: height);
+  final clock = Stopwatch()..start();
+  for (final _ in job.steps()) {
+    if (clock.elapsed >= slice) {
+      await Future<void>.delayed(Duration.zero);
+      clock.reset();
+    }
+  }
+  return job.image;
+}
+
+/// A scene resolved down to shapes, and the buffer they draw into.
+///
+/// Splitting this out is what lets one drawing be driven two ways without two
+/// implementations of it. The **resolution** — scale, mask, paint servers,
+/// filters, shape collection — happens once, here, and throws where it always
+/// threw; the **drawing** is [steps], which is the same generator in both cases.
+class SceneRaster {
+  factory SceneRaster(SvgNode root, {required int width, required int height}) {
+    final view = _resolveScale(root, width, height);
+
+    final maskNode = _firstOfKind(root, SvgElement.mask);
+    if (maskNode == null) {
+      throw UnsupportedSceneError('the scene has no <mask>');
+    }
+    final mask = _readMask(maskNode, view.scale);
+    // The paint servers are read before the shapes, because a shape's `fill` can
+    // reference one — `sunset` paints both its halves that way.
+    final paints = _readPaintServers(root, view.scale);
+    // **The viewBox, not the target.** A filter region is in user units — §15.7.2
+    // again — and [_ShapeAttributes.filterRegionQuad] maps it through the same
+    // matrix that carries the device scale. Handing the device size to this
+    // resolver and then scaling the result would apply the scale twice.
+    final filters = _readFilters(root, view.viewWidth, view.viewHeight);
+    final shapes = <RasterShape>[];
+    _collectShapes(
+      root,
+      shapes,
+      insideMask: false,
+      maskId: maskNode.attribute('id') as String?,
+      paints: paints,
+      filters: filters,
+      inherited: Affine.scaling(view.scale, view.scale),
+      // **Pre-scaled by the device scale, and by nothing else.** Flattening
+      // happens in user units and the matrix multiplies the resulting error, so
+      // a chord that sat `1/4096` inside its arc sits `scale × 1.3` device
+      // pixels inside it once `marble`'s own `scale(1.3)` has applied too.
+      // Dividing here holds the *device* error at the constant the tolerance was
+      // chosen for, and at `scale == 1` it changes nothing — which is what keeps
+      // every committed golden byte-identical.
+      //
+      // The variant's own scale is deliberately left out. Folding that in as
+      // well would be exact and would move every golden for no visible gain,
+      // which is the trade `_shapesOf`'s circle arm already records; what
+      // changes with #58 is only that the *device* factor is unbounded, so it is
+      // the one that has to be divided out.
+      flatness: defaultFlatness / view.scale,
+    );
+
+    // The region **travels per shape**, so there is no scene-wide one to
+    // reconcile. An earlier revision of this function refused a scene whose two
+    // filters declared different regions; that check existed only because the
+    // region was being resolved once, in viewport space — which was the defect.
+    // See [_Filter.region].
+    return SceneRaster._(RasterImage(width, height), shapes, mask);
+  }
+
+  SceneRaster._(this.image, this._shapes, this._mask);
+
+  /// The buffer the drawing lands in.
+  ///
+  /// Allocated up front rather than at the end, so a driver that runs out of
+  /// budget mid-drawing still has something to hold — and so the allocation is
+  /// not itself a band nobody can interrupt.
+  final RasterImage image;
+
+  final List<RasterShape> _shapes;
+  final RoundedRectMask _mask;
+
+  /// The drawing, as bands. Drain it to finish; stop between any two.
+  Iterable<void> steps() =>
+      rasterizeMaskedShapesSteps(image: image, shapes: _shapes, mask: _mask);
 }
 
 /// The device scale mapping the scene's `viewBox` onto a `width` × `height`
