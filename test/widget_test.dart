@@ -25,6 +25,9 @@ import 'support/golden_cases.dart';
 /// - `_drawLatest`'s **one-raster-at-a-time** bound. Before the raster moved off
 ///   `build()` this was structural; now it is a flag, and a flag is the kind of
 ///   thing a test should hold.
+/// - Dropping the on-screen image when the *picture* changes but keeping it when
+///   only the resolution does. Both branches need an `_image` to exist first,
+///   and one never arrives here.
 /// - The widget-level leak proof, which [_noLeak] already records as covering
 ///   the function and not the widget.
 ///
