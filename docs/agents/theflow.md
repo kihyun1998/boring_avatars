@@ -965,9 +965,20 @@ unprovable under the current binding.** Opening it needs an injected decoder or
 a test-only hook in `lib/`, which is a judgement about public surface and has
 not been taken.
 
-**And "observed at the screen" is still owed.** Nothing in #80 has been run in a
-real app — `flutter run` opens a window, so it is the user's to run, and the
-example (#78) is what will carry it.
+**"Observed at the screen" — discharged 2026-08-10, on both paths.** The example
+(#78) is what carries it, and the two platforms are genuinely different code:
+`compute` is a real isolate on native and a main-thread call on web, so seeing
+one prove nothing about the other.
+
+- **Web**: built, served, and looked at in Chrome at 1280x900. All six variants
+  render, `beam` draws its faces, the palette cycles, and the SVG panel shows
+  the document the avatars above it were rasterised from.
+- **Native (Windows)**: run by the user with `flutter run -d windows` and
+  reported working. The agent cannot run this one — it opens a window.
+
+Fourteen concurrent rasters are on screen at first paint, because the variant
+picker is drawn by the thing it picks. That was not planned as a test of the
+one-raster-per-widget bound, but it is one, and it held.
 
 **Why the raster gate is split.** A 0-diff gate against Chrome is a gate that
 fails when *Chrome* updates while our code is untouched — and theflow forbids
