@@ -1267,9 +1267,33 @@ only there.** Below is what each one has to *do* — the mapping is not repeated
 
 | Release | The work that earns it |
 |---|---|
-| `0.1.0` | everything: harness, primitives, scene, all six variants, the public SVG surface, **the rasteriser's arbitrary scale (#58), the `BoringAvatar` widget (#80), the banded rasteriser that keeps it off the frame on both platforms (#80), and the example (#78)** |
+| `0.1.0` | everything: harness, primitives, scene, all six variants, the public SVG surface, **the rasteriser's arbitrary scale (#58), the `BoringAvatar` widget (#80), the banded rasteriser that keeps it off the frame on both platforms (#80), the example (#78), and the colour vocabulary the rasteriser reads (#71 → #62 → #63 → #64)** |
 | `0.2.0` | the `<title>` gate (hidden-state #16) — **one change** |
 | `0.3.0` | `pixel`'s second colour-index path — **one change**, and the only one in scope where the drawing moves |
+
+**Why the colour work moved into `0.1.0` — user ruling, 2026-08-10.** It had no
+milestone at all, and the agent proposed `0.3.0` alongside the Chrome parity
+sweep. The user ruled the other way: *"0.1.0 도 사람들이 쓰는 릴리스"* — delay is
+acceptable, breaking `0.1.0`'s coherence is not.
+
+The test was whether it breaks that coherence, and it does not. **The release
+axis is the upstream output state, and colour parsing is not on that axis** —
+the palette is the caller's, so nothing here creates a fourth output state or
+touches the `v1_6_1` selector. Principle 3 is untouched.
+
+The stronger argument is that shipping without it is what would be incoherent.
+`0.1.0` currently carries **two palette contracts**: `boringAvatarSvg` passes any
+string through, and `BoringAvatar` throws `ArgumentError` on anything that is not
+`#RRGGBB` (`lib/src/widget/boring_avatar.dart:355`). The README spends a section
+explaining that asymmetry away. And #64 in particular is a one-way door in the
+wrong direction: ruling it *after* publish means one input yields an exception
+for `0.1.0` users and a browser-matching render for the next release's, where
+ruling it before publish means the package only ever had one answer.
+
+**What this does not license.** #50 stays in `0.3.0` on its own merits, not on
+preference — two of the seven combinations it counts require `#45`'s code to
+exist, so it cannot run against one output state. Its circular blocked-by is
+still unruled and was deliberately not encoded as a dependency edge.
 
 **Why this collapsed from eight releases to three.** The previous plan gave
 `1.8.0`, `1.10.2`, `1.11.0` and `1.11.1` their own releases whose stated work was
