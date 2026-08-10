@@ -944,7 +944,30 @@ as `a&quot;b` and a guard that reconstructed the expected text would be
 asserting its own copy of the escaper.
 | **3 raster — regression** | our rasterizer vs **golden images committed to this repo** (raw RGBA under `test/goldens/`, not PNG — no encoder in the loop, so a decoder change cannot move a golden) | **0 diff, no exceptions.** Runs every `flutter test` |
 | **3 raster — parity calibration** | our rasterizer vs a **real Chrome render** | interior/background **0**; antialiased edge pixels **≤1/255**. Run **manually** when the rasterizer changes, not per commit |
-| **widget** | widget test asserting the produced `ui.Image` bytes, observed at the screen | as layer 3 |
+| **widget** | a test asserting the produced `ui.Image` bytes against the goldens, taken at `rasterAvatarImage` inside `runAsync`, **not** through `pumpWidget` | as layer 3 |
+
+**The widget bar says `rasterAvatarImage` because `pumpWidget` was measured
+shut, not because it is easier.** A raster started from `build()` lives in the
+test binding's fake-async zone while `compute` and `decodeImageFromPixels`
+complete on real callbacks, and all three pump arrangements fail: inside
+`runAsync` it deadlocks past seven minutes without failing, one pump after it
+arrives with no image, two pumps hang at 3m30. `decodeImageFromPixelsSync` would
+have removed the callback and is "not implemented on Skia", which is the test
+backend. A future *created inside* `runAsync` has none of that, which is what a
+caller of `rasterAvatarImage` is.
+
+What that leaves unproved is everything the widget does *after* the raster
+starts — the error path, the one-raster-at-a-time bound, dropping a stale
+picture, and the widget-level leak. Four behaviours, named in
+`test/widget_test.dart`'s header rather than left blank, and the length of that
+list is itself the finding: **this widget's asynchronous half is structurally
+unprovable under the current binding.** Opening it needs an injected decoder or
+a test-only hook in `lib/`, which is a judgement about public surface and has
+not been taken.
+
+**And "observed at the screen" is still owed.** Nothing in #80 has been run in a
+real app — `flutter run` opens a window, so it is the user's to run, and the
+example (#78) is what will carry it.
 
 **Why the raster gate is split.** A 0-diff gate against Chrome is a gate that
 fails when *Chrome* updates while our code is untouched — and theflow forbids
@@ -1655,11 +1678,14 @@ hidden-state list above is *pre-incident* enumeration, not evidence; move a
 row's story into `lessons.md` the first time it actually catches a defect, and
 cite the issue number.
 
-Twenty-three entries as of #41. The ones that have caught something more than
+Twenty-six entries as of #80. The ones that have caught something more than
 once:
 
 | Rule | Caught in |
 |---|---|
+| Going asynchronous deletes guarantees nobody wrote down | #80 |
+| A default is a measurement, not a derivation | #80 |
+| A pump cannot bridge two zones, and a hang is not a failure | #80 |
 | A file existing is not the feature existing | #1 → closed #8 |
 | A row nobody can act on yet is a row nobody checks | #38, #41 |
 | A pattern written with the wrong line ending matches nothing | #39, #41 |
