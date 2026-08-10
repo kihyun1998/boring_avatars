@@ -322,6 +322,22 @@ class SceneRaster {
   final List<RasterShape> _shapes;
   final RoundedRectMask _mask;
 
+  /// What the scene resolved to, for the one assertion a golden cannot make.
+  ///
+  /// A rect whose matrix [Affine.isTranslationOnly] stays a [RasterRect] and
+  /// takes its coverage in closed form; anything else becomes a
+  /// [RasterPolygon] and goes through the scanline integrator. **The two draw
+  /// the same picture** — that agreement is why the byte assertions in this
+  /// suite pass either way, and it is exactly what makes the difference
+  /// invisible to them. It is not invisible to a caller: measured, `pixel` at
+  /// 80 physical pixels costs 2.8 ms and at 81 costs 18 ms, because the first
+  /// is the only target where the device scale is 1 and the rects stay rects.
+  ///
+  /// So the fast path is pinned structurally, here, rather than by timing —
+  /// a timing test would be flaky on a machine whose absolute numbers move by
+  /// 7x under load, which is measured too (see `docs/agents/theflow.md`).
+  List<RasterShape> get shapes => List.unmodifiable(_shapes);
+
   /// The drawing, as bands. Drain it to finish; stop between any two.
   Iterable<void> steps() =>
       rasterizeMaskedShapesSteps(image: image, shapes: _shapes, mask: _mask);

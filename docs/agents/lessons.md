@@ -501,6 +501,38 @@ inspected before being dropped.
 starts, not just afterwards. Parallel read-only lenses are cheap; parallel
 *measuring* lenses share one mutable working tree and are not.
 
+### A minimum over N repetitions is not a defence against a busy machine (#80 follow-up)
+
+#80 left one question open: its absolute raster costs could not be reproduced,
+and the session's own numbers contradicted each other — an AOT build measured
+*slower* than JIT — so the costs were filed as unverified and the fix was
+recorded as "re-measure on a quiet machine".
+
+Re-measuring found that the premise was the defect. Eight runs, four JIT and
+four AOT with the order alternated, each cell the **minimum of nine
+repetitions** — and inside one process `marble` at 80 physical pixels measured
+**39.3 ms** in the first table and **286.2 ms** in the second, minutes later.
+Same binary, same code path, same run. The contention lasted longer than the
+whole measurement, so every one of the nine repetitions met it and the minimum
+inherited it in full. There was never an AOT-versus-JIT result to find; there
+was a machine, doing something else.
+
+What survived it was untouched. The banded-versus-sync ratio, measured back to
+back inside each cell, came out at **1.00** across all forty cells — including
+in the run whose absolute numbers were inflated tenfold. A 6.5x cost cliff
+between neighbouring sizes reproduced exactly, twice.
+
+**The rule this earns:** a minimum defends against *brief* interference and
+nothing else, and it is dangerous precisely because it looks like it defends
+against more. Before trusting an absolute number, ask how long the contention
+would have to last to survive the estimator — if the answer is "less than the
+run", the estimator is decoration. Prefer to state the claim as a **ratio whose
+two halves are measured back to back**: the conditions they share divide out,
+which is why the ratios here were reportable from data whose absolute values
+were not. And carry a **control** that the mechanism predicts will not move; a
+dip with no control is an observation, a dip beside a flat control is an
+attribution.
+
 ### A row nobody can act on yet is a row nobody checks (#38)
 
 Hidden-state **#26** said "`ring`'s viewBox is **90**; the other five are 80".
@@ -875,6 +907,35 @@ A footnote on the run itself: one mutation appeared to survive re-testing and
 had not actually been applied — a `perl` substitution that silently matched
 nothing. A mutation whose application is not verified is not a mutation. The
 re-runs now print the applied-edit count before the suite.
+
+### Two paths that agree make the choice between them invisible (#80 follow-up)
+
+The rasterizer keeps two integrators for a rectangle: an exact closed-form one
+when the matrix is a translation, and the general polygon scanline otherwise.
+They agree — deliberately, and that agreement is tested. It is also what makes
+the branch between them undefendable by anything in the suite: with the fast
+path forced off, **758 of 760 tests stayed green**, every committed golden
+included, and the two that failed were the ones written that afternoon to catch
+exactly this.
+
+The consequence is not cosmetic. `pixel` is **6.5x** cheaper at 80 physical
+pixels than at 81 because 80 is the one target where the branch is taken. A
+refactor that stopped taking it would have made the cheapest variant six times
+dearer, shipped, and left a clean suite behind it.
+
+This is the sibling of "a suite can be green for a mechanism it never runs"
+above, with the failure moved one step: the suite *does* run the mechanism, on
+every golden. It cannot see which one ran, because seeing that was never what a
+byte comparison was for.
+
+**The rule this earns:** when a change installs a second path to the same
+output, ask what would go red if the *wrong* one were chosen. If the answer is
+nothing, the property is a performance property and a correctness suite is
+structurally blind to it — pin it **structurally** (assert the shape the
+resolver produced) rather than by timing, because a timing test on a machine
+whose absolute numbers move by 7x under load is a flake generator. The two go
+together: the same session that found this also found it could not have measured
+its way to a stable assertion.
 
 ### The same edge case behaves differently per variant (#33)
 

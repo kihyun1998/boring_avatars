@@ -35,6 +35,13 @@ First release. Reproduces upstream `boring-avatars` **1.6.1, 1.6.2 and 1.6.3**
   picture arrives — but it arrives a beat later rather than immediately. Web is
   about four times slower than native for the same drawing; the README carries
   the measured numbers.
+* **One physical size per variant is markedly cheaper than its neighbours.**
+  Each variant has a design size — 80 for `marble`, `pixel`, `sunset` and
+  `bauhaus`, 90 for `ring`, 36 for `beam` — and asking for exactly that many
+  physical pixels is the one case where an axis-aligned rectangle keeps an exact
+  closed-form coverage instead of going through the polygon integrator. Same
+  picture; measured, `pixel` is 6.5x cheaper at 80 than at 81. Worth knowing if
+  you draw many avatars and can choose `size × devicePixelRatio`.
 * Only one raster runs at a time per widget. A burst of changing sizes draws
   once, at the size that survived, rather than once per frame.
 * Changing `name`, `colors`, `variant`, `version` or `square` clears the avatar
