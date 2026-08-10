@@ -1472,12 +1472,35 @@ seconds** under dart2js and **five** under WasmGC. It does not move the ruling �
 nothing here is made worse by shipping, which is the ground the "do not wait"
 half rests on — but it raises what the unchosen web fix is worth.
 
-**Its validity condition, and the first work item.** The one objection that
-survives is that **nobody has measured isolate spawn plus buffer transfer**.
-The mechanism is therefore recorded as *chosen but not yet earned*: the first
-commit under this ruling is a throwaway probe at both ends (`pixel` at 80, the
-3 ms case, and `marble` at 210, the 124 ms case). If spawn cost swamps the small
-case, this entry is what gets amended, and the banded rasteriser below moves up.
+**Its validity condition — measured, and the mechanism is earned.** The one
+objection that survived the SDK reading was that nobody had measured isolate
+spawn plus buffer transfer, so a probe decomposed it rather than timing the
+whole thing, because "`compute` is slower" would not have said *why*. Seven
+repetitions each, under `flutter test`:
+
+| | median |
+|---|---|
+| spawn alone (`compute` returning an `int`) | **0.3 ms** |
+| spawn + returning 25 600 bytes | 0.4 ms |
+| spawn + returning 176 400 bytes | 0.4 ms |
+
+The hop costs **under a millisecond and does not grow with the buffer** — same
+isolate group, so the return is not a serialisation. Against the cheapest thing
+this package draws (`pixel` at 80, single-digit milliseconds) that is a few per
+cent, which is exactly why no size threshold is needed and why the derivation
+that refused to invent one holds. In the same run `compute` was not measurably
+slower than the direct call at any size.
+
+**A second question opened while measuring it, and is deliberately not answered
+here.** The absolute raster costs #80 recorded could not be reproduced in that
+session — `marble` at 80 came out at about twice its recorded 22 ms — and the
+session's own numbers contradicted each other (an AOT build measured *slower*
+than JIT at 210 px, which cannot be true), so the machine was not quiet enough
+to adjudicate. One thing was ruled out: **#58 did not regress it.** The revision
+before that change and the current one measured the same, back to back
+(`pixel` 8.2 → 6.9 ms, `marble` 43.5 → 46.9 ms). The recorded costs are
+therefore **unverified rather than wrong**, and re-measuring them on a quiet
+machine is its own task, not this one.
 
 **What this does not decide.** The **web fix is unchosen.** Two candidates were
 enumerated and neither was ruled on, because neither is needed to ship:
