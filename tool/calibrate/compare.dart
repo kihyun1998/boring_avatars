@@ -109,6 +109,50 @@ final _cases = <String, (SvgNode, int)>{
     ),
     80,
   ),
+  // #83 — hidden-state #24, live for the first time since it was written.
+  //
+  // **Every case above renders at the variant's own viewBox side**, which is the
+  // one target where the row is inert: `pixel`'s 10-unit tiles land exactly on
+  // pixel boundaries and no two shapes meet *inside* a pixel. So this harness
+  // has never been in a position to see the row, and its 0s never said anything
+  // about it.
+  //
+  // Asking for a different number costs nothing structural: `size` reaches
+  // `width`/`height` only and the viewBox is a per-variant constant
+  // (`pixel.dart:25`), so both sides are handed the *same document* at a device
+  // scale of 100/80. That is the whole point of the harness and it still holds.
+  //
+  // 100 is the number hidden-state #24 nominated. 210 is the one a widget
+  // actually asks for — a 80-logical avatar at the 2.625 device pixel ratio
+  // #58's derivation names — and it is where the row measured its worst count.
+  'pixel-clara-100': (
+    buildPixelScene(name: 'Clara Barton', colors: _default, size: 100),
+    100,
+  ),
+  // **The discriminating case.** Without the rounded mask every edge in the
+  // render is axis-aligned, and hidden-state #27 measured Chrome *exact* there
+  // (0.003 px at fractional edges) where its curves are up to 0.13 px off. The
+  // 71/255 that five rows of the table above carry is the mask's own curve, so
+  // removing it removes the noise this question would otherwise be buried in.
+  'pixel-clara-square-100': (
+    buildPixelScene(
+      name: 'Clara Barton',
+      colors: _default,
+      size: 100,
+      square: true,
+    ),
+    100,
+  ),
+  'pixel-clara-210': (
+    buildPixelScene(name: 'Clara Barton', colors: _default, size: 210),
+    210,
+  ),
+  // The second variant the row names. `ring` abuts along `y=45` in four places,
+  // which is a pixel boundary at 90 and is not at 101.
+  'ring-clara-101': (
+    buildRingScene(name: 'Clara Barton', colors: _default, size: 101),
+    101,
+  ),
 };
 
 void main(List<String> args) {
@@ -143,9 +187,45 @@ void main(List<String> args) {
     var edges = 0;
     var worst = 0;
     var worstAt = '';
+    // Hidden-state #24's own shape, counted **without going through
+    // [_isEdge]**: pixels Chrome fills solid that we leave translucent.
+    //
+    // The interior/edge split cannot answer this question on its own, and
+    // hidden-state #42 is the general warning. Where two abutting tiles differ
+    // in colour, Chrome's own 3x3 neighbourhood is non-uniform whatever it does
+    // about the seam, so the pixel is filed as an edge and its delta lands
+    // beside the mask curve's 71/255 — invisible. Only same-coloured neighbours
+    // reach the interior bucket. This counter has no such blind spot: it asks
+    // the row's question directly, in the row's own terms.
+    var seams = 0;
+    var worstSeam = 0;
+    var seamAt = '';
+    // **And the count that stops the one above from being tautological.** A
+    // zero in `seams` means one of two opposite things — the seam exists and
+    // Chrome conflates the same way, or there is no seam here to disagree
+    // about — and only these two numbers separate them. Reported side by side
+    // for that reason, never alone.
+    var partialOurs = 0;
+    var partialTheirs = 0;
     for (var y = 0; y < size; y++) {
       for (var x = 0; x < size; x++) {
         final i = (y * size + x) * 4;
+        if (theirs[i + 3] == 255 && ours.bytes[i + 3] < 255) {
+          seams++;
+          final deficit = 255 - ours.bytes[i + 3];
+          if (deficit > worstSeam) {
+            worstSeam = deficit;
+            seamAt = '($x, $y)';
+          }
+          // Listed, not just aggregated: the row's prediction names a *place*
+          // (`ring` abuts along y=45, `pixel` along its 10-unit tile grid), so
+          // a count cannot tell the row's own mechanism apart from the curve
+          // error hidden-state #27 already measures. Where they are is the
+          // answer; how many there are is not.
+          if (seams <= 12) stdout.writeln('    seam ($x, $y) -$deficit/255');
+        }
+        if (ours.bytes[i + 3] > 0 && ours.bytes[i + 3] < 255) partialOurs++;
+        if (theirs[i + 3] > 0 && theirs[i + 3] < 255) partialTheirs++;
         // Compared **premultiplied**, which is the only representation where a
         // nearly-transparent pixel's colour means anything. Both sides store
         // straight alpha, and there the RGB of an alpha-3 pixel is the full
@@ -185,9 +265,14 @@ void main(List<String> args) {
     worstEdge = worst > worstEdge ? worst : worstEdge;
     totalInterior += interior;
     stdout.writeln(
-      '${entry.key.padRight(22)} interior mismatches $interior, '
+      '${entry.key.padRight(24)} interior mismatches $interior, '
       'edge mismatches $edges, worst edge delta $worst'
       '${worstAt.isEmpty ? '' : ' at $worstAt'}',
+    );
+    stdout.writeln(
+      '${' '.padRight(24)} opaque in Chrome, translucent here: $seams'
+      '${seamAt.isEmpty ? '' : ' (worst $worstSeam/255 at $seamAt)'}'
+      '   [partial px — ours $partialOurs, Chrome $partialTheirs]',
     );
   }
 
