@@ -10,6 +10,27 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/golden_cases.dart';
 
 /// `BoringAvatar` — the consumer seam (#80).
+///
+/// **What this file cannot reach, named rather than left blank.** Everything the
+/// widget does *after* its raster starts is unpumpable under the test binding:
+/// the raster lives in the fake-async zone while `compute` and
+/// `decodeImageFromPixels` complete on real callbacks, and all three pump
+/// arrangements were measured shut (see [_bytesOnScreen] below for the numbers).
+/// Three behaviours therefore have no test here and are verified by reading:
+///
+/// - `_rasterFailed` — that a failed raster is reported through
+///   `FlutterError.reportError` and that the **stale image is dropped**, so a
+///   widget whose fields say `beam` stops drawing the `pixel` it used to be. The
+///   error itself surviving the isolate hop *is* tested, one group down.
+/// - `_drawLatest`'s **one-raster-at-a-time** bound. Before the raster moved off
+///   `build()` this was structural; now it is a flag, and a flag is the kind of
+///   thing a test should hold.
+/// - The widget-level leak proof, which [_noLeak] already records as covering
+///   the function and not the widget.
+///
+/// Tracked on #80 rather than quietly assumed. The seam that would make them
+/// testable — an injected decoder, or a test-only hook in `lib/` — is a
+/// judgement about public surface and is not taken here.
 void main() {
   _bytesOnScreen();
   _noLeak();

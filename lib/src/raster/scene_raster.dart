@@ -178,6 +178,14 @@ RasterImage rasterizeScene(
   return job.image;
 }
 
+/// How long to draw before handing the loop back — see [rasterizeSceneAsync]
+/// for the measurement that picked the number.
+///
+/// Shared rather than written twice: the premultiply that follows the drawing
+/// slices itself the same way, and two constants that must agree are one that
+/// eventually will not.
+const Duration defaultRasterSlice = Duration(milliseconds: 8);
+
 /// [rasterizeScene] without holding the thread for the whole drawing.
 ///
 /// **The yield has to be a macrotask, and `Duration.zero` is what makes it one.**
@@ -207,9 +215,16 @@ RasterImage rasterizeScene(
 /// | 100 ms | 2310 ms | 110 ms |
 ///
 /// 8 ms beats 16 ms on *both* axes, which is the only strict domination on the
-/// curve, so it is the default. Callers who would rather have the pixels sooner
-/// than the frames can pass a larger one — 33 ms costs 1.3x instead of 2.1x and
-/// still stays under the 50 ms the browser calls a long task.
+/// curve, so it is the default.
+///
+/// **The parameter is an internal knob, not caller policy** — neither this
+/// function nor [defaultRasterSlice] is exported from the barrel, and the
+/// ruling on #80 puts band size alongside the flattening tolerance rather than
+/// alongside `colors` and `size`. It exists so the tests can drive the loop
+/// hard and so the table above stays re-measurable, not so a consumer can tune
+/// it. The rest of the curve is recorded for whoever re-takes that measurement:
+/// 33 ms costs 1.3x instead of 2.1x and still stays under the 50 ms the browser
+/// calls a long task.
 ///
 /// **This composes with `compute`** rather than competing with it:
 /// `ComputeCallback` is `FutureOr<R> Function(M)`, so on native an isolate runs
@@ -219,7 +234,7 @@ Future<RasterImage> rasterizeSceneAsync(
   SvgNode root, {
   required int width,
   required int height,
-  Duration slice = const Duration(milliseconds: 8),
+  Duration slice = defaultRasterSlice,
 }) async {
   final job = SceneRaster(root, width: width, height: height);
   final clock = Stopwatch()..start();
@@ -293,8 +308,15 @@ class SceneRaster {
   /// The buffer the drawing lands in.
   ///
   /// Allocated up front rather than at the end, so a driver that runs out of
-  /// budget mid-drawing still has something to hold — and so the allocation is
-  /// not itself a band nobody can interrupt.
+  /// budget mid-drawing still has something to hold.
+  ///
+  /// **The allocation itself is not banded, and cannot be.** It — along with the
+  /// filter layer in `_drawThroughLayerSteps`, which is the big one at roughly
+  /// 86 bytes per output pixel — happens before the first `yield`, so a large
+  /// enough avatar still has one uninterruptible allocate-and-zero at the front.
+  /// Measured behaviour up to 480 physical pixels shows no stall from it (17 ms
+  /// worst gap, the same as every other size); past there it is read from the
+  /// code rather than measured, and it is the remaining unbanded cost.
   final RasterImage image;
 
   final List<RasterShape> _shapes;

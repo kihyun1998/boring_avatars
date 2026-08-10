@@ -71,12 +71,23 @@ class BoringAvatar extends StatefulWidget {
   /// at layout time and so could not be memoised on this widget's fields.
   ///
   /// **There is no upper bound, and that is a decision rather than an
-  /// oversight.** Cost is O(area) — roughly 86 bytes of `Float64` per output
-  /// pixel on the filtered path, so a large `marble` costs seconds and tens of
-  /// megabytes. A ceiling was considered and rejected: this package refuses
+  /// oversight.** A ceiling was considered and rejected: this package refuses
   /// input it **cannot honour** (a `size` that is not a size, a non-uniform
   /// scale), and a large avatar is one it can honour, only slowly. Deciding how
-  /// slow is too slow is the caller's budget, and size is theirs to inject.
+  /// slow is too slow is the caller's budget, and size is theirs to inject —
+  /// which only works if the budget is stated, so here it is.
+  ///
+  /// Cost is O(area). The filtered path (`marble`) holds roughly **86 bytes of
+  /// `Float64` per output pixel**, so 1024 physical pixels a side is an 86 MiB
+  /// layer and 2048 is four times that again. Measured time, `marble`:
+  ///
+  /// | | native | web |
+  /// |---|---|---|
+  /// | 210 physical | 237 ms | — |
+  /// | 480 physical | — | 5.4 s |
+  ///
+  /// Web is the expensive platform and the numbers include the banding tax that
+  /// buys the frame back — 2.1x there, 10–26% on native.
   ///
   /// **That argument used to have a hole, and the hole is now closed.** It
   /// assumed the caller could budget around "slow", which was false while the
@@ -85,10 +96,12 @@ class BoringAvatar extends StatefulWidget {
   /// between bands on web, so a slow avatar is a *late* avatar rather than a
   /// stalled application. Cost is still real, and still the caller's to weigh.
   ///
-  /// **Web is the expensive platform**, measured in #80: the same drawing runs
-  /// roughly 4x slower there than on native, and building for WebAssembly made
-  /// it slower still rather than faster. The frame survives either way; the
-  /// avatar simply takes longer to arrive.
+  /// Building for WebAssembly does **not** help — measured, it ran this code
+  /// 2.2–2.6x slower than dart2js.
+  ///
+  /// The application stays responsive throughout, but "responsive" is not
+  /// "free": the worst measured stall at the shipped slice is 23 ms, so a web
+  /// raster drops at least one 60 Hz frame however small the avatar is.
   ///
   /// Multiply by the device pixel ratio before judging: a 512-logical avatar on
   /// a 3x display is 1536 physical.
@@ -213,15 +226,29 @@ Future<Uint8List> _rasterBytes(_RasterRequest request) async {
   // Straight is the deliberate choice — a browser hands back straight bytes, so
   // a premultiplied buffer would differ from Chrome on every antialiased pixel
   // — and `raster.dart:22` already records that the cost is "one multiply at
-  // the Flutter hand-off". This is that multiply, and it rides along to
-  // whichever thread drew the pixels rather than making a second pass here.
+  // the Flutter hand-off". This is that multiply.
+  //
+  // **It slices like the drawing does, and for the same reason.** It is O(area)
+  // — 2.4 million iterations for a 512-logical avatar on a 3x display — and on
+  // web `compute` has no isolate to put it in, so leaving it as one
+  // uninterruptible pass would hand back exactly the stall the banding removed,
+  // just after the drawing instead of during it.
+  final width = request.pixels;
   final premultiplied = Uint8List(raster.bytes.length);
-  for (var i = 0; i < raster.bytes.length; i += 4) {
-    final a = raster.bytes[i + 3];
-    premultiplied[i] = (raster.bytes[i] * a + 127) ~/ 255;
-    premultiplied[i + 1] = (raster.bytes[i + 1] * a + 127) ~/ 255;
-    premultiplied[i + 2] = (raster.bytes[i + 2] * a + 127) ~/ 255;
-    premultiplied[i + 3] = a;
+  final clock = Stopwatch()..start();
+  for (var y = 0; y < request.pixels; y++) {
+    for (var x = 0; x < width; x++) {
+      final i = (y * width + x) * 4;
+      final a = raster.bytes[i + 3];
+      premultiplied[i] = (raster.bytes[i] * a + 127) ~/ 255;
+      premultiplied[i + 1] = (raster.bytes[i + 1] * a + 127) ~/ 255;
+      premultiplied[i + 2] = (raster.bytes[i + 2] * a + 127) ~/ 255;
+      premultiplied[i + 3] = a;
+    }
+    if (clock.elapsed >= defaultRasterSlice) {
+      await Future<void>.delayed(Duration.zero);
+      clock.reset();
+    }
   }
   return premultiplied;
 }
@@ -280,7 +307,25 @@ Future<ui.Image> rasterAvatarImage({
 }
 
 class _BoringAvatarState extends State<BoringAvatar> {
-  _AvatarKey? _drawn;
+  /// The newest key `build` has asked for.
+  _AvatarKey? _wanted;
+
+  /// The key the drawing loop has finished with — drawn, or failed and reported.
+  _AvatarKey? _settled;
+
+  /// Whether [_drawLatest] is running. **One raster at a time, and this is what
+  /// enforces it.**
+  ///
+  /// Before the raster moved off `build()` it was synchronous, so a second one
+  /// could not start until the first had finished: concurrency was structurally
+  /// one and nothing had to say so. Going asynchronous removed that silently.
+  /// Without this flag every rebuild with a different key — an animated `size`,
+  /// a rotation, a recycled list row — starts *another* `compute`, each holding
+  /// its own O(area) buffers, and on web each one still claims its slice of the
+  /// single thread, so the avatar the user is waiting for arrives later the more
+  /// of them are in flight.
+  bool _drawing = false;
+
   ui.Image? _image;
 
   @override
@@ -309,40 +354,70 @@ class _BoringAvatarState extends State<BoringAvatar> {
   }
 
   void _sync(_AvatarKey key) {
-    if (key == _drawn) return;
-    _drawn = key;
-    unawaited(_raster(key));
+    if (key == _wanted) return;
+    _wanted = key;
+    // A raster already running will pick this up when it lands: it re-reads
+    // `_wanted` rather than closing over the key it started with.
+    if (!_drawing) unawaited(_drawLatest());
   }
 
-  Future<void> _raster(_AvatarKey key) async {
-    final ui.Image image;
+  /// Draws until what is on screen is what was last asked for.
+  ///
+  /// **A loop rather than a call per rebuild**, which is what bounds the work: a
+  /// burst of ten different sizes starts one raster, not ten, and the nine
+  /// superseded keys are never drawn at all rather than drawn and thrown away.
+  Future<void> _drawLatest() async {
+    _drawing = true;
     try {
-      image = await rasterAvatarImage(
-        name: key.name,
-        colors: key.colors,
-        pixels: key.pixels,
-        version: key.version,
-        variant: key.variant,
-        square: key.square,
-      );
-    } catch (error, stack) {
-      _rasterFailed(key, error, stack);
-      return;
-    }
+      while (mounted) {
+        final key = _wanted;
+        if (key == null || key == _settled) return;
 
-    // Unmounted, or the inputs moved on while this was in flight: the arriving
-    // image is nobody's and has to be released rather than assigned.
-    if (!mounted || key != _drawn) {
-      image.dispose();
-      return;
-    }
-    final previous = _image;
-    setState(() => _image = image);
-    // **Not disposed synchronously.** The frame being painted can still hold
-    // the outgoing image; the framework's own widget defers this to a
-    // post-frame callback for the same reason.
-    if (previous != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => previous.dispose());
+        final ui.Image image;
+        try {
+          image = await rasterAvatarImage(
+            name: key.name,
+            colors: key.colors,
+            pixels: key.pixels,
+            version: key.version,
+            variant: key.variant,
+            square: key.square,
+          );
+        } catch (error, stack) {
+          // Settled *as failed*: retrying the input that just threw would
+          // report the same error forever. A different key is a different key
+          // and the loop picks it up on the next turn.
+          _settled = key;
+          _rasterFailed(key, error, stack);
+          continue;
+        }
+
+        // Unmounted, or the inputs moved on while this was in flight: the
+        // arriving image is nobody's and has to be released rather than
+        // assigned.
+        if (!mounted) {
+          image.dispose();
+          return;
+        }
+        if (key != _wanted) {
+          image.dispose();
+          continue;
+        }
+
+        _settled = key;
+        final previous = _image;
+        setState(() => _image = image);
+        // **Not disposed synchronously.** The frame being painted can still
+        // hold the outgoing image; the framework's own widget defers this to a
+        // post-frame callback for the same reason.
+        if (previous != null) {
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => previous.dispose(),
+          );
+        }
+      }
+    } finally {
+      _drawing = false;
     }
   }
 
@@ -358,11 +433,11 @@ class _BoringAvatarState extends State<BoringAvatar> {
   /// the stale image, because showing the wrong avatar is the plausible wrong
   /// picture this package's seams exist to refuse.
   ///
-  /// `_drawn` stays latched at the failing key on purpose. Retrying the same
-  /// input that just threw would report the same error every frame; a *different*
-  /// input is a different key and does try again.
+  /// The key is marked settled before this runs, on purpose. Retrying the input
+  /// that just threw would report the same error every frame; a *different*
+  /// input is a different key and the draw loop picks it up.
   void _rasterFailed(_AvatarKey key, Object error, StackTrace stack) {
-    if (!mounted || key != _drawn) return;
+    if (!mounted || key != _wanted) return;
 
     FlutterError.reportError(
       FlutterErrorDetails(
