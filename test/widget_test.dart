@@ -70,6 +70,30 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('an empty beam palette still reaches the caller', (
+      tester,
+    ) async {
+      // **S-2's only cell, and it was the one the sweep above never ran.**
+      // `avatar.dart` promises an `ArgumentError` for `beam` with an empty
+      // palette; before this, the widget's raster threw into the zone and the
+      // caller learned nothing. Taken through `rasterAvatarImage` because that
+      // is where the error now has to survive an isolate hop — `compute`
+      // forwards it, and this is what says so rather than assuming it.
+      await tester.runAsync(() async {
+        await expectLater(
+          rasterAvatarImage(
+            name: 'Clara Barton',
+            colors: const [],
+            pixels: 36,
+            version: BoringAvatarsVersion.v1_6_1,
+            variant: BoringAvatarsVariant.beam,
+            square: false,
+          ),
+          throwsA(isA<ArgumentError>()),
+        );
+      });
+    });
+
     testWidgets('an empty palette is not a bad colour', (tester) async {
       // Five variants render an avatar with colours missing and `beam` throws,
       // because upstream throws there — ruling S-2. The palette check must not
@@ -86,6 +110,58 @@ void main() {
           ),
         ),
       );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('a size that is not a size is refused, naming the argument', () {
+    Widget atRatio(double dpr, Widget child) => MediaQuery(
+      data: MediaQueryData(devicePixelRatio: dpr),
+      child: wrap(child),
+    );
+
+    Widget avatar(double size) => BoringAvatar(
+      name: 'Clara Barton',
+      colors: palette,
+      size: size,
+      version: BoringAvatarsVersion.v1_6_1,
+      variant: BoringAvatarsVariant.pixel,
+    );
+
+    // **These reached `.round()` before the guard.** `Infinity` and `NaN` came
+    // out as `UnsupportedError: Infinity or NaN toInt` — an internal conversion,
+    // no argument named — which is the exact counterexample to S-4, whose whole
+    // reason was that otherwise it blows up deeper down naming an internal type.
+    // An unbounded `BoxConstraints.maxWidth` is where a caller gets one.
+    for (final (label, bad) in const <(String, double)>[
+      ('infinity', double.infinity),
+      ('negative infinity', double.negativeInfinity),
+      ('NaN', double.nan),
+      ('zero', 0.0),
+      ('negative', -80.0),
+    ]) {
+      testWidgets('$label is refused', (tester) async {
+        await tester.pumpWidget(atRatio(3, avatar(bad)));
+        expect(
+          tester.takeException(),
+          isA<ArgumentError>().having((e) => e.name, 'name', 'size'),
+        );
+      });
+    }
+
+    testWidgets('a positive size that rounds away says *that*', (tester) async {
+      // Not "must be positive" — it is positive. The device is what makes it
+      // vanish, and a message that misdescribes the input sends the reader to
+      // the wrong argument.
+      await tester.pumpWidget(atRatio(1, avatar(0.1)));
+      final error = tester.takeException();
+      expect(error, isA<ArgumentError>().having((e) => e.name, 'name', 'size'));
+      expect((error as ArgumentError).message, contains('rounds to'));
+      expect(error.message, isNot(contains('must be positive')));
+    });
+
+    testWidgets('a size that survives the ratio is accepted', (tester) async {
+      await tester.pumpWidget(atRatio(2.625, avatar(40)));
       expect(tester.takeException(), isNull);
     });
   });
