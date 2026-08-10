@@ -334,11 +334,15 @@ void main() {
 
   group('colour parsing refuses what it cannot draw correctly', () {
     test('forms a browser accepts but this cannot are null, not guesses', () {
+      // The hex forms left this list in #62 — `#F00` and `#FF0000FF` are read
+      // now, along with `#RGBA` and `#RRGGBBAA`. What remains is everything
+      // that is not hex notation at all, plus the two shapes that look like it
+      // and are not: a length the grammar does not define, and a padded string.
       for (final bad in [
-        '#F00',
         'red',
         'rgb(255,0,0)',
-        '#FF0000FF',
+        '#FF000', // five — hex, but not a form
+        '#FF00000', // seven — the same
         ' #FF0000',
       ]) {
         expect(parseHexColour(bad), isNull, reason: bad);

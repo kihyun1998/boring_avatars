@@ -49,7 +49,14 @@ class RasterImage {
   void blend(int x, int y, RasterColour colour, double coverage) {
     if (coverage <= 0) return;
     final i = (y * width + x) * 4;
-    final sa = coverage.clamp(0.0, 1.0);
+    // **The colour's alpha and the shape's coverage multiply.** They are
+    // independent quantities — one says how transparent the paint is, the other
+    // how much of the pixel the shape reaches — and a source-over composite
+    // takes their product as its source alpha. Measured against Chrome:
+    // `#FF000080` at full coverage over opaque white gives 255,127,127, and at
+    // half coverage 255,191,191. Letting coverage *replace* the colour's alpha
+    // reproduces the first and not the second.
+    final sa = (coverage * colour.a / 255).clamp(0.0, 1.0);
     final da = bytes[i + 3] / 255;
 
     final outA = sa + da * (1 - sa);
@@ -112,12 +119,26 @@ class RasterImage {
   }
 }
 
-/// A straight RGB triple.
+/// A straight RGBA quadruple — **straight**, never premultiplied.
+///
+/// [a] defaults to opaque, which is not only ergonomics: every colour upstream
+/// writes is a six-digit `#RRGGBB` (hidden-state #31 closes that enumeration
+/// over the whole fixture), so every colour reaching this class from a real
+/// avatar has `a == 255` and the alpha factor added in #62 is exactly 1. That
+/// is what makes "no golden can move" structural rather than hopeful.
+///
+/// Alpha lives on the **colour** and not only on the shape's coverage because
+/// `#RRGGBBAA` puts it there. The two are independent and they multiply — see
+/// [RasterImage.blend].
 class RasterColour {
-  const RasterColour(this.r, this.g, this.b);
+  const RasterColour(this.r, this.g, this.b, [this.a = 255]);
   final int r;
   final int g;
   final int b;
+
+  /// 0–255, straight. A gradient interpolates this channel like any other —
+  /// measured, see [LinearGradientPaint._sample].
+  final int a;
 }
 
 /// What a colour-valued attribute declared, before any call site decides what
@@ -204,25 +225,37 @@ ColourDeclaration readColourDeclaration(String? declared) {
   return colour == null ? UnreadableColour(declared) : ParsedColour(colour);
 }
 
-/// Parses the `#RRGGBB` form upstream's default palette uses.
+/// Parses every hex notation CSS Color 4 §5.2 defines: `#RGB`, `#RGBA`,
+/// `#RRGGBB`, `#RRGGBBAA`, in either case.
 ///
-/// Returns `null` for anything else, **including forms a browser would
-/// accept** — `#F00`, `red`, `rgb(…)`, `#RRGGBBAA`. The palette is consumer
-/// policy and upstream validates none of it, so those reach here; the SVG
-/// backend passes them through intact while this one cannot draw them. That
-/// divergence is recorded rather than papered over: see hidden-state #20.
+/// **Four lengths, not one, because the grammar says four** — ADR-0001's R1:
+/// what is a valid `<color>` is decided by the property's grammar and not by
+/// what this parser happens to read. Until #62 only the six-digit form was
+/// read, so `#F00` fell into "unreadable" beside `red` and `zzz`; a browser
+/// draws it, which made the rasterizer's blank the divergence hidden-state #20
+/// described as intended and #62 measured was not.
+///
+/// The short forms **double each digit**, alpha included — `#F008` is
+/// `#FF000088`, alpha 136 and not 128. Measured in Chrome; a parser that
+/// doubled the colour digits and left the alpha alone would be 8/255 out on
+/// that one value and exact everywhere else.
+///
+/// Returns `null` for anything the grammar does not admit, and that answer is
+/// still #64's to change, not this function's — a length of five or seven is
+/// hex without being a form, and rejecting it here is what lets "invalid" mean
+/// something later. A sign is rejected for the same reason it always was:
+/// `int.tryParse('+12345', radix: 16)` succeeds and would turn punctuation into
+/// a plausible colour.
 ///
 /// It is a **hex parser**, not the vocabulary: `none` fails here the way `red`
-/// does, four characters that are not six. Anything deciding what a
-/// declaration *means* goes through [readColourDeclaration], which reads the
-/// keyword before it reaches this.
-///
-/// A sign is rejected. `int.tryParse('+12345', radix: 16)` succeeds, which
-/// would turn punctuation into a plausible colour.
+/// does. Anything deciding what a declaration *means* goes through
+/// [readColourDeclaration], which reads the keyword before it reaches this.
 RasterColour? parseHexColour(String? hex) {
   if (hex == null) return null;
   final h = hex.startsWith('#') ? hex.substring(1) : hex;
-  if (h.length != 6) return null;
+  if (h.length != 3 && h.length != 4 && h.length != 6 && h.length != 8) {
+    return null;
+  }
   for (final unit in h.codeUnits) {
     final isHex =
         (unit >= 0x30 && unit <= 0x39) ||
@@ -230,8 +263,19 @@ RasterColour? parseHexColour(String? hex) {
         (unit >= 0x61 && unit <= 0x66);
     if (!isHex) return null;
   }
-  final v = int.parse(h, radix: 16);
-  return RasterColour((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF);
+  // The short forms are expanded rather than parsed separately, so there is one
+  // arithmetic path and the doubling is visible instead of implied.
+  final long = h.length <= 4 ? h.split('').map((d) => '$d$d').join() : h;
+  final v = int.parse(long, radix: 16);
+  if (long.length == 6) {
+    return RasterColour((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF);
+  }
+  return RasterColour(
+    (v >> 24) & 0xFF,
+    (v >> 16) & 0xFF,
+    (v >> 8) & 0xFF,
+    v & 0xFF,
+  );
 }
 
 /// Per-pixel coverage of a rounded rectangle, in the range 0–1.
@@ -358,7 +402,7 @@ sealed class RasterPaint {
 class SolidPaint extends RasterPaint {
   const SolidPaint(this.colour);
 
-  /// `#RRGGBB` only, and `null` for anything else — see [parseHexColour].
+  /// Any hex notation, and `null` for anything else — see [parseHexColour].
   ///
   /// A shorthand for building a paint from a literal, which is what the tests
   /// do. It is **not** the route a scene's `fill` takes: that goes through
@@ -424,10 +468,17 @@ class LinearGradientPaint extends RasterPaint {
       final span = offset - previousOffset;
       final f = span == 0 ? 1.0 : (t - previousOffset) / span;
       int mix(int a, int b) => (a + (b - a) * f).round().clamp(0, 255);
+      // **Alpha is mixed straight, like any other channel — measured, because
+      // the two plausible models disagree loudly and nothing upstream can tell
+      // them apart.** `#FF000000` → `#0000FFFF` over opaque white gives a
+      // midpoint of 191,128,191 in Chrome; interpolating premultiplied would
+      // give 127,127,255. Upstream never writes a stop with alpha, so a
+      // premultiplied implementation would have left every golden green.
       return RasterColour(
         mix(previousColour.r, colour.r),
         mix(previousColour.g, colour.g),
         mix(previousColour.b, colour.b),
+        mix(previousColour.a, colour.a),
       );
     }
     return stops.last.$2;
@@ -770,7 +821,12 @@ Iterable<void> _drawThroughLayerSteps(
   final layer = Float64List(lw * lh * 4);
 
   void put(int px, int py, RasterColour colour, double coverage) {
-    final a = coverage.clamp(0.0, 1.0);
+    // Same product as [RasterImage.blend], for the same reason — a filtered
+    // shape painted in a translucent colour is translucent before it is
+    // blurred, not after. Unreachable from any upstream variant today
+    // (`marble` is the only filtered one and its palette is opaque), which is
+    // exactly why it is written here rather than left for the day it is not.
+    final a = (coverage * colour.a / 255).clamp(0.0, 1.0);
     if (a <= 0) return;
     final i = ((py + pad) * lw + (px + pad)) * 4;
     // Shapes inside one filtered layer would source-over each other here.

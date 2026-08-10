@@ -58,9 +58,13 @@ void main() {
     //
     // So the widget rejects at the seam and names the argument, which is what
     // `avatar.dart:141` already does for `size` (S-4) and what S-2 does for an
-    // empty `beam` palette. #62/#63 later *widen* what is accepted, which is
-    // additive: a palette that works keeps working.
-    for (final bad in const ['red', '#F00', 'rgb(255,0,0)', '#FF000080', '']) {
+    // empty `beam` palette.
+    //
+    // **#62 performed the first widening, and it was additive as promised**:
+    // `#F00` and `#FF000080` moved out of this list and into the group below,
+    // and no palette that worked before stopped working. `#63` takes `red` and
+    // `rgb(…)` next.
+    for (final bad in const ['red', 'rgb(255,0,0)', '#FF000', '']) {
       testWidgets('"$bad" is refused, naming colors', (tester) async {
         await tester.pumpWidget(
           wrap(
@@ -94,6 +98,30 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     });
+
+    // **The other half of the widening, and the half a shorter reject-list
+    // cannot state.** Dropping two entries above proves only that nothing
+    // throws where it used to; it does not say the widget now *accepts* them,
+    // which is the behaviour a caller actually gets. A build that widened
+    // `parseHexColour` and forgot to widen this guard would pass the list above
+    // and fail here.
+    for (final good in const ['#F00', '#f00', '#FF000080', '#F008', '#FF00']) {
+      testWidgets('"$good" is accepted, because a browser draws it', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          wrap(
+            BoringAvatar(
+              name: 'Clara Barton',
+              colors: [good],
+              size: 80,
+              version: BoringAvatarsVersion.v1_6_1,
+            ),
+          ),
+        );
+        expect(tester.takeException(), isNull, reason: good);
+      });
+    }
 
     testWidgets('an empty beam palette still reaches the caller', (
       tester,

@@ -45,7 +45,14 @@ void main() {
     test(
       'a notation only a browser reads is unreadable, and keeps its text',
       () {
-        for (final value in ['red', '#F00', 'rgb(255,0,0)', '#FF0000FF', '']) {
+        // **`#F00` and `#FF0000FF` left this list in #62**, which taught the
+        // parser every hex form CSS Color 4 defines. They were never caller
+        // garbage — a browser draws both — and keeping them here would have
+        // been asserting the divergence rather than the vocabulary. What is
+        // left is what a hex parser genuinely cannot read: a keyword, a
+        // function, a padded string, and nothing at all. #64 is where those
+        // answers change; `raster_alpha_test.dart` holds the ones that moved.
+        for (final value in ['red', 'rgb(255,0,0)', ' #FF0000', '']) {
           final declaration = readColourDeclaration(value);
           expect(declaration, isA<UnreadableColour>(), reason: value);
           expect((declaration as UnreadableColour).text, value);

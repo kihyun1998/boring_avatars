@@ -26,8 +26,11 @@ First release. Reproduces upstream `boring-avatars` **1.6.1, 1.6.2 and 1.6.3**
   either, which would make the pixels depend on Skia-vs-Impeller, GPU, platform
   and Flutter version.
 * The widget's `colors` is narrower than the SVG function's: the rasterizer
-  reads `#RRGGBB` and nothing else yet, and rather than draw a blank for a
-  colour it cannot read, the widget throws and names the argument.
+  reads **hex** — `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, in either case — and
+  nothing else yet, and rather than draw a blank for a colour it cannot read,
+  the widget throws and names the argument. A palette colour may carry its own
+  transparency; its alpha multiplies the shape's coverage, as a browser does
+  with the same document.
 * **The drawing happens off the frame.** A background isolate on native; on the
   web, where Flutter has no isolate to offer, the rasterizer yields the thread
   between bands instead. Your app stays responsive while an avatar draws, and
