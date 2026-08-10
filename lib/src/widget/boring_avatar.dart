@@ -41,16 +41,21 @@ import '../version.dart';
 ///
 /// ## `colors` is narrower here than on [boringAvatarSvg]
 ///
-/// The SVG function passes a colour through to the document and a browser draws
-/// it, so `'red'` works there. This rasterizer reads **hex** — `#RGB`, `#RGBA`,
-/// `#RRGGBB` and `#RRGGBBAA`, in either case — and nothing else yet, and a
-/// colour it cannot read would draw a **blank** avatar rather than fail, so this
-/// widget rejects it instead, naming the argument. Named colours and the
-/// `rgb(…)` / `hsl(…)` functions are next. A palette that works today keeps
-/// working: every widening so far has been additive.
+/// The SVG function hands a colour to the document and a browser draws it, so
+/// **any** CSS colour works there. This rasterizer reads:
 ///
-/// A hex colour may carry its own transparency. `#RRGGBBAA`'s alpha multiplies
-/// the shape's coverage, which is what a browser does with the same document.
+/// * hex — `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`;
+/// * the 148 CSS named colours, plus `transparent` and `currentColor`;
+/// * `rgb()` / `rgba()` / `hsl()` / `hsla()`, either separator, percentages or
+///   0–255, and an alpha as a number or a percentage.
+///
+/// Keywords are ASCII case-insensitive and tolerate surrounding whitespace, as
+/// CSS defines them. Anything outside that grammar would draw a **blank** avatar
+/// rather than fail, so this widget rejects it and names the argument.
+///
+/// A colour may carry its own transparency — `#RRGGBBAA`, `rgba(…)`, `hsla(…)`,
+/// `transparent`. Its alpha multiplies the shape's coverage, which is what a
+/// browser does with the same document.
 class BoringAvatar extends StatefulWidget {
   const BoringAvatar({
     super.key,
@@ -66,8 +71,9 @@ class BoringAvatar extends StatefulWidget {
   /// The only input the drawing comes from.
   final String name;
 
-  /// The palette, as hex strings — `#RGB`, `#RGBA`, `#RRGGBB` or `#RRGGBBAA`.
-  /// See the note on this class.
+  /// The palette, as CSS colours — hex, a named colour, `transparent`,
+  /// `currentColor`, or an `rgb()` / `hsl()` function. See the note on this
+  /// class.
   final List<String> colors;
 
   /// The side, in **logical** pixels.
@@ -359,12 +365,12 @@ class _BoringAvatarState extends State<BoringAvatar> {
   /// the ledger already settled.
   void _checkPalette() {
     for (final colour in widget.colors) {
-      if (parseHexColour(colour) == null) {
+      if (parseCssColour(colour) == null) {
         throw ArgumentError.value(
           colour,
           'colors',
-          'the raster path reads hex only — #RGB, #RGBA, #RRGGBB, #RRGGBBAA; '
-              'boringAvatarSvg accepts any CSS colour, this widget does not',
+          'not a CSS colour this rasterizer reads: hex, one of the 148 named '
+              'colours, transparent, currentColor, rgb()/rgba(), hsl()/hsla()',
         );
       }
     }

@@ -171,18 +171,29 @@ keeps drawing until the sharper version is ready and never flashes.
 **A raster that fails reports through Flutter's error machinery** rather than
 disappearing, and the widget clears rather than leaving a stale avatar behind.
 
-**`colors` is narrower on the widget.** `boringAvatarSvg` hands a colour to the
-document and a browser draws it, so `'red'` works there. The rasterizer reads
-**hex** — `#RGB`, `#RGBA`, `#RRGGBB` and `#RRGGBBAA`, in either case — and
-nothing else yet; rather than draw a blank avatar for a colour it cannot read,
-the widget rejects it and names the argument. Named colours and the `rgb(…)` /
-`hsl(…)` functions are next. Every widening so far has been additive: a palette
-that works today keeps working.
+**`colors` is narrower on the widget — but not by much any more.**
+`boringAvatarSvg` hands a colour to the document and a browser draws it, so
+*any* CSS colour works there. The rasterizer reads:
 
-**A palette colour may be translucent.** `#RRGGBBAA`'s alpha multiplies the
-shape's coverage, which is what a browser does with the same document —
-measured against Chrome on a stacked variant, every interior pixel agrees to
-within 1/255.
+* hex — `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`;
+* the **148 CSS named colours**, plus `transparent` and `currentColor`;
+* `rgb()` / `rgba()` / `hsl()` / `hsla()` — either separator, percentages or
+  0–255, alpha as a number or a percentage, and a hue in `deg`, `grad`, `rad`
+  or `turn`.
+
+Keywords are ASCII case-insensitive and tolerate surrounding whitespace, as CSS
+defines them. Rather than draw a blank avatar for something outside that
+grammar, the widget rejects it and names the argument.
+
+The name table is **generated from the CSS Color 4 specification**, not typed
+out, and every one of the 148 was cross-checked against a real Chrome render —
+a mistyped entry would be wrong only for the palette that names it, which no
+test could catch.
+
+**A palette colour may be translucent.** `#RRGGBBAA`, `rgba(…)`, `hsla(…)` and
+`transparent` all carry their own alpha, and it multiplies the shape's coverage
+— what a browser does with the same document. Measured against Chrome on a
+stacked variant, every interior pixel agrees to within 1/255.
 
 ## Where it differs on purpose
 

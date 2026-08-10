@@ -843,6 +843,36 @@ of "a tripwire that cannot trip reads as coverage", moved from a test into a
 tool, where it is harder to see because a tool's output is read by a person who
 already knows what it is for.
 
+### A validity condition came due, and only the condition could tell (#63)
+
+Hidden-state and ADR-0001 both carried the same clearance: the rasterizer
+matched `none` **exactly**, which was safe "as long as the only writer of these
+scenes is this package's own emitter", with #63 named as where a loose match
+would land if one were ever wanted. Four tickets passed. #63 rendered the
+spellings: Chrome paints nothing for `NONE`, `None` and ` none ` exactly as it
+does for `none`, so the strict match was a divergence waiting for a caller to
+write one.
+
+**Nothing else could have found it.** The answer does not change — every
+spelling drew nothing before and draws nothing now — so no golden moved, no
+fixture differed, and the parity harness compares two documents that both say
+`none` in lower case. The only artefact that pointed at it was the sentence
+someone wrote down when they cleared the concern.
+
+The same ticket collected a second one: `currentColor` had a *derived* answer
+(black, because nothing declares `color`) marked explicitly as **not measured**,
+with #63 named as where to measure it. Rendered in a document declaring no
+`color`, Chrome gives `0,0,0,255`. The derivation was right; what changed is
+that it is now evidence.
+
+**The rule this earns:** a cleared concern is written with the condition that
+makes it safe *and* with the ticket that will re-open it — and the second half
+is what makes the first half actionable. A bare "fine for now" is indistinguishable
+from "fine", and a condition with no named owner is read by whoever happens to
+be passing. Both of these came due silently, in the sense that no test, golden
+or gate could have reported it; the only reason they were collected on time is
+that a previous ticket wrote down where they would land.
+
 ### A ticket's own acceptance criteria put a valid value in the invalid cell (#62)
 
 #62 listed the values that must keep today's behaviour: *"invalid hex

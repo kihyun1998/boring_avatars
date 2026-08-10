@@ -175,7 +175,37 @@ final _cases = <String, (SvgNode, int)>{
     buildSunsetScene(name: 'Clara Barton', colors: _translucent, size: 80),
     80,
   ),
+  // #63 — a palette written in the notations the parser learned here.
+  //
+  // **Not a six-variant × per-notation matrix, and that is deliberate.** A
+  // notation decides what colour a string *is*; once parsed it is the same
+  // `RasterColour` the hex path produces and takes the same code. The
+  // notation→colour mapping is verified far more sharply than a variant render
+  // could: all 148 names against the spec table *and* against Chrome, and every
+  // function form measured directly. What these two cases add is the end of the
+  // chain — that a scene carrying such a palette draws what Chrome draws — on
+  // the variant that stacks and the variant that runs a gradient, which are the
+  // two paths a colour can reach a pixel through.
+  'bauhaus-named': (
+    buildBauhausScene(name: 'Clara Barton', colors: _named, size: 80),
+    80,
+  ),
+  'sunset-named': (
+    buildSunsetScene(name: 'Clara Barton', colors: _named, size: 80),
+    80,
+  ),
 };
+
+/// One of each notation, so a single run exercises the whole grammar: a name,
+/// both function families, both separators, a percentage channel, an alpha as
+/// a number and as a percentage, and a hue in a unit that is not degrees.
+const _named = [
+  'rebeccapurple',
+  'rgb(20, 106, 124)',
+  'hsl(38 87% 59%)',
+  'rgba(194, 113, 180, 0.75)',
+  'hsl(0.85turn 88% 40% / 60%)',
+];
 
 /// Five colours that all carry their own alpha, in the two short forms and the
 /// long one, so a run exercises the expansion as well as the compositing.

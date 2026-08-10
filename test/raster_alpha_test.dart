@@ -87,7 +87,7 @@ void main() {
       // Note `#FF000` — **five** digits. Picking a short invalid form is
       // harder than it looks now that four lengths are legal: the first draft
       // of this list used `#FF0`, which is three and therefore yellow.
-      for (final form in ['#GG0000', '#FF000', '#FF00000', '+123456', 'red']) {
+      for (final form in ['#GG0000', '#FF000', '#FF00000', '+123456']) {
         expect(parseHexColour(form), isNull, reason: form);
         expect(
           readColourDeclaration(form),
@@ -95,6 +95,11 @@ void main() {
           reason: form,
         );
       }
+      // `red` used to be in that list. It is not a *hex* colour and never
+      // was — `parseHexColour` still refuses it — but #63 taught the
+      // vocabulary above it the 148 names, so the declaration is read now.
+      expect(parseHexColour('red'), isNull);
+      expect(readColourDeclaration('red'), isA<ParsedColour>());
     });
   });
 
