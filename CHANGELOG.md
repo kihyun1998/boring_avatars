@@ -28,3 +28,21 @@ First release. Reproduces upstream `boring-avatars` **1.6.1, 1.6.2 and 1.6.3**
 * The widget's `colors` is narrower than the SVG function's: the rasterizer
   reads `#RRGGBB` and nothing else yet, and rather than draw a blank for a
   colour it cannot read, the widget throws and names the argument.
+* **The drawing happens off the frame.** A background isolate on native; on the
+  web, where Flutter has no isolate to offer, the rasterizer yields the thread
+  between bands instead. Your app stays responsive while an avatar draws, and
+  the box is its final size from the first frame, so nothing reflows when the
+  picture arrives — but it arrives a beat later rather than immediately. Web is
+  about four times slower than native for the same drawing; the README carries
+  the measured numbers.
+* Only one raster runs at a time per widget. A burst of changing sizes draws
+  once, at the size that survived, rather than once per frame.
+* Changing `name`, `colors`, `variant`, `version` or `square` clears the avatar
+  while the new one draws, because the old pixels are a picture of somebody
+  else. Changing `size` alone keeps the current one on screen until the sharper
+  version is ready.
+* `size` must be finite and positive, and must survive the device pixel ratio.
+  Each failure throws an `ArgumentError` naming `size` and saying which of the
+  two it was.
+* A raster that fails reports through Flutter's error machinery instead of
+  vanishing, and the widget clears rather than leaving a stale avatar up.

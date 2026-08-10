@@ -94,6 +94,50 @@ the whole reason this package rasterises in software.
 
 So the determinism guarantee — the same bytes on every platform, GPU, Flutter
 version and rendering backend — covers the widget as well as the SVG string.
+That guarantee is about the image the widget **produces**: it is drawn at the
+box's own physical pixel size and handed over with `FilterQuality.none`, so
+nothing resamples it. Layout that then squeezes the box smaller than the size
+you asked for is outside the package, and Flutter's sampler runs there like it
+would for any image.
+
+### The avatar arrives a beat after the widget does
+
+Drawing happens off the frame — in a background isolate on native, and in
+interruptible slices on web, where Flutter has no isolate to offer. **Your app
+stays responsive while it draws**, and the box is its final size from the very
+first frame, so nothing reflows when the picture lands. But the picture is not
+there on frame one.
+
+Measured for `marble`, the most expensive variant, at its **physical** size:
+
+| physical pixels a side | native | web |
+|---|---|---|
+| 80 (a 40-logical avatar at 2x) | 33 ms | |
+| 120 (the same at 3x) | 80 ms | |
+| 210 | 237 ms | |
+| 480 | | 5.4 s |
+
+The blanks are not measured. Cost is O(area) and web runs the same drawing about
+**four times slower** than native, which is enough to place them — but they are
+arithmetic, and this table only states what was observed.
+
+Two things worth knowing before scaling from it. `pixel` is about **eight times
+cheaper** than `marble`, and the other variants sit between. And compiling to
+WebAssembly does **not** help — measured, it is 2.2–2.6x slower than the
+JavaScript build for this code.
+
+Because the cost is O(area), it is the physical size that matters: doubling
+`size` is four times the work, and moving the same avatar from a 2x display to a
+3x one is 2.25 times.
+
+**If the inputs change, the widget blanks rather than showing the old avatar** —
+a new `name`, palette, `variant`, `version` or `square` is a different person's
+face, and showing the previous one under the new name would be a small lie. A
+change to `size` alone is the *same* avatar at a new resolution, so that one
+keeps drawing until the sharper version is ready and never flashes.
+
+**A raster that fails reports through Flutter's error machinery** rather than
+disappearing, and the widget clears rather than leaving a stale avatar behind.
 
 **`colors` is narrower on the widget.** `boringAvatarSvg` hands a colour to the
 document and a browser draws it, so `'red'` works there. The rasterizer reads

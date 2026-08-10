@@ -134,6 +134,32 @@ identical in a diff of the output, and only the sweep separates them. And a
 statistic that reports agreement on 3 of 4 cases is not 75% right — check
 whether it *could* have disagreed.
 
+### A reasoned default was the worst value on the curve (#80)
+
+The banded rasteriser shipped with a 4 ms slice, chosen by argument:
+comfortably inside a 16.7 ms frame, so it cannot drop one. Measured in Chrome
+against 2629 ms of uninterrupted work at 480 physical pixels:
+
+| slice | total | worst stall |
+|---|---|---|
+| 4 ms | 10130 ms | 28 ms |
+| 8 ms | 5450 ms | 23 ms |
+| 16 ms | 5144 ms | 32 ms |
+| 33 ms | 3407 ms | 47 ms |
+| 100 ms | 2310 ms | 110 ms |
+
+4 ms was the **worst available choice**, and not by a little. Every yield on the
+web is a `setTimeout(0)` the browser clamps to about 4 ms, so a slice at the
+clamp spends most of its wall time waiting rather than drawing. The reasoning was
+sound and simply did not contain the fact that decided the answer.
+
+8 ms also beats 16 ms on *both* axes, which no amount of reasoning would have
+predicted either — the worst stall does not shrink with the slice, because one
+scanline is indivisible and already costs milliseconds at that size.
+
+**A default is a measurement, not a derivation.** Especially one whose units
+belong to a platform the code does not run on while you are choosing it.
+
 ## Step 2 — mechanism / policy boundary
 
 _(none yet)_
@@ -753,6 +779,44 @@ the test weak?" and "is the variant degenerate?" — **is the code reachable at
 all?** Answer it before writing a test, because the three answers have three
 different fixes: strengthen, construct, or delete.
 
+### A pump cannot bridge two zones, and a hang is not a failure (#80)
+
+The widget's Step 4 proof — the produced `ui.Image` bytes against the goldens —
+could not be taken through `pumpWidget`, and finding that out cost four
+experiments that are recorded here so nobody runs them a fifth time.
+
+A raster started from `build()` lives in the test binding's **fake-async zone**
+while `decodeImageFromPixels` completes on a **real** callback. Measured:
+
+| arrangement | result |
+|---|---|
+| `pumpWidget` inside `runAsync` | deadlock — **7 minutes+, silently**, never failing |
+| one `pump` after `runAsync` | `the image never arrived` (1 s) |
+| two `pump`s after `runAsync` | hang again — 3m30 to "did not complete" |
+| `decodeImageFromPixelsSync` | **"not implemented on Skia"** — Impeller only, and the test backend is Skia |
+
+Three lessons, in order of how much they cost.
+
+**A test that hangs is worse than a test that fails.** The seven-minute
+arrangement stopped the whole file with no output; moving the pump out turned it
+into a one-second failure. That is a gain even though the test still failed —
+a gate you can read is a gate.
+
+**The fix was in the code under test, not in the test.** The proof moved to
+`rasterAvatarImage`, a function with nothing of the widget in it, called from
+inside `runAsync` so the future is *created* in the zone that will resolve it. An
+earlier attempt proposed a `@visibleForTesting` completion future on the widget;
+that would not have worked, because a future the widget creates is created in the
+other zone either way.
+
+**An unprovable area grows quietly.** By the end of #80 four widget behaviours
+had no test — the error path, the one-raster-at-a-time bound, dropping a stale
+picture, and the widget-level leak — each individually reasonable to defer, and
+together a statement that the widget's asynchronous half is structurally
+untestable here. They are listed in `test/widget_test.dart`'s header for that
+reason: a gap named four times in four places reads as four small compromises,
+and named once in one place reads as what it is.
+
 ## Step 5 — adversarial completeness pass
 
 ### Two lenses on the same material disagreed usefully (#37)
@@ -837,6 +901,31 @@ hypothesis until it has been measured across its whole surface.
 
 The harness now records a throw as data (`{"__throws": "TypeError"}`) rather
 than dying, so upstream's crash is itself a reproducible fixture.
+
+### Going asynchronous deletes guarantees nobody wrote down (#80)
+
+The completeness pass on the banded rasteriser found a defect the 752-test suite
+could not see, and it was not a new bug — it was a **removed guarantee**.
+
+`_sync` fired `unawaited(_raster(key))` on every rebuild whose inputs differed.
+That line was unchanged by the work. What changed was underneath it: the raster
+used to be synchronous, so a second one could not start until the first
+finished. Concurrency was structurally one, and *because it was structural, no
+comment, test or doc recorded it*. Moving the work off the frame deleted it in
+silence — an animated `size` now started a `compute` per frame, each holding its
+own O(area) buffers, and on web each one claimed a slice of the single thread, so
+the avatar actually being waited for arrived **later** the more superseded ones
+were in flight.
+
+The general shape: **synchronous code hands out serialisation for free, and free
+things do not get written down.** When a call becomes asynchronous, the checklist
+is not only "what can now interleave" but "what was true only because nothing
+could". Ordering, single-flight, and the lifetime of anything captured before the
+first `await` are all in that class.
+
+It is also why the pass was worth buying on a change whose own tests were green:
+this is invisible to a suite that asserts outputs, because every individual
+output was still correct.
 
 ## Step 6 — surface sweep
 
