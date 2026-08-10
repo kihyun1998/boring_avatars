@@ -1178,7 +1178,7 @@ enumeration-risk judgement.
 
   | Record | Status | Area it governs | Conformance items |
   |---|---|---|---|
-  | [ADR-0001](../adr/0001-what-a-colour-declaration-means.md) — what a colour declaration means | **Proposed** (#71) | every colour-valued attribute the rasterizer reads: `fill`, `stroke`, `stop-color`, and any that follow | #62, #63, #64 (done: #69) |
+  | [ADR-0001](../adr/0001-what-a-colour-declaration-means.md) — what a colour declaration means | **Accepted** 2026-08-10 (#71) | every colour-valued attribute the rasterizer reads: `fill`, `stroke`, `stop-color`, and any that follow | #62, #63, #64 (done: #69) |
 
   A **proposed** record counts for this check exactly as an accepted one does —
   it is already doing a spine's job (a hypothesis, a roster, an explicit
