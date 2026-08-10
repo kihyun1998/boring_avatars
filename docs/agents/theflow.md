@@ -1671,6 +1671,62 @@ against 22 ms — close enough to say the record was not wrong, only re-measured
 under load. The two larger sizes are still about 1.7x their recorded figures,
 which remains open.
 
+#### The widget's asynchronous half ships unproven — the ruling, as an event
+
+**Decided by the user on 2026-08-10**, and it is theirs to reverse.
+
+Four widget behaviours have no test and are verified by reading: the failure path
+(report + drop the stale image), the one-raster-at-a-time bound, dropping a
+changed picture while keeping a rescaled one, and the widget-level leak. The
+obstacle is structural and measured, not laziness — see the Step 4 bar above.
+
+**What they were shown.** Two options, and the asymmetry between them:
+
+- **A — ship it.** The four stay unproven, named in `test/widget_test.dart`'s
+  header. Adding the seam later is additive.
+- **B — add a testing seam now**, before `0.1.0` freezes the public surface: an
+  injected decoder, or a test-only hook in `lib/`.
+
+**What they chose: A.** The argument that decided it is one this repo keeps
+reaching for — **A can become B and B cannot become A.** A public surface can be
+added later and cannot be withdrawn, so B spends something irreversible to buy
+something that is still available afterwards.
+
+**What it costs, stated rather than implied.** The completeness pass on this very
+change found a defect of exactly the kind these four tests would catch — a
+concurrency bound deleted in silence while 752 tests stayed green. So the cost is
+not hypothetical: it is that the next change to this widget has the same blind
+spot, and the mitigation is that the blind spot is *written down* rather than
+discovered again.
+
+**What this does not decide.** Nothing about *how* the seam would look if it is
+ever added, and nothing about the test binding itself — if a future Flutter makes
+`pumpWidget` and real callbacks cohabit, the whole question dissolves and none of
+this needs reversing.
+
+### `pana` cannot run on Windows, which is where this project's only gates run
+
+**Measured 2026-08-10.** `pana` 0.23.17 — the version pub.dev scores with — fails
+before it analyses anything:
+
+```
+Invalid argument (outputFolder): Sandbox output folder must not contain ":":
+  "C:\Users\User\AppData\Local\Temp\pana_1a413f8"
+```
+
+`_detectGitRoot` → `GitTool` → `SandboxRunner.runSandboxed` runs unconditionally,
+and every absolute Windows path contains a drive colon. Being outside a git
+repository does not avoid it; the call is made either way.
+
+**So the score below was taken with 0.22.19**, which predates the sandbox check.
+The individual checks are the same checks; the totals model may not be. Any
+future comparison against pub.dev's own number has to start here rather than
+treating a mismatch as a regression.
+
+`CLAUDE.md` says the gates that run on this machine are the only gates. This is a
+hole in that claim, and naming it is cheaper than rediscovering it at publish
+time.
+
 ### Downstream loop
 
 **N/A — nothing is published.** At first publish, derive consumers on the spot
