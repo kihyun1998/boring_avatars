@@ -1536,6 +1536,68 @@ before that change and the current one measured the same, back to back
 therefore **unverified rather than wrong**, and re-measuring them on a quiet
 machine is its own task, not this one.
 
+**Re-measured on 2026-08-10, and the premise above was the thing that was
+wrong.** Waiting for a quiet machine was never the condition, because this
+machine cannot be made quiet and the comparison never needed it to be. Two
+throwaway probes ran the raster directly, outside `flutter test`, over eight
+runs — four JIT (`dart run`) and four AOT (`dart compile exe`), alternating
+which mode went first so a warm-up or thermal order effect could not favour
+either.
+
+**What the noise turned out to be.** Inside a *single* AOT process, `marble` at
+80 physical pixels measured **39.3 ms** in the first table and **286.2 ms** in
+the second, minutes apart — same binary, same code path, same run. That is the
+whole explanation for last session's impossible AOT-slower-than-JIT: it was
+never an observation about AOT, it was an observation about what else the
+machine was doing. A minimum over nine repetitions does not defend against
+contention that lasts for minutes, which is the trap, because taking a minimum
+*looks* like it does.
+
+**So the boundary of what is measurable here is itself the result:**
+
+- **Absolute cost is not measurable** closer than an order of magnitude. Across
+  the eight runs the same cell moved by up to 7x. No number in the README should
+  be read as a spec, and it now says so.
+- **Any ratio measured back to back is measurable, and survives the same
+  contention intact** — because both halves meet the same conditions and the
+  conditions divide out. The banded-versus-sync overhead came out at 0.71–1.25x
+  centred on **1.00** across all forty cells, *including* inside the run whose
+  absolute numbers were inflated tenfold. Slicing the raster costs nothing.
+- **AOT versus JIT stays unadjudicated**, and now for a stated reason rather
+  than a shrug: the two differ by less than the run-to-run drift does.
+- **The recorded costs are reproduced**, so the "unverified" flag is discharged.
+  `marble` at 80 / 120 / 210 measured 33.4 / 90.5 / 233.1 ms in the quietest AOT
+  run against 33 / 80 / 237 recorded.
+
+**And a fact nobody had asked for, which is the reason this was worth doing.**
+Cost is **discontinuous at the design size**. `scene_raster.dart` sends a rect to
+the closed-form `RasterRect` only when its matrix `isTranslationOnly`, which
+holds exactly when the device scale is 1 — that is, when the target equals the
+variant's own viewBox side. Swept one pixel either way, twice:
+
+| | at the side | one pixel off |
+|---|---|---|
+| `pixel` (all axis-aligned rects) | 2.8 ms | **6.5x** |
+| `bauhaus` (some rects rotated) | 7.3 ms | 1.9x |
+| `ring` (no axis-aligned rects) | 27.7 ms | flat |
+
+`ring` is the control, and it is what makes this an attribution rather than a
+dip someone noticed: the effect is present exactly where the mechanism predicts
+it and absent where it predicts nothing. It is also robust to everything above,
+because it is a ratio between neighbours measured seconds apart.
+
+**It was undefended.** With `isTranslationOnly` forced false, **758 of 760 tests
+stayed green** — every golden included, because the two integrators agree and
+that agreement is the whole point of the pair. A change that stopped taking the
+fast path would have made the cheapest variant six times dearer with a clean
+suite. `test/raster_fast_path_test.dart` now pins it structurally rather than by
+timing, and the two failures in that run were its own.
+
+**What is still not known.** Why `pixel`'s discount is 6.5x and `bauhaus`'s only
+1.9x is read from the code (`bauhaus` rotates some of its rects, so only part of
+its work can take the fast path) and not measured per shape. Nothing depends on
+it.
+
 **What this does not decide.** The **web fix is unchosen.** Two candidates were
 enumerated and neither was ruled on, because neither is needed to ship:
 
@@ -1745,11 +1807,13 @@ hidden-state list above is *pre-incident* enumeration, not evidence; move a
 row's story into `lessons.md` the first time it actually catches a defect, and
 cite the issue number.
 
-Twenty-six entries as of #80. The ones that have caught something more than
-once:
+Twenty-eight entries as of #80's follow-up. The ones that have caught something
+more than once:
 
 | Rule | Caught in |
 |---|---|
+| A minimum over N repetitions is not a defence against a busy machine | #80 follow-up |
+| Two paths that agree make the choice between them invisible | #80 follow-up |
 | Going asynchronous deletes guarantees nobody wrote down | #80 |
 | A default is a measurement, not a derivation | #80 |
 | A pump cannot bridge two zones, and a hang is not a failure | #80 |
