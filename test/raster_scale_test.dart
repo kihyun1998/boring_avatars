@@ -724,4 +724,43 @@ void _abuttingSeams() {
           'above renders while asserting only that the canvas is not empty',
     );
   });
+
+  test('and Chrome seams identically, which is what settles #24', () {
+    // **The ruling, not another measurement.** The counts above were pinned in
+    // #58 with "measured, not ruled" written beside them, because nothing said
+    // whether a browser fills those pixels or leaves them exactly as we do.
+    // #83 ran `tool/calibrate` and it does leave them:
+    //
+    //   pixel-clara-square-100   partial px — ours 784, Chrome 784
+    //                            opaque in Chrome, translucent here: 0
+    //                            worst edge delta 3/255
+    //
+    // The square case carries the ruling because it is the only one with no
+    // curve in it. Every other row of that run has a rounded mask, and
+    // hidden-state #27 measured Chrome's curves up to 0.13 px inside ours — so
+    // a residue there says nothing about *this* mechanism. With the curve gone
+    // the residue goes to zero, and `pixel-clara-210` — the device pixel ratio
+    // a widget actually asks for — agrees too.
+    //
+    // **Why the count and not the picture.** 784 == 784 is a weaker statement
+    // than per-pixel identity, and it is paired with the two that are not:
+    // zero pixels where Chrome is opaque and we are not, and a worst edge delta
+    // of 3/255 across the whole render — the best row in that table by a factor
+    // of twenty. What this test can hold on its own is the count; what it is
+    // *for* is that a change moving the count has invalidated the agreement
+    // above, and should send someone back to Chrome rather than to this number.
+    final (scene, _) = goldenCases['pixel-clara-square']!;
+    final image = rasterizeScene(scene, width: 100, height: 100);
+    var partial = 0;
+    for (var i = 3; i < image.bytes.length; i += 4) {
+      if (image.bytes[i] > 0 && image.bytes[i] < 255) partial++;
+    }
+    expect(
+      partial,
+      784,
+      reason:
+          'the square mask covers the canvas exactly at any target, so every '
+          'one of these is a tile meeting a tile — no rim, no curve',
+    );
+  });
 }

@@ -811,6 +811,58 @@ the test weak?" and "is the variant degenerate?" — **is the code reachable at
 all?** Answer it before writing a test, because the three answers have three
 different fixes: strengthen, construct, or delete.
 
+### A harness that never ran in the condition cannot have cleared it (#83)
+
+`tool/calibrate` had thirteen cases and a row of zeros in the interior column,
+read for four tickets as "the solid regions agree with Chrome". Hidden-state #24
+— abutting shapes seaming inside a pixel — sat unruled the whole time, with
+"settling it costs one calibration run" written beside it.
+
+It could not have been settled by any run that existed. `_cases` passed **one
+number** to both the scene and the raster target, so the device scale was always
+exactly 1 — and 1 is precisely the condition under which the row is inert:
+`pixel`'s 10-unit tiles land on pixel boundaries and no two shapes meet *inside*
+a pixel. The harness was structurally incapable of producing the phenomenon it
+was nominated to adjudicate, and nothing about it looked wrong. There is no
+missing case in a list of cases; there is a parameter that was never varied.
+
+Two details made it cheap once seen. Asking for another number cost nothing
+structural — `size` reaches `width`/`height` only and the viewBox is a
+per-variant constant, so both sides still receive the same document, which is
+the whole premise of the harness. And the answer needed a **curve-free** case to
+be readable at all: every existing row carries a rounded mask, and hidden-state
+#27 measures Chrome's curves up to 0.13 px inside ours, so a residue there could
+never be attributed. A square `pixel` at 100 has no curve, and it answered
+immediately.
+
+**The rule this earns:** when a record says "one run of X settles this", check
+that X *can reach the condition* before trusting the sentence — and before
+running it. The tell is a harness whose cases vary the *subject* while holding
+some other parameter fixed at a value that happens to be the benign one. Sibling
+of "a tripwire that cannot trip reads as coverage", moved from a test into a
+tool, where it is harder to see because a tool's output is read by a person who
+already knows what it is for.
+
+### A zero means one of two opposite things, and one more counter separates them (#83)
+
+The calibration reported *"opaque in Chrome, translucent here: 0"* for the square
+case, which reads as the answer: our seam is Chrome's seam. It is also exactly
+what a run with **no seam at all** would print — a scene the harness scaled wrong,
+a case built at the wrong size, a counter comparing the render to itself.
+
+The fix was one line: report the partial-pixel count on **both** sides beside it.
+`ours 784, Chrome 784` turns the zero into evidence, and the control case
+(`ring-clara-square`, at 1:1) reads `ours 0, Chrome 0` — the phenomenon absent
+where it should be absent.
+
+**The rule this earns:** a null result needs a companion statistic proving the
+mechanism was present. This is the same shape as "a mutation surviving means one
+of two opposite things", one level up: there the ambiguity is in a test that did
+not fail, here in a measurement that found nothing, and both are resolved by
+measuring that the thing was there to be found. Write the companion into the
+harness rather than reasoning about it once — the next reader gets the zero
+without the reasoning.
+
 ### A pump cannot bridge two zones, and a hang is not a failure (#80)
 
 The widget's Step 4 proof — the produced `ui.Image` bytes against the goldens —

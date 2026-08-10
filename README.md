@@ -150,6 +150,14 @@ So if you draw many avatars and can pick the number, a `size` where
 `size × devicePixelRatio` lands exactly on the variant's own is worth having.
 Nothing else about the avatar changes.
 
+**One thing does change, and it is not a defect.** Away from that size, two
+shapes that meet edge to edge can share a pixel, and neither fills it — so
+`pixel` shows faint seams between its tiles at most scales. A browser does the
+same thing with the same document: measured against Chrome at a 1.25 scale, both
+leave **784** pixels partly covered and there is not one pixel Chrome fills that
+this package leaves open. Reproducing the browser is the whole point, so the
+seams stay.
+
 Away from that one size the cost is O(area), so it is the physical size that
 matters: doubling `size` is four times the work, and moving the same avatar from
 a 2x display to a 3x one is 2.25 times.
