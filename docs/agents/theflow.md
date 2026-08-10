@@ -1233,7 +1233,7 @@ only there.** Below is what each one has to *do* — the mapping is not repeated
 
 | Release | The work that earns it |
 |---|---|
-| `0.1.0` | everything: harness, primitives, scene, all six variants, the public SVG surface, **the rasteriser's arbitrary scale (#58), the `BoringAvatar` widget (#80) and the example (#78)** |
+| `0.1.0` | everything: harness, primitives, scene, all six variants, the public SVG surface, **the rasteriser's arbitrary scale (#58), the `BoringAvatar` widget (#80), the banded rasteriser that keeps it off the frame on both platforms (#80), and the example (#78)** |
 | `0.2.0` | the `<title>` gate (hidden-state #16) — **one change** |
 | `0.3.0` | `pixel`'s second colour-index path — **one change**, and the only one in scope where the drawing moves |
 
@@ -1525,7 +1525,61 @@ divergence seed `CLAUDE.md` names.
 **What it costs.** `0.1.0` gains a probe, a mechanism change to the widget, and
 a documented web limitation; it does not gain a web fix. Web callers keep
 today's behaviour exactly — this ruling makes nothing worse there, which is the
-ground the "do not wait" half rests on.
+ground the "do not wait" half rests on. **— That half is SUPERSEDED the same
+day; see immediately below. The rest of the entry stands.**
+
+#### The web half joins `0.1.0` too — the ruling, as an event
+
+**Decided by the user on 2026-08-10**, hours after the entry above, and it is
+theirs to reverse. What changed was not the argument but the size of the thing
+being deferred: the browser measurement landed in between.
+
+**What they were shown.** The twelve-run table above — `compute` moving nothing
+on web, a 320-logical avatar freezing the tab for two seconds under dart2js and
+five under WasmGC, and `--wasm` measuring *slower* rather than being the escape
+hatch. Against that, the two unchosen candidates and their costs, and the option
+of shipping `0.1.0` without a web fix on the ground that nothing there gets
+worse.
+
+**What they chose:** put the web fix in `0.1.0`. The rejected option — ship now,
+fix web later — was cheaper and was rejected on purpose, which is the same shape
+as the reversal that put the widget in `0.1.0` in the first place.
+
+**Which candidate is *not* their call, and that is recorded on purpose.** They
+were asked and the question was withdrawn: **the browser's own SVG renderer is
+foreclosed by invariant 4**, not merely dispreferred. "The same input yields the
+same bytes on every platform … and rendering backend" is incompatible with
+letting a browser's rasteriser decide the bytes — it is the *same sentence* that
+forecloses `Canvas`, one level further out, and the widget's own doc-comment
+already cites it. Choosing it would first require ruling that the determinism
+guarantee does not cover web, which is a change to what the package *is* rather
+than a choice of implementation, and it was not put to them in those terms. If
+it ever is, this paragraph is what it has to overturn.
+
+**So: banded rasterisation**, and it is a derivation — it falls to a better
+derivation, not to a re-vote.
+
+**The two mechanisms compose, which is why `compute` survives the reversal.**
+`ComputeCallback` is `FutureOr<R> Function(M)` (`isolates.dart:19`), so an
+*async* banded rasteriser is a legal `compute` callback. On native the isolate
+runs it and the inter-band yields cost nothing; on web `compute` runs it on the
+main thread and those same yields are what keep the frame alive. **One code
+path, no platform branch in `lib/`** — which is the property that made the
+web-worker candidate unacceptable in the first place.
+
+**What it costs.** `0.1.0` grows by a rasteriser restructure. Three things are
+known to be hard before starting: `marble`'s Gaussian is a whole-image operation
+and does not band without overlap; the `Float64` layer has to stay alive across
+yields, so peak memory lasts longer rather than shorter; and `lib/src/raster/`
+is where #58's pass found the missed gradient axis and five mutation gaps, so
+this buys a completeness pass rather than reasoning its way out of one.
+
+**What this does not decide.** Nothing about *native* keeping `compute` — that
+is settled above and unaffected. Nothing about band size, which is an internal
+constant like the flattening tolerance and not caller policy. And nothing about
+whether banding is worth its cost on native, where `compute` alone already
+returns the frame; if the restructure turns out to hurt there, the honest answer
+is a measurement, not a second code path.
 
 ### Downstream loop
 
