@@ -843,6 +843,53 @@ of "a tripwire that cannot trip reads as coverage", moved from a test into a
 tool, where it is harder to see because a tool's output is read by a person who
 already knows what it is for.
 
+### A ticket's own acceptance criteria put a valid value in the invalid cell (#62)
+
+#62 listed the values that must keep today's behaviour: *"invalid hex
+(`#GG0000`, `#FF00`, `+123456`) — unchanged"*. Two of those three are not hex at
+all. **`#FF00` is a valid `#RGBA`** — yellow at alpha zero — which CSS Color 4
+§5.2 defines and Chrome renders as nothing.
+
+Nothing would have caught it. The visible result is identical either way: the
+pixel stays empty. What differs is the *state* the value lands in, and the whole
+reason `ColourDeclaration` has four cases rather than two is that #64 will treat
+"invalid" differently from "read" — so filing a transparent yellow as garbage
+hands the next ticket a value that is not garbage to make a rule about. It would
+have been frozen by a test asserting the right answer for the wrong reason.
+
+The measurement that found it took one Chrome render of eleven swatches, and it
+was run because the routing table sends this layer to the spec first and a real
+browser where the spec is silent — not because anyone suspected the line.
+
+**The rule this earns:** an acceptance criterion is a claim like any other and
+gets verified, not executed. The dangerous ones are exactly those whose right and
+wrong answers *look the same on screen* — a value that draws nothing for the
+wrong reason, an error that happens to have the correct message, a default that
+coincides with the computed value. When a ticket enumerates inputs into buckets,
+check the buckets against the grammar before writing the test that freezes them.
+
+### A model with two candidates that no golden can distinguish is measured, not chosen (#62)
+
+Gradient stops with different alphas can be interpolated **straight** or
+**premultiplied**. The two disagree loudly — midpoint `191,128,191` against
+`127,127,255` over white — and upstream writes no such gradient, so every golden
+in this repo is green under either. The parity harness could not have caught it
+either: it compares our SVG against upstream's SVG, and neither document
+contains an alpha stop.
+
+So a wrong choice here would have been invisible to the entire gate matrix and
+visible only in a caller's palette, in a package whose one promise is that its
+pixels match the browser's. It cost one render to settle: Chrome interpolates
+straight.
+
+**The rule this earns:** when a mechanism has two plausible models and the
+corpus cannot distinguish them, that is not a reason to pick the likelier one —
+it is the precise condition under which picking is unsafe, because nothing
+downstream will ever report the mistake. Measure it, and write the measurement
+next to the code, since the next reader has the same two candidates and the same
+silent corpus. Sibling of "a tripwire that cannot trip reads as coverage": here
+the whole suite is the tripwire that cannot trip.
+
 ### A zero means one of two opposite things, and one more counter separates them (#83)
 
 The calibration reported *"opaque in Chrome, translucent here: 0"* for the square

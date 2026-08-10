@@ -42,10 +42,15 @@ import '../version.dart';
 /// ## `colors` is narrower here than on [boringAvatarSvg]
 ///
 /// The SVG function passes a colour through to the document and a browser draws
-/// it, so `'red'` works there. This rasterizer reads `#RRGGBB` and nothing else
-/// yet, and a colour it cannot read would draw a **blank** avatar rather than
-/// fail — so this widget rejects it instead, naming the argument. Later
-/// releases widen what is accepted; a palette that works today keeps working.
+/// it, so `'red'` works there. This rasterizer reads **hex** — `#RGB`, `#RGBA`,
+/// `#RRGGBB` and `#RRGGBBAA`, in either case — and nothing else yet, and a
+/// colour it cannot read would draw a **blank** avatar rather than fail, so this
+/// widget rejects it instead, naming the argument. Named colours and the
+/// `rgb(…)` / `hsl(…)` functions are next. A palette that works today keeps
+/// working: every widening so far has been additive.
+///
+/// A hex colour may carry its own transparency. `#RRGGBBAA`'s alpha multiplies
+/// the shape's coverage, which is what a browser does with the same document.
 class BoringAvatar extends StatefulWidget {
   const BoringAvatar({
     super.key,
@@ -61,7 +66,8 @@ class BoringAvatar extends StatefulWidget {
   /// The only input the drawing comes from.
   final String name;
 
-  /// The palette, as `#RRGGBB` strings — see the note on this class.
+  /// The palette, as hex strings — `#RGB`, `#RGBA`, `#RRGGBB` or `#RRGGBBAA`.
+  /// See the note on this class.
   final List<String> colors;
 
   /// The side, in **logical** pixels.
@@ -357,7 +363,7 @@ class _BoringAvatarState extends State<BoringAvatar> {
         throw ArgumentError.value(
           colour,
           'colors',
-          'the raster path reads #RRGGBB and nothing else yet; '
+          'the raster path reads hex only — #RGB, #RGBA, #RRGGBB, #RRGGBBAA; '
               'boringAvatarSvg accepts any CSS colour, this widget does not',
         );
       }

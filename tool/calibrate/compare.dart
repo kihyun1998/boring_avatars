@@ -153,7 +153,39 @@ final _cases = <String, (SvgNode, int)>{
     buildRingScene(name: 'Clara Barton', colors: _default, size: 101),
     101,
   ),
+  // #62 — a translucent palette, which nothing in this harness had before and
+  // upstream's own palettes cannot produce.
+  //
+  // `bauhaus` because it is the variant that genuinely **stacks**: a
+  // full-canvas background rect with three shapes drawn on top of it, so a
+  // translucent colour composites against something rather than against the
+  // void. That is the case #62's acceptance criteria name, and it is the one
+  // that separates "alpha reached the parser" from "alpha reached the
+  // compositor".
+  //
+  // `sunset` because its colours arrive through `stop-color` and a gradient,
+  // which interpolates alpha on a different code path from a solid fill — and
+  // the interpolation model was itself a measured question (straight, not
+  // premultiplied).
+  'bauhaus-translucent': (
+    buildBauhausScene(name: 'Clara Barton', colors: _translucent, size: 80),
+    80,
+  ),
+  'sunset-translucent': (
+    buildSunsetScene(name: 'Clara Barton', colors: _translucent, size: 80),
+    80,
+  ),
 };
+
+/// Five colours that all carry their own alpha, in the two short forms and the
+/// long one, so a run exercises the expansion as well as the compositing.
+const _translucent = [
+  '#92A1C680',
+  '#146A7C40',
+  '#FA3', // #FFAA33, opaque — the three-digit form
+  '#C271B4C0',
+  '#C098', // #CC009988
+];
 
 void main(List<String> args) {
   if (args.isEmpty) {
@@ -184,6 +216,8 @@ void main(List<String> args) {
     final theirs = reference.readAsBytesSync();
 
     var interior = 0;
+    var worstInterior = 0;
+    var worstInteriorAt = '';
     var edges = 0;
     var worst = 0;
     var worstAt = '';
@@ -252,6 +286,16 @@ void main(List<String> args) {
           }
         } else {
           interior++;
+          // **The worst interior delta, not only the count.** The recorded bar
+          // is interior *zero*, so until #62 a count was all anyone needed —
+          // any non-zero was a failure and its size did not change that. A
+          // translucent palette makes the size the whole question: 417 pixels
+          // out by 1/255 and 417 out by 40 are different findings, and five
+          // printed samples cannot tell them apart.
+          if (delta > worstInterior) {
+            worstInterior = delta;
+            worstInteriorAt = '($x, $y)';
+          }
           if (interior <= 5) {
             stdout.writeln(
               '  interior ($x, $y): ours '
@@ -265,8 +309,9 @@ void main(List<String> args) {
     worstEdge = worst > worstEdge ? worst : worstEdge;
     totalInterior += interior;
     stdout.writeln(
-      '${entry.key.padRight(24)} interior mismatches $interior, '
-      'edge mismatches $edges, worst edge delta $worst'
+      '${entry.key.padRight(24)} interior mismatches $interior'
+      '${worstInteriorAt.isEmpty ? '' : ' (worst $worstInterior/255 at $worstInteriorAt)'}'
+      ', edge mismatches $edges, worst edge delta $worst'
       '${worstAt.isEmpty ? '' : ' at $worstAt'}',
     );
     stdout.writeln(

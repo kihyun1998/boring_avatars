@@ -173,9 +173,16 @@ disappearing, and the widget clears rather than leaving a stale avatar behind.
 
 **`colors` is narrower on the widget.** `boringAvatarSvg` hands a colour to the
 document and a browser draws it, so `'red'` works there. The rasterizer reads
-`#RRGGBB` and nothing else yet, and rather than draw a blank avatar for a colour
-it cannot read, the widget rejects it and names the argument. Later releases
-widen what is accepted; a palette that works today keeps working.
+**hex** — `#RGB`, `#RGBA`, `#RRGGBB` and `#RRGGBBAA`, in either case — and
+nothing else yet; rather than draw a blank avatar for a colour it cannot read,
+the widget rejects it and names the argument. Named colours and the `rgb(…)` /
+`hsl(…)` functions are next. Every widening so far has been additive: a palette
+that works today keeps working.
+
+**A palette colour may be translucent.** `#RRGGBBAA`'s alpha multiplies the
+shape's coverage, which is what a browser does with the same document —
+measured against Chrome on a stacked variant, every interior pixel agrees to
+within 1/255.
 
 ## Where it differs on purpose
 
