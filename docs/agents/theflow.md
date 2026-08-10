@@ -1576,10 +1576,32 @@ this buys a completeness pass rather than reasoning its way out of one.
 
 **What this does not decide.** Nothing about *native* keeping `compute` — that
 is settled above and unaffected. Nothing about band size, which is an internal
-constant like the flattening tolerance and not caller policy. And nothing about
-whether banding is worth its cost on native, where `compute` alone already
-returns the frame; if the restructure turns out to hurt there, the honest answer
-is a measurement, not a second code path.
+constant like the flattening tolerance and not caller policy.
+
+**What banding costs on native — measured, back to back on the two revisions,
+because the absolute numbers this session had proved untrustworthy:**
+
+| | before | after |
+|---|---|---|
+| `pixel` @80 | 3.5 ms | 4.1 ms |
+| `marble` @80 | 25.8 ms | 32.6 ms |
+| `marble` @120 | 72.5 ms | 79.7 ms |
+| `marble` @210 | 205.6 ms | 237.2 ms |
+
+**A 10–26% tax**, and it is paid everywhere, not only on web. It is accepted
+rather than optimised away, on the ground that on native the whole raster runs
+inside a `compute` isolate where the tax costs no frame at all, and on web it is
+what buys one. The obvious tuning — yield every *n* rows instead of every row —
+was considered and **not taken**: at `marble` @210 a row is already ~1.1 ms, so
+even n = 8 overshoots the 4 ms slice, and the coarsening would hurt exactly
+where responsiveness matters most. Recorded so the next reader does not
+re-derive it, and so the number is a decision rather than a discovery.
+
+**And the earlier "unverified" note is partly discharged.** In this quieter run
+`pixel` @80 measured 3.5 ms against #80's recorded 3 ms and `marble` @80 25.8 ms
+against 22 ms — close enough to say the record was not wrong, only re-measured
+under load. The two larger sizes are still about 1.7x their recorded figures,
+which remains open.
 
 ### Downstream loop
 
