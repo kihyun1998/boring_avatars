@@ -1,0 +1,121 @@
+{
+  "issue": 95,
+  "what": "the Color 4 remainder — hwb, the Lab families, color() and the system colours — lands on Chrome's bytes",
+  "test": null,
+  "note": [
+    "`test: null` — the whole suite. Every expected byte in",
+    "raster_colour4_test.dart is a Chrome measurement, so a mutant that",
+    "survives it has by definition stopped matching the browser somewhere the",
+    "browser was actually read.",
+    "",
+    "The ticket's three named mutations — a hue direction, a matrix element,",
+    "a clamp — are all here, plus the traps this implementation specifically",
+    "invites: the derived-matrix construction (one primary digit feeds every",
+    "space that shares the white point), the modern-comma refusal, and the one",
+    "system colour whose alpha is not 255.",
+    "",
+    "The Bradford element case mutates the 3x3 that both `lab()` and",
+    "`prophoto-rgb`/`xyz-d50` adapt through, so it proves the adaptation is",
+    "shared rather than duplicated — a second copy would let one path go red",
+    "while the other stayed green.",
+    "",
+    "Two first-run survivors were re-judged rather than kept (#34's rule): a",
+    "third-decimal Bradford drift moves no measured byte through rounding, so",
+    "it became a realistic digit swap; and the linear-space clamp turned out",
+    "to be a second copy of the byte clamp behind a monotone transfer, so the",
+    "copy was deleted (#40) and the case now targets the one clip that exists."
+  ],
+  "cases": [
+    {
+      "name": "the lch/oklch hue turns the wrong way",
+      "file": "lib/src/raster/colour_spaces.dart",
+      "from": "  return (c * math.cos(rad), c * math.sin(rad));",
+      "to": "  return (c * math.cos(rad), -c * math.sin(rad));",
+      "expectEdits": 1
+    },
+    {
+      "name": "a Bradford matrix element takes a transcription slip",
+      "file": "lib/src/raster/colour_spaces.dart",
+      "from": "  0.8951, 0.2664, -0.1614, //",
+      "to": "  0.8591, 0.2664, -0.1614, //",
+      "expectEdits": 1
+    },
+    {
+      "name": "an oklab LMS coefficient drifts",
+      "file": "lib/src/raster/colour_spaces.dart",
+      "from": "  final l1 = l + 0.3963377773761749 * a + 0.2158037573099136 * b;",
+      "to": "  final l1 = l + 0.3963377773761749 * a + 0.2258037573099136 * b;",
+      "expectEdits": 1
+    },
+    {
+      "name": "a sRGB primary digit moves, and every derived matrix with it",
+      "file": "lib/src/raster/colour_spaces.dart",
+      "from": "  [0.64, 0.33, 0.30, 0.60, 0.15, 0.06],",
+      "to": "  [0.65, 0.33, 0.30, 0.60, 0.15, 0.06],",
+      "expectEdits": 1
+    },
+    {
+      "name": "the gamut clip is removed",
+      "file": "lib/src/raster/raster.dart",
+      "from": "  (encoded[0] * 255).round().clamp(0, 255),\n  (encoded[1] * 255).round().clamp(0, 255),\n  (encoded[2] * 255).round().clamp(0, 255),",
+      "to": "  (encoded[0] * 255).round(),\n  (encoded[1] * 255).round(),\n  (encoded[2] * 255).round(),",
+      "expectEdits": 1
+    },
+    {
+      "name": "hwb loses its achromatic branch",
+      "file": "lib/src/raster/colour_spaces.dart",
+      "from": "  if (wc + bc >= 1) {",
+      "to": "  if (false) {",
+      "expectEdits": 1
+    },
+    {
+      "name": "the modern functions start taking commas",
+      "file": "lib/src/raster/raster.dart",
+      "from": "    if (modern.contains(name)) return null;",
+      "to": "    if (false && modern.contains(name)) return null;",
+      "expectEdits": 1
+    },
+    {
+      "name": "lab's a/b percentage reference decays to 100",
+      "file": "lib/src/raster/raster.dart",
+      "from": "      final labA = _cssComponent(parts[1], 125);",
+      "to": "      final labA = _cssComponent(parts[1], 100);",
+      "expectEdits": 1
+    },
+    {
+      "name": "highlight goes opaque",
+      "file": "lib/src/raster/system_colours.dart",
+      "from": "  'highlight': 0x9980BCFE,",
+      "to": "  'highlight': 0xFF80BCFE,",
+      "expectEdits": 1
+    },
+    {
+      "name": "the CSS float clamp is removed, and Infinity reaches round()",
+      "file": "lib/src/raster/raster.dart",
+      "from": "  final clamped = _clampCssFloat(n);\n  return percent ? clamped * percentRef / 100 : clamped;",
+      "to": "  return percent ? n * percentRef / 100 : n;",
+      "expectEdits": 1
+    },
+    {
+      "name": "a bare fourth component becomes an alpha again",
+      "file": "lib/src/raster/raster.dart",
+      "from": "  if (!commaForm && !alphaFromSlash && parts.length > expectedParts) {\n    return null;\n  }",
+      "to": "  if (false) {\n    return null;\n  }",
+      "expectEdits": 1
+    },
+    {
+      "name": "the space form reverts to all-or-none percentages",
+      "file": "lib/src/raster/raster.dart",
+      "from": "    if (commaForm) {\n      final percent = parts[0].endsWith('%');",
+      "to": "    if (true) {\n      final percent = parts[0].endsWith('%');",
+      "expectEdits": 1
+    },
+    {
+      "name": "the number-token check is removed and a trailing dot parses",
+      "file": "lib/src/raster/raster.dart",
+      "from": "  if (!_cssNumberToken.hasMatch(s)) return null;",
+      "to": "  if (s.isEmpty) return null;",
+      "expectEdits": 1
+    }
+  ]
+}

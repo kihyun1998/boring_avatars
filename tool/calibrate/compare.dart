@@ -216,6 +216,18 @@ final _cases = <String, (SvgNode, int)>{
     buildSunsetScene(name: 'Clara Barton', colors: _invalid, size: 80),
     80,
   ),
+  // #95 — a palette in the Color 4 notations learned there, same two-variant
+  // pattern as `-named` and `-invalid` and for the same reason. One entry per
+  // family, including a wide-gamut `color()` (so the clip runs end-to-end)
+  // and a system colour (the frozen-table path).
+  'bauhaus-colour4': (
+    buildBauhausScene(name: 'Clara Barton', colors: _colour4, size: 80),
+    80,
+  ),
+  'sunset-colour4': (
+    buildSunsetScene(name: 'Clara Barton', colors: _colour4, size: 80),
+    80,
+  ),
 };
 
 /// One of each notation, so a single run exercises the whole grammar: a name,
@@ -233,6 +245,16 @@ const _named = [
 /// the empty string — interleaved with valid neighbours so the render
 /// discriminates (see the case comment).
 const _invalid = ['zzz', '#146A7C', '', '#C20D90', 'rgb(255,0)'];
+
+/// One of each family #95 learned: hwb, a Lab, an OKLCh, a wide-gamut
+/// `color()` that leaves sRGB (the gamut clip, end-to-end), a system colour.
+const _colour4 = [
+  'hwb(210 20% 15%)',
+  'lab(52.2% 40 -30)',
+  'oklch(0.7 0.15 200)',
+  'color(display-p3 1 0.2 0.1)',
+  'accentcolor',
+];
 
 /// Five colours that all carry their own alpha, in the two short forms and the
 /// long one, so a run exercises the expansion as well as the compositing.

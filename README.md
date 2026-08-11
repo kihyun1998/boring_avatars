@@ -179,7 +179,16 @@ disappearing, and the widget clears rather than leaving a stale avatar behind.
 * the **148 CSS named colours**, plus `transparent` and `currentColor`;
 * `rgb()` / `rgba()` / `hsl()` / `hsla()` — either separator, percentages or
   0–255, alpha as a number or a percentage, and a hue in `deg`, `grad`, `rad`
-  or `turn`.
+  or `turn`;
+* the CSS Color 4 families — `hwb()`, `lab()` / `lch()`, `oklab()` /
+  `oklch()`, and `color()` with every predefined space (`srgb`,
+  `srgb-linear`, `display-p3`, `a98-rgb`, `prophoto-rgb`, `rec2020`, the
+  `xyz` trio). A colour outside the sRGB gamut clips per channel, which is
+  what Chrome was measured doing;
+* the **42 system colours** (`Canvas`, `AccentColor`, the deprecated
+  aliases…), frozen at the values Chrome resolves on macOS in light mode —
+  the one place "the same as the browser" cannot be promised across
+  machines, because system colours vary by OS and theme by design.
 
 Keywords are ASCII case-insensitive and tolerate surrounding whitespace, as CSS
 defines them. For something outside that grammar the rasterizer answers as a
