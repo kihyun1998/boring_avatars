@@ -1324,7 +1324,7 @@ only there.** Below is what each one has to *do* — the mapping is not repeated
 
 | Release | The work that earns it |
 |---|---|
-| `0.1.0` | everything: harness, primitives, scene, all six variants, the public SVG surface, **the rasteriser's arbitrary scale (#58), the `BoringAvatar` widget (#80), the banded rasteriser that keeps it off the frame on both platforms (#80), the example (#78), and the colour vocabulary the rasteriser reads (#71 → #62 → #63 → #64)** |
+| `0.1.0` | everything: harness, primitives, scene, all six variants, the public SVG surface, **the rasteriser's arbitrary scale (#58), the `BoringAvatar` widget (#80), the banded rasteriser that keeps it off the frame on both platforms (#80), the example (#78), and the colour vocabulary the rasteriser reads (#71 → #62 → #63 → #64, plus #95 — the Color 4 remainder the #64 pass found unlearned; user ruling 2026-08-11, same criterion as the 08-10 ruling below: publishing first would put a release that refuses valid colours in people's hands)** |
 | `0.2.0` | the `<title>` gate (hidden-state #16) — **one change** |
 | `0.3.0` | `pixel`'s second colour-index path — **one change**, and the only one in scope where the drawing moves |
 
