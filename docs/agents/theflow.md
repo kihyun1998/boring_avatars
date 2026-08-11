@@ -1886,28 +1886,25 @@ ever added, and nothing about the test binding itself — if a future Flutter ma
 `pumpWidget` and real callbacks cohabit, the whole question dissolves and none of
 this needs reversing.
 
-### `pana` cannot run on Windows, which is where this project's only gates run
+### `pana` — 160/160 on the scoring version, now that the machine can run it
 
-**Measured 2026-08-10.** `pana` 0.23.17 — the version pub.dev scores with — fails
-before it analyses anything:
+**Measured 2026-08-11, on macOS: `pana` 0.23.17 — the version pub.dev scores
+with — runs clean and scores 160/160.** Conventions 30/30, documentation
+(20%+ coverage, example) in full, all six platforms plus WASM-ready, static
+analysis 50/50, dependencies 40/40 including the `pub downgrade` lower-bound
+check. The one note it left — two undocumented symbols on `BoringAvatar` —
+was fixed in the same change.
 
-```
-Invalid argument (outputFolder): Sandbox output folder must not contain ":":
-  "C:\Users\User\AppData\Local\Temp\pana_1a413f8"
-```
-
-`_detectGitRoot` → `GitTool` → `SandboxRunner.runSandboxed` runs unconditionally,
-and every absolute Windows path contains a drive colon. Being outside a git
-repository does not avoid it; the call is made either way.
-
-**So the score below was taken with 0.22.19**, which predates the sandbox check.
-The individual checks are the same checks; the totals model may not be. Any
-future comparison against pub.dev's own number has to start here rather than
-treating a mismatch as a regression.
-
-`CLAUDE.md` says the gates that run on this machine are the only gates. This is a
-hole in that claim, and naming it is cheaper than rediscovering it at publish
-time.
+The earlier state of this section is kept because its lesson still holds for
+anyone on Windows: measured 2026-08-10 there, 0.23.17 fails before analysing
+anything (`Sandbox output folder must not contain ":"` —
+`_detectGitRoot` → `GitTool` → `SandboxRunner.runSandboxed` runs
+unconditionally, and every absolute Windows path contains a drive colon; being
+outside a git repository does not avoid it). The 2026-08-10 score was
+therefore taken with 0.22.19, which predates the sandbox check. **On this
+machine that hole in the "gates run here" claim is closed** — the environment
+moved to macOS at #59, and the bindings' own rule applied: measure rather
+than assume which machine you are on.
 
 ### Downstream loop
 
