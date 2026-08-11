@@ -2,7 +2,7 @@
 
 - **Status:** **Accepted — 2026-08-10**, 사용자 판정 (#71). 2026-08-06 에 Proposed 로 작성.
 - **Supersedes:** 없음. 이 저장소의 첫 결정 기록.
-- **Conformance items:** **전부 완료** — #69 (PR #70), **#62** (hex 표기 전부 + 색 알파), **#63** (이름 148개 + 함수 표기 + `transparent` / `currentColor`), **#64** (무효값의 답 — `fill` 안 그림 / `stop-color` 검정, 던지지 않음).
+- **Conformance items:** 완료 — #69 (PR #70), **#62** (hex 표기 전부 + 색 알파), **#63** (이름 148개 + 함수 표기 + `transparent` / `currentColor`), **#64** (무효값의 답 — `fill` 안 그림 / `stop-color` 검정, 던지지 않음). **열림 — #95** (Color 4 의 나머지 표기: `hwb()`, `lab()`/`lch()`, `oklab()`/`oklch()`, `color()`, 시스템 색 — #64 의 완전성 패스가 "문법이 닫혔다" 를 반증, 사용자 판정 2026-08-11 "배운다").
 
 ## 수락 — 사건으로서
 
