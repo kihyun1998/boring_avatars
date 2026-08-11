@@ -54,12 +54,14 @@ void main() {
     // `avatar.dart:141` already does for `size` (S-4) and what S-2 does for an
     // empty `beam` palette.
     //
-    // **The gap this guarded is now closed, in two additive steps.** #62 took
-    // the hex forms and #63 the rest of the `<color>` grammar — the 148 named
-    // colours, `transparent`, `currentColor`, `rgb()`/`rgba()`/`hsl()`/`hsla()`
-    // — so what stays refused is only what no grammar admits. Hidden-state #20
-    // called the narrow set a *gap* rather than a contract, and it was: no
-    // palette that worked at any point stopped working.
+    // **The gap this guarded is now closed, in three additive steps.** #62
+    // took the hex forms, #63 the names and the legacy functions, and #95 the
+    // Color 4 remainder — `hwb()`, `lab()`/`lch()`, `oklab()`/`oklch()`,
+    // `color()` and the system colours — so what stays refused is only what
+    // no grammar admits, plus the `none`-component forms #95 recorded as out
+    // of scope. Hidden-state #20 called the narrow set a *gap* rather than a
+    // contract, and it was: no palette that worked at any point stopped
+    // working.
     for (final bad in const ['zzz', 'rgb(255,0)', 'hsv(0,100%,50%)', '']) {
       testWidgets('"$bad" is refused, naming colors', (tester) async {
         await tester.pumpWidget(
@@ -115,6 +117,16 @@ void main() {
       'rgba(255 0 0 / 50%)',
       'hsl(120, 100%, 25%)',
       'hsla(0 100% 50% / 0.5)',
+      // #95's families — the guard reads `parseCssColour`, so learning them
+      // widened this seam with no widget change; this is the pin that says so.
+      'hwb(120 30% 20%)',
+      'lab(50% 40 59.5)',
+      'lch(52.2% 72.2 50)',
+      'oklab(0.7 0.1 0.1)',
+      'oklch(0.7 0.15 200)',
+      'color(display-p3 1 0 0)',
+      'AccentColor',
+      'Highlight',
     ]) {
       testWidgets('"$good" is accepted, because a browser draws it', (
         tester,

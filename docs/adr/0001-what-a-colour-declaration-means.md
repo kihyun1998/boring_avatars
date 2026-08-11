@@ -2,7 +2,7 @@
 
 - **Status:** **Accepted — 2026-08-10**, 사용자 판정 (#71). 2026-08-06 에 Proposed 로 작성.
 - **Supersedes:** 없음. 이 저장소의 첫 결정 기록.
-- **Conformance items:** 완료 — #69 (PR #70), **#62** (hex 표기 전부 + 색 알파), **#63** (이름 148개 + 함수 표기 + `transparent` / `currentColor`), **#64** (무효값의 답 — `fill` 안 그림 / `stop-color` 검정, 던지지 않음). **열림 — #95** (Color 4 의 나머지 표기: `hwb()`, `lab()`/`lch()`, `oklab()`/`oklch()`, `color()`, 시스템 색 — #64 의 완전성 패스가 "문법이 닫혔다" 를 반증, 사용자 판정 2026-08-11 "배운다").
+- **Conformance items:** 완료 — #69 (PR #70), **#62** (hex 표기 전부 + 색 알파), **#63** (이름 148개 + 함수 표기 + `transparent` / `currentColor`), **#64** (무효값의 답 — `fill` 안 그림 / `stop-color` 검정, 던지지 않음). **#95** (Color 4 의 나머지 표기 — `hwb()`, `lab()`/`lch()`, `oklab()`/`oklch()`, `color()`, 시스템 색 42개. 완료 2026-08-11: 전부 Chrome 151 실측 바이트와 일치, gamut 은 per-channel clip 으로 실측 고정, 측정 도구는 `tool/colour4/` 로 재실행 가능. 의도적 범위 밖 — `none` 성분, relative color syntax, `calc()` — 은 Chrome 이 그리는 것을 실측한 채로 기록·핀 됨).
 
 ## 수락 — 사건으로서
 

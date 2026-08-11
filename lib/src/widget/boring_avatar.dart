@@ -369,8 +369,9 @@ class _BoringAvatarState extends State<BoringAvatar> {
         throw ArgumentError.value(
           colour,
           'colors',
-          'not a CSS colour this rasterizer reads: hex, one of the 148 named '
-              'colours, transparent, currentColor, rgb()/rgba(), hsl()/hsla()',
+          'not a CSS colour this rasterizer reads: hex, a named or system '
+              'colour, transparent, currentColor, rgb()/rgba(), hsl()/hsla(), '
+              'hwb(), lab()/lch(), oklab()/oklch(), or color()',
         );
       }
     }

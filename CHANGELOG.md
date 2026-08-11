@@ -25,13 +25,17 @@ First release. Reproduces upstream `boring-avatars` **1.6.1, 1.6.2 and 1.6.3**
   and it has no `<filter>`, so `marble` loses its blur. Not through `Canvas`
   either, which would make the pixels depend on Skia-vs-Impeller, GPU, platform
   and Flutter version.
-* The widget's `colors` is narrower than the SVG function's, which takes any CSS
-  colour. The rasterizer reads hex (`#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`),
-  the **148 CSS named colours**, `transparent`, `currentColor`, and
-  `rgb()` / `rgba()` / `hsl()` / `hsla()` — either separator, percentages or
-  0–255, alpha as a number or a percentage, hue in `deg` / `grad` / `rad` /
-  `turn`. Keywords are ASCII case-insensitive and tolerate surrounding
-  whitespace. Anything outside that grammar draws what a browser draws for an
+* The rasterizer reads the whole practical CSS `<color>` grammar: hex
+  (`#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`), the **148 CSS named colours**,
+  `transparent`, `currentColor`, `rgb()` / `rgba()` / `hsl()` / `hsla()`
+  (either separator, percentages or 0–255, alpha as a number or a percentage,
+  hue in `deg` / `grad` / `rad` / `turn`), the Color 4 families — `hwb()`,
+  `lab()` / `lch()`, `oklab()` / `oklch()`, `color()` with every predefined
+  space — and the 42 system colours, frozen at Chrome's macOS light-mode
+  values. Out-of-gamut colours clip per channel, as Chrome was measured
+  doing. Keywords are ASCII case-insensitive and tolerate surrounding
+  whitespace. Not read, deliberately: `none` components, relative colour
+  syntax, and `calc()`. Anything outside that grammar draws what a browser draws for an
   invalid declaration — the shape is not painted, and a gradient stop falls
   back to black; measured against Chrome. The widget still rejects such a
   palette up front, naming the argument, so a typo fails loudly.

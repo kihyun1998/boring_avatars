@@ -1145,6 +1145,34 @@ own enumeration, not against the list of what was built — the same failure as
 #62's `#FF00`, one level up: there a value sat in the wrong cell of a ticket's
 table, here a whole family sat in the wrong cell of the vocabulary itself.
 
+### First-try green on measured bytes is not grammar convergence (#95)
+
+Twenty-eight tests, every expected byte a Chrome measurement, passed on the
+first run — the matrices derived from the primaries' chromaticities landed on
+Chrome's bytes exactly, out-of-gamut swatches included. That is convergence on
+the axis the tests measured: value → byte. The lens then walked the *other*
+axis — which strings are accepted at all — and found five behavioural
+divergences, one of them a crash: `lab(50 1e300 0)` threw from an unclamped
+cube reaching `.round()` where Chrome clamps the number to float range and
+draws `255,0,255`; a bare fourth component was read as an alpha where Chrome
+requires the slash (legacy space form included, a hole carried silently from
+#63); the modern space form's per-component number|percentage independence was
+refused (`rgb(100% 0 0)` drew in Chrome and nothing here); `50.` parsed as
+fifty where a CSS number token needs a digit after its dot; and `calc()` was
+out of scope without any record saying so. None of the twenty-eight could have
+seen any of them: a value test samples the accept region's *interior*, and
+every divergence lived on its *boundary*.
+
+All five were then re-confirmed on the reference Chrome 151 before the fixes
+were frozen — the lens had measured on a cached headless 149, and a fix frozen
+against the wrong reference would have been the #63-era trap again.
+
+**The rule this earns:** a parser has two surfaces — the value map and the
+accept/refuse boundary — and measuring one says nothing about the other.
+Budget the boundary its own measured sweep (wrong arity, wrong separators,
+token edge forms, huge magnitudes), and expect the crash to be found there:
+the boundary is where the unclamped arithmetic lives.
+
 ### Going asynchronous deletes guarantees nobody wrote down (#80)
 
 The completeness pass on the banded rasteriser found a defect the 752-test suite

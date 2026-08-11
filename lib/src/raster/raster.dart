@@ -12,7 +12,9 @@ library;
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'colour_spaces.dart';
 import 'named_colours.dart';
+import 'system_colours.dart';
 
 /// An RGBA buffer, four bytes a pixel, row-major, **straight (not
 /// premultiplied) alpha**.
@@ -201,16 +203,16 @@ final class ParsedColour extends ColourDeclaration {
 /// palette is consumer policy and upstream validates none of it, so they
 /// reach here (hidden-state #20).
 ///
-/// **"Lands here" is not the same as "invalid", and the gap is known.** CSS
-/// Color 4 notations this parser has not learned — `hwb()`, `lab()`/`lch()`,
-/// `oklab()`/`oklch()`, `color()`, the system colours — file here too, and a
-/// browser draws them (measured: `hwb(120 0% 0%)` is 0,255,0 in Chrome, in a
-/// `stop-color` as well). For those the #64 answer is wrong in the same
-/// direction the pre-#62 blank was; the widget's palette guard is what keeps
-/// them off the public surface. Surfaced in #64's completeness pass and ruled
-/// by the user: **learn them — #95**, after which this paragraph comes out.
-/// [text] is kept so a seam that still refuses — that guard — can say what it
-/// could not read.
+/// **The Color 4 gap #64's pass found is closed** — #95 learned `hwb()`,
+/// `lab()`/`lch()`, `oklab()`/`oklch()`, `color()` and the system colours, so
+/// those no longer land here. What still does while being valid CSS a browser
+/// draws is recorded scope, not accident: `none` components
+/// (`lab(none 50 0)`), relative colour syntax, and `calc()` — each measured
+/// drawn in Chrome and each deliberately skipped (#95's ticket and its pins
+/// in `raster_colour4_test.dart`), on the ground that upstream never writes
+/// them and a palette author has no reason to. [text] is kept so a seam that
+/// still refuses — the widget's palette guard — can say what it could not
+/// read.
 final class UnreadableColour extends ColourDeclaration {
   const UnreadableColour(this.text);
   final String text;
@@ -336,9 +338,13 @@ String _cssNormalise(String value) {
   return out.toString();
 }
 
-/// Every `<color>` this rasterizer reads: hex, the 148 named colours,
+/// Every `<color>` this rasterizer reads: hex (#62); the 148 named colours,
 /// `transparent`, `currentColor`, and the `rgb()` / `rgba()` / `hsl()` /
-/// `hsla()` functions.
+/// `hsla()` functions (#63); and the Color 4 remainder — `hwb()`,
+/// `lab()`/`lch()`, `oklab()`/`oklch()`, `color()` and the system colours
+/// (#95). What is deliberately *not* read, with the measurement that Chrome
+/// draws it: `none` components, relative colour syntax, and `calc()` — all
+/// recorded in #95 and pinned in `raster_colour4_test.dart`.
 ///
 /// **ADR-0001's R1 in one function.** What is a valid `<color>` is the
 /// property's grammar, so this answers the grammar and nothing above it —
@@ -366,46 +372,89 @@ RasterColour? parseCssColour(String? value) {
       named & 0xFF,
     );
   }
+  // §6.2's system colours, resolved to the frozen Chrome measurement —
+  // including `highlight`, the one that carries its own alpha, which is why
+  // the table packs 0xAARRGGBB where the named table packs 0xRRGGBB.
+  final system = systemColours[v];
+  if (system != null) {
+    return RasterColour(
+      (system >> 16) & 0xFF,
+      (system >> 8) & 0xFF,
+      system & 0xFF,
+      (system >> 24) & 0xFF,
+    );
+  }
   return _parseColourFunction(v);
 }
 
-/// A finite double, or `null`. `double.tryParse` accepts `Infinity` and `NaN`,
-/// which would survive every clamp below and reach the buffer as a byte nobody
-/// chose.
+/// A CSS `<number>` token, or `null`.
+///
+/// The token grammar is checked first because `double.tryParse` is wider than
+/// CSS in both directions that matter: it accepts `Infinity`/`NaN` (which
+/// would survive every clamp below and reach the buffer as a byte nobody
+/// chose) and it accepts a trailing dot — `50.` parses as fifty in Dart and
+/// is a refusal in Chrome, measured on the reference 151 (#95's pass), so
+/// leaning on `tryParse` alone drew a colour the browser does not.
+final _cssNumberToken = RegExp(r'^[+-]?(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?$');
+
 double? _cssNumber(String s) {
-  if (s.isEmpty) return null;
+  if (!_cssNumberToken.hasMatch(s)) return null;
   final n = double.tryParse(s);
   return n == null || !n.isFinite ? null : n;
 }
 
-/// `rgb()`, `rgba()`, `hsl()`, `hsla()` — measured, not read from a summary.
+/// CSS clamps a `<number>` to the float range rather than refusing it or
+/// overflowing — `lab(50 1e300 0)` computes to `lab(50 3.40282e38 0)` in
+/// Chrome and draws. Without this clamp the cube of a large component is
+/// `Infinity`, the Inf−Inf inside the Lab conversion is `NaN`, and
+/// `.round()` throws — a crash on the surface #64 promises degrades, which
+/// is S-4's named failure mode. Applied to the *number*, before any unit or
+/// reference scaling, which is where CSS applies it — a clamp after `turn`'s
+/// ×360 would already have overflowed.
+const _cssFloatMax = 3.402823466e38;
+
+double _clampCssFloat(double n) => n.clamp(-_cssFloatMax, _cssFloatMax);
+
+/// The colour functions — the legacy four and the Color 4 six — measured,
+/// not read from a summary.
 ///
-/// The grammar this accepts is exactly what Chrome accepted in #63's probe:
-/// either separator (`a, b, c` or `a b c`, the latter taking its alpha after a
-/// `/`), either value form for `rgb` (all three percentages or all three
-/// numbers, **never mixed** — `rgb(100%,0,0)` is invalid there), percentages
-/// required for `hsl`'s saturation and lightness (`hsl(0,100,50)` is invalid),
-/// alpha as a number or a percentage, and every value clamped rather than
-/// refused (`rgb(300,-20,0)` is `255,0,0`; an alpha of `-1` is 0 and `150%` is
-/// 1).
+/// The grammar splits by separator, and both halves are Chrome measurements
+/// (#63's probe and #95's strip). The **comma** form exists only for the
+/// legacy four and keeps the strict legacy rules: no `/` alpha, `rgb` takes
+/// all-percentages or all-numbers never mixed (`rgb(100%,0,0)` is invalid),
+/// `hsl`'s saturation and lightness must be percentages. The **space** form
+/// is the modern syntax for everything: alpha only behind a `/`, and every
+/// component independently a number or a percentage (`rgb(100% 0 0)` and
+/// `hsl(120 50 50)` draw). Values clamp rather than refuse — `rgb(300,-20,0)`
+/// is `255,0,0`, an alpha of `-1` is 0 — and a number itself clamps to the
+/// CSS float range before any unit or reference scaling.
 RasterColour? _parseColourFunction(String v) {
   final open = v.indexOf('(');
   if (open < 0 || !v.endsWith(')')) return null;
   final name = v.substring(0, open);
   final isRgb = name == 'rgb' || name == 'rgba';
-  if (!isRgb && name != 'hsl' && name != 'hsla') return null;
+  final isLegacy = isRgb || name == 'hsl' || name == 'hsla';
+  const modern = {'hwb', 'lab', 'lch', 'oklab', 'oklch', 'color'};
+  if (!isLegacy && !modern.contains(name)) return null;
 
   var body = v.substring(open + 1, v.length - 1);
   List<String> parts;
+  var commaForm = false;
+  var alphaFromSlash = false;
   if (body.contains(',')) {
     // The legacy comma form has no `/` alternative; accepting both would take
-    // a string Chrome refuses.
+    // a string Chrome refuses. The Color 4 functions have no comma form at
+    // all — `hwb(120, 30%, 20%)` and `lab(50%, 40, 59.5)` both measured
+    // refused (#95), so a comma anywhere in them is a refusal here too.
+    if (modern.contains(name)) return null;
     if (body.contains('/')) return null;
+    commaForm = true;
     parts = body.split(',').map(_cssNormalise).toList();
   } else {
     var alpha = '';
     final slash = body.indexOf('/');
     if (slash >= 0) {
+      alphaFromSlash = true;
       alpha = _cssNormalise(body.substring(slash + 1));
       body = body.substring(0, slash);
       if (alpha.isEmpty) return null;
@@ -416,33 +465,140 @@ RasterColour? _parseColourFunction(String v) {
       if (alpha.isNotEmpty) alpha,
     ];
   }
-  if (parts.length != 3 && parts.length != 4) return null;
   if (parts.any((p) => p.isEmpty)) return null;
+
+  // In the space form the alpha exists only behind the slash — a bare fourth
+  // component is a refusal, `hwb(120 30% 20% 10%)` and legacy
+  // `rgb(255 0 0 0.5)` alike (both measured on the reference Chrome, #95's
+  // pass). Only the comma form carries its alpha as an ordinary part.
+  final expectedParts = name == 'color' ? 4 : 3;
+  if (!commaForm && !alphaFromSlash && parts.length > expectedParts) {
+    return null;
+  }
+
+  // `color()` leads with the space name, so it is one part longer than every
+  // other function and is dispatched before the common length check.
+  if (name == 'color') {
+    if (parts.length != 4 && parts.length != 5) return null;
+    final a = parts.length == 5 ? _cssAlpha(parts[4]) : 255;
+    if (a == null) return null;
+    final space = colourFunctionSpaces[parts[0]];
+    if (space == null) return null;
+    // Percentages map 100% -> 1 in every predefined space, xyz included.
+    final c1 = _cssComponent(parts[1], 1);
+    final c2 = _cssComponent(parts[2], 1);
+    final c3 = _cssComponent(parts[3], 1);
+    if (c1 == null || c2 == null || c3 == null) return null;
+    return _encodedToColour(space.encodedFrom(c1, c2, c3), a);
+  }
+
+  if (parts.length != 3 && parts.length != 4) return null;
 
   final a = parts.length == 4 ? _cssAlpha(parts[3]) : 255;
   if (a == null) return null;
 
+  // The two grammars really differ per separator, and #63's measurements
+  // pinned the strict half: in the *comma* form `rgb` takes all-percentages
+  // or all-numbers, never mixed, and `hsl`'s saturation and lightness must
+  // be percentages. The *space* form is Color 4's modern syntax, where every
+  // component independently takes a number or a percentage — `rgb(100% 0 0)`,
+  // `rgb(255 0% 0)` and `hsl(120 50 50)` all measured drawn (#95's pass),
+  // and this parser refused all three until it did.
   if (isRgb) {
-    final percent = parts[0].endsWith('%');
-    // All three or none: a browser refuses the mixture rather than coercing it.
-    if (parts.take(3).any((p) => p.endsWith('%') != percent)) return null;
+    if (commaForm) {
+      final percent = parts[0].endsWith('%');
+      if (parts.take(3).any((p) => p.endsWith('%') != percent)) return null;
+    }
     final channels = <int>[];
     for (final p in parts.take(3)) {
-      final n = _cssNumber(percent ? p.substring(0, p.length - 1) : p);
+      final n = _cssComponent(p, 255);
       if (n == null) return null;
-      channels.add((percent ? n * 255 / 100 : n).round().clamp(0, 255));
+      channels.add(n.round().clamp(0, 255));
     }
     return RasterColour(channels[0], channels[1], channels[2], a);
   }
 
-  final h = _cssHue(parts[0]);
-  if (h == null) return null;
-  if (!parts[1].endsWith('%') || !parts[2].endsWith('%')) return null;
-  final s = _cssNumber(parts[1].substring(0, parts[1].length - 1));
-  final l = _cssNumber(parts[2].substring(0, parts[2].length - 1));
-  if (s == null || l == null) return null;
-  return _hslToRgb(h, (s / 100).clamp(0.0, 1.0), (l / 100).clamp(0.0, 1.0), a);
+  if (name == 'hsl' || name == 'hsla') {
+    final h = _cssHue(parts[0]);
+    if (h == null) return null;
+    if (commaForm && (!parts[1].endsWith('%') || !parts[2].endsWith('%'))) {
+      return null;
+    }
+    final s = _cssComponent(parts[1], 100);
+    final l = _cssComponent(parts[2], 100);
+    if (s == null || l == null) return null;
+    return _hslToRgb(
+      h,
+      (s / 100).clamp(0.0, 1.0),
+      (l / 100).clamp(0.0, 1.0),
+      a,
+    );
+  }
+
+  // The Color 4 families. Each component takes a number or a percentage,
+  // independently — unlike legacy `rgb()`'s all-or-none — with the
+  // percentage reference the specification assigns per slot: 100 for Lab's
+  // L, ±125 for its a/b, 150 for its chroma; 1 for OKLab's L, ±0.4 for its
+  // a/b and chroma. L clamps into its range and a chroma clamps at zero
+  // (parse-time clamps the spec names); a/b are unbounded, and whatever
+  // leaves the sRGB gamut is clipped per channel at the end, which is the
+  // measured Chrome behaviour (see colour_spaces.dart).
+  switch (name) {
+    case 'hwb':
+      final h = _cssHue(parts[0]);
+      final w = _cssComponent(parts[1], 100);
+      final b = _cssComponent(parts[2], 100);
+      if (h == null || w == null || b == null) return null;
+      return _encodedToColour(hwbToEncoded(h, w / 100, b / 100), a);
+    case 'lab':
+      final l = _cssComponent(parts[0], 100);
+      final labA = _cssComponent(parts[1], 125);
+      final labB = _cssComponent(parts[2], 125);
+      if (l == null || labA == null || labB == null) return null;
+      return _encodedToColour(labToEncoded(l.clamp(0.0, 100.0), labA, labB), a);
+    case 'lch':
+      final l = _cssComponent(parts[0], 100);
+      final c = _cssComponent(parts[1], 150);
+      final h = _cssHue(parts[2]);
+      if (l == null || c == null || h == null) return null;
+      final (labA, labB) = lchToAb(math.max(c, 0.0), h);
+      return _encodedToColour(labToEncoded(l.clamp(0.0, 100.0), labA, labB), a);
+    case 'oklab':
+      final l = _cssComponent(parts[0], 1);
+      final okA = _cssComponent(parts[1], 0.4);
+      final okB = _cssComponent(parts[2], 0.4);
+      if (l == null || okA == null || okB == null) return null;
+      return _encodedToColour(oklabToEncoded(l.clamp(0.0, 1.0), okA, okB), a);
+    case 'oklch':
+      final l = _cssComponent(parts[0], 1);
+      final c = _cssComponent(parts[1], 0.4);
+      final h = _cssHue(parts[2]);
+      if (l == null || c == null || h == null) return null;
+      final (okA, okB) = lchToAb(math.max(c, 0.0), h);
+      return _encodedToColour(oklabToEncoded(l.clamp(0.0, 1.0), okA, okB), a);
+  }
+  return null;
 }
+
+/// A component that is a number as-is or a percentage scaled so 100% is
+/// [percentRef] — the per-slot reference CSS Color 4 assigns. The number is
+/// clamped to the CSS float range first (see [_clampCssFloat]).
+double? _cssComponent(String s, double percentRef) {
+  final percent = s.endsWith('%');
+  final n = _cssNumber(percent ? s.substring(0, s.length - 1) : s);
+  if (n == null) return null;
+  final clamped = _clampCssFloat(n);
+  return percent ? clamped * percentRef / 100 : clamped;
+}
+
+/// Encoded sRGB channels in [0, 1] → bytes, on the same half-away round every
+/// other path takes — `color(srgb 0.5 …)` measured 128, not 127.
+RasterColour _encodedToColour(List<double> encoded, int a) => RasterColour(
+  (encoded[0] * 255).round().clamp(0, 255),
+  (encoded[1] * 255).round().clamp(0, 255),
+  (encoded[2] * 255).round().clamp(0, 255),
+  a,
+);
 
 /// A hue in degrees, from any of CSS's four angle units.
 ///
@@ -461,10 +617,14 @@ double? _cssHue(String s) {
   ]) {
     if (s.endsWith(suffix)) {
       final n = _cssNumber(s.substring(0, s.length - suffix.length));
-      return n == null ? null : n * factor;
+      // Clamped before the unit multiplies — 3.4e38 turns is a finite (if
+      // meaningless) number of degrees, where clamping after would already
+      // have overflowed to Infinity and NaN'd the hue wrap.
+      return n == null ? null : _clampCssFloat(n) * factor;
     }
   }
-  return _cssNumber(s);
+  final n = _cssNumber(s);
+  return n == null ? null : _clampCssFloat(n);
 }
 
 /// 0–255 from a number in 0–1 or a percentage, clamped rather than refused.
