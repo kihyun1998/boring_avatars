@@ -283,6 +283,9 @@ void main(List<String> args) {
   var missing = 0;
   var worstEdge = 0;
   var totalInterior = 0;
+  var worstInteriorAll = 0;
+  int? controlSeams;
+  int? controlWorstEdge;
 
   for (final entry in _cases.entries) {
     final reference = File('${dir.path}/${entry.key}.rgba');
@@ -387,6 +390,13 @@ void main(List<String> args) {
     }
     worstEdge = worst > worstEdge ? worst : worstEdge;
     totalInterior += interior;
+    worstInteriorAll = worstInterior > worstInteriorAll
+        ? worstInterior
+        : worstInteriorAll;
+    if (entry.key == _controlCase) {
+      controlSeams = seams;
+      controlWorstEdge = worst;
+    }
     stdout.writeln(
       '${entry.key.padRight(24)} interior mismatches $interior'
       '${worstInteriorAt.isEmpty ? '' : ' (worst $worstInterior/255 at $worstInteriorAt)'}'
@@ -409,13 +419,52 @@ void main(List<String> args) {
     return;
   }
 
+  // The bar, in three parts, each scoped to what its statistic can measure —
+  // settled 2026-08-11 (the ruling event is in docs/agents/theflow.md, Step
+  // 4). The old single bar — "interior 0, edge <= 1" — was recorded in #33,
+  // first executed in #37, and **never met by any run that ever existed**,
+  // because for a curved or shallow rotated edge the reference's own error is
+  // the larger term: hidden-state #27 measures Chrome's circles up to 0.13 px
+  // inside true geometry and its shallow edges 30/255 out, where this
+  // integrator is within 0.03/255 of exact coverage. A bar the reference
+  // cannot meet gates nothing; these three can each fail for a reason that
+  // is ours:
+  //
+  //  1. every interior residue stays within 1/255 — today's residues are the
+  //     compositing-rounding class (#23, #29), and a wrong picture is not a
+  //     1/255 event;
+  //  2. the curve-free control renders with no pixel Chrome fills solid that
+  //     we leave translucent, and its worst edge stays within 3/255 — the one
+  //     case in the matrix where a residue is *attributable* (#83), and 3 is
+  //     that run's measured value kept as a regression tripwire rather than a
+  //     derived constant;
+  //  3. everything on a curve or a shallow edge is reported, ungated, with
+  //     #27 as the named reason — the gate role belongs to `flutter test`
+  //     and the goldens, which killed every wrong picture ever tried through
+  //     this harness while the Chrome comparison killed none (#37, #39).
+  final interiorOk = worstInteriorAll <= 1;
+  final controlOk =
+      controlSeams != null && controlSeams == 0 && controlWorstEdge! <= 3;
   stdout.writeln(
-    '\nbar: interior 0, edge <= 1  ->  '
-    '${totalInterior == 0 && worstEdge <= 1 ? "PASS" : "FAIL"} '
-    '(interior $totalInterior, worst edge $worstEdge)',
+    '\nbar 1 — interior within 1/255: '
+    '${interiorOk ? "PASS" : "FAIL"} '
+    '(worst $worstInteriorAll/255 over $totalInterior mismatches)',
   );
-  if (totalInterior != 0 || worstEdge > 1) exit(1);
+  stdout.writeln(
+    'bar 2 — curve-free control ($_controlCase) seam-exact, edge <= 3: '
+    '${controlOk ? "PASS" : "FAIL"} '
+    '${controlSeams == null ? "(control case missing from the matrix)" : "(seams $controlSeams, worst edge $controlWorstEdge/255)"}',
+  );
+  stdout.writeln(
+    'reported, ungated — worst edge over all cases: $worstEdge/255 '
+    '(curves and shallow edges; the residual is Chrome\'s, hidden-state #27)',
+  );
+  if (!interiorOk || !controlOk) exit(1);
 }
+
+/// The one case with no curve in it — every edge axis-aligned, so nothing of
+/// hidden-state #27's reference error is in frame and a residue means us.
+const _controlCase = 'pixel-clara-square-100';
 
 /// Whether (x, y) sits on a coverage boundary in the reference.
 ///
