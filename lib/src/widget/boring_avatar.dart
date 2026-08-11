@@ -57,6 +57,9 @@ import '../version.dart';
 /// `transparent`. Its alpha multiplies the shape's coverage, which is what a
 /// browser does with the same document.
 class BoringAvatar extends StatefulWidget {
+  /// Every parameter mirrors [boringAvatarSvg] — the two public surfaces
+  /// deliberately share one vocabulary, so an avatar moved between them is
+  /// the same avatar.
   const BoringAvatar({
     super.key,
     required this.name,
@@ -123,6 +126,8 @@ class BoringAvatar extends StatefulWidget {
   /// a default of "newest" would redraw the avatars in an app that upgraded.
   final BoringAvatarsVersion version;
 
+  /// Which of upstream's six drawings to render; the two deprecated aliases
+  /// resolve exactly as upstream resolves them.
   final BoringAvatarsVariant variant;
 
   /// Drops the mask's corner radius.
