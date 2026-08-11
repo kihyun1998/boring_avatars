@@ -18,9 +18,11 @@ import 'package:flutter_test/flutter_test.dart';
 ///   no paint is applied"). Measured across the 600-render fixture, it reaches
 ///   a drawn element in **`beam` only**: `<path fill="none">` on 44 of the 80
 ///   renders that do not throw, and `<rect stroke="none">` on 160.
-/// * **unreadable** — `red`, `#F00`, `rgb(…)`. The caller's palette, in a
-///   notation a browser reads and this rasterizer has not learned
-///   (hidden-state #20). #64 changes this answer; this file pins today's.
+/// * **unreadable** — `zzz`, `rgb(255,0)`, `""`. The caller's palette, in a
+///   form no colour grammar admits (hidden-state #20). Since #64 each
+///   property answers it as a browser answers an ignored declaration
+///   (ADR-0001 R2): a `fill` or `stroke` paints nothing, a `stop-color`
+///   paints black. This file pins those answers per property.
 void main() {
   group('the three states are told apart, not collapsed', () {
     test('an attribute that was never written is absent', () {
@@ -50,14 +52,14 @@ void main() {
         // garbage — a browser draws both — and keeping them here would have
         // been asserting the divergence rather than the vocabulary. What is
         // left is what a hex parser genuinely cannot read: a keyword, a
-        // function, a padded string, and nothing at all. #64 is where those
-        // answers change; `raster_alpha_test.dart` holds the ones that moved.
+        // function, a padded string, and nothing at all.
         // **`red`, `rgb(255,0,0)` and ` #FF0000` left this list in #63**, which
         // finished the `<color>` grammar: 148 names, the four functions,
         // `transparent`, `currentColor`, and CSS's own trimming. What is left
         // is what no grammar admits — a shape that looks like a function and
-        // is not, a name that is not a name, and nothing at all. #64 decides
-        // what these *draw*; this only says they were not read.
+        // is not, a name that is not a name, and nothing at all. #64 decided
+        // what these *draw* (nothing in a `fill`, black in a `stop-color`);
+        // this only says they were not read.
         for (final value in ['zzz', 'rgb(255,0)', 'hsv(0,100%,50%)', '']) {
           final declaration = readColourDeclaration(value);
           expect(declaration, isA<UnreadableColour>(), reason: value);
@@ -147,10 +149,12 @@ void main() {
 
     test('`none` draws nothing', () => expect(centre('none'), [0, 0, 0, 0]));
 
-    test('unreadable draws nothing — today', () {
-      // #64 is where this answer changes: Chrome paints nothing for an
-      // unreadable `fill`, so the answer is already right, but it is right
-      // for the wrong reason until the notation is actually learned.
+    test('unreadable draws nothing — the ruled answer since #64', () {
+      // Chrome's mechanism is inheritance: the declaration is ignored (CSS
+      // 2.1 §4.2) and the slot takes the root's `fill="none"`. Ours is a
+      // direct "unreadable paints nothing". Same answer, different reason —
+      // ADR-0001 discrepancy ②, which parts ways the day a root declares a
+      // colour.
       //
       // **`red` used to stand here and no longer can** — #63 taught the parser
       // the 148 names, so it is a colour now and the witness has to be
@@ -230,7 +234,10 @@ void main() {
       expect(centre('none'), [0, 0, 0, 0]);
     });
 
-    test('unreadable draws nothing — today', () {
+    test('unreadable draws nothing — `stroke`\'s initial value is `none`', () {
+      // The invalid-value rule lands on the initial value here (no ancestor
+      // declares a `stroke`), which is `none` — so unlike `fill`, this cell
+      // does not even depend on the root's declaration (ADR-0001).
       expect(centre('zzz'), [0, 0, 0, 0]);
     });
 
@@ -245,7 +252,10 @@ void main() {
     // `stroke` it is the first alternative of `<paint>` (11.2). So the same
     // three states legitimately get different answers here, and the shared
     // vocabulary is what makes that a decision rather than an accident.
-    SvgNode scene(List<SvgAttribute> stopAttributes) => SvgNode(
+    SvgNode scene(
+      List<SvgAttribute> stopAttributes, {
+      String secondStop = '#000000',
+    }) => SvgNode(
       SvgElement.svg,
       attributes: const [SvgAttribute('viewBox', '0 0 8 8')],
       children: [
@@ -295,11 +305,11 @@ void main() {
               ],
               children: [
                 SvgNode(SvgElement.stop, attributes: stopAttributes),
-                const SvgNode(
+                SvgNode(
                   SvgElement.stop,
                   attributes: [
-                    SvgAttribute('offset', 1),
-                    SvgAttribute('stop-color', '#000000'),
+                    const SvgAttribute('offset', 1),
+                    SvgAttribute('stop-color', secondStop),
                   ],
                 ),
               ],
@@ -309,8 +319,15 @@ void main() {
       ],
     );
 
-    List<int> topLeft(List<SvgAttribute> stopAttributes) {
-      final image = rasterizeScene(scene(stopAttributes), width: 8, height: 8);
+    List<int> topLeft(
+      List<SvgAttribute> stopAttributes, {
+      String secondStop = '#000000',
+    }) {
+      final image = rasterizeScene(
+        scene(stopAttributes, secondStop: secondStop),
+        width: 8,
+        height: 8,
+      );
       return image.bytes.sublist(0, 4);
     }
 
@@ -332,31 +349,57 @@ void main() {
       expect(topLeft(const []), [0, 0, 0, 255]);
     });
 
-    test('`none` is refused — it is not in stop-color\'s grammar', () {
-      expect(
-        () => rasterizeScene(
-          scene(const [SvgAttribute('stop-color', 'none')]),
-          width: 8,
-          height: 8,
-        ),
-        throwsA(isA<UnsupportedSceneError>()),
-      );
-    });
+    test(
+      '`none` is black — outside the grammar, so the invalid-value rule',
+      () {
+        // `none` is a <paint> value; stop-color's grammar
+        // (`currentColor | <color> <icccolor> | inherit`, 13.2.4) does not
+        // include it, so the declaration is ignored (CSS 2.1 §4.2) and the slot
+        // takes the initial value — black, because `stop-color` does not
+        // inherit (§6.1.1). Chrome measured black, not nothing (#64's table).
+        //
+        // The second stop is white so the answer discriminates: a fallback of
+        // white, or a rasterizer that dropped the stop and rode the remaining
+        // white one, both come out 255 here where black mixed 1/16 toward white
+        // is 16.
+        expect(
+          topLeft(const [
+            SvgAttribute('stop-color', 'none'),
+          ], secondStop: '#FFFFFF'),
+          [16, 16, 16, 255],
+        );
+      },
+    );
 
-    test('unreadable is refused — today', () {
-      // Chrome paints black here, not nothing, and #64 is where that answer
-      // is taken. Until then the seam refuses rather than guessing, which is
-      // the rule the whole rasterizer is built on.
+    test('unreadable is black — the same rule, same answer', () {
+      // A value no grammar admits lands in the same cell as `none`: ignored,
+      // then the initial value. This seam threw here from #69 to #64, and the
+      // throw was recorded as temporary the day ADR-0001 derived black —
+      // hidden-state #44 is the row that carried it.
       //
       // `red` was the witness until #63 taught the parser its 148 names; the
       // value has to be one no grammar admits now.
       expect(
-        () => rasterizeScene(
-          scene(const [SvgAttribute('stop-color', 'zzz')]),
-          width: 8,
-          height: 8,
-        ),
-        throwsA(isA<UnsupportedSceneError>()),
+        topLeft(const [
+          SvgAttribute('stop-color', 'zzz'),
+        ], secondStop: '#FFFFFF'),
+        [16, 16, 16, 255],
+      );
+    });
+
+    test('`transparent` is a read colour, not an invalid one', () {
+      // The row in #64's table that must NOT go through the invalid-value
+      // rule: `transparent` is a valid <color> (#63), so it reaches the
+      // gradient as alpha 0 rather than falling back to black. An
+      // implementation that classified it invalid would print 16,16,16,255
+      // here — the exact answer the two tests above require for `zzz`.
+      expect(
+        topLeft(const [
+          SvgAttribute('stop-color', 'transparent'),
+        ], secondStop: '#FFFFFF'),
+        // Straight interpolation (#62, measured): every channel runs
+        // 0 → 255 across the axis, alpha included, so 1/16 along it is 16.
+        [16, 16, 16, 16],
       );
     });
 

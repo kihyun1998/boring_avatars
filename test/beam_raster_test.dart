@@ -682,6 +682,56 @@ void main() {
       );
     });
 
+    test('an unreadable rect stroke paints no outline, like a browser', () {
+      // #64's rule at its third reader. The invalid-value rule ignores the
+      // declaration and `stroke` falls back to `none` (no ancestor declares
+      // one), so `stroke="zzz"` cannot paint — refusing it was a false
+      // refusal, found by the #64 completeness pass after the other two call
+      // sites were updated.
+      final image = rasterizeScene(
+        wrap(const [
+          SvgNode(
+            SvgElement.rect,
+            attributes: [
+              SvgAttribute('width', 4),
+              SvgAttribute('height', 4),
+              SvgAttribute('rx', 2),
+              SvgAttribute('stroke', 'zzz'),
+              SvgAttribute('fill', '#00FF00'),
+            ],
+          ),
+        ]),
+        width: 8,
+        height: 8,
+      );
+      var ink = 0.0;
+      for (var i = 3; i < image.bytes.length; i += 4) {
+        ink += image.bytes[i] / 255;
+      }
+      expect(ink, closeTo(math.pi * 4, 0.05), reason: 'the same disc');
+    });
+
+    test('a rect stroke naming a paint server is still refused', () {
+      // `url(#…)` reads as unreadable in the shared vocabulary — a paint
+      // server is not a <color> — but unlike `zzz` it names something that
+      // *would* paint an outline, so letting it ride the unreadable cell
+      // would silently drop a gradient outline. The url shape keeps the
+      // refusal whatever the vocabulary files it as.
+      expectRejected(
+        wrap(const [
+          SvgNode(
+            SvgElement.rect,
+            attributes: [
+              SvgAttribute('width', 4),
+              SvgAttribute('height', 4),
+              SvgAttribute('stroke', 'url(#nope)'),
+              SvgAttribute('fill', '#00FF00'),
+            ],
+          ),
+        ]),
+      );
+    });
+
     test('but stroke="none" on a rect is read and paints nothing', () {
       // The other half: `beam` writes this on both eyes, 160 times across the
       // fixture, and refusing it would refuse the variant.

@@ -1092,6 +1092,57 @@ hypothesis until it has been measured across its whole surface.
 The harness now records a throw as data (`{"__throws": "TypeError"}`) rather
 than dying, so upstream's crash is itself a reproducible fixture.
 
+### The rule had a third reader, and only the lens walked all three (#64)
+
+#64 changed what an unreadable colour answers at the two call sites the ticket
+named — `resolvePaint` and `_readLinearGradient` — and the whole 813-test suite
+went green. The completeness lens then walked the grid per *reader* rather than
+per property and found the `<rect>` stroke guard: a third consumer of the same
+vocabulary, still refusing `stroke="zzz"` with a throw whose own predicate
+("would paint an outline") had been false for that cell since the change. The
+suite could not see it because no variant reaches the guard with anything but
+`none` — the same reachability shape as every `a value nothing reads` entry.
+
+The fix had a trap inside it, which is the reason this entry exists rather than
+a one-line note: the obvious edit (`is! NoneColour` → allow unreadable) would
+have let `stroke="url(#g)"` ride the unreadable cell and silently drop a
+gradient outline — a *new* wrong picture, introduced by the fix to a false
+refusal. The url shape had to keep its refusal on its own key, exactly as
+`resolvePaint` branches before reading the declaration. Both directions are
+pinned as mutations (`64-invalid-colours.json`).
+
+**The rule this earns** is #41's, one ticket later and one function further:
+when a change applies a rule at the call sites it knows about, *enumerate the
+readers of the shared vocabulary* before claiming the rule is applied — grep
+for the type names, not for the property names. And when a lens-found false
+refusal is fixed, ask what the refusal was *also* guarding before deleting it.
+
+### "The grammar is closed" was a claim, and the pass measured it false (#64)
+
+The same pass's second product. #63's completion had been recorded — including
+by this ticket's own first draft of a doc-comment — as "the `<color>` grammar
+is closed, so what is unreadable is genuinely invalid". CSS Color 4 defines
+`hwb()`, `lab()`/`lch()`, `oklab()`/`oklch()`, `color()` and the system
+colours; Chrome draws all of them (measured in this pass: `hwb(120 0% 0%)` is
+0,255,0, in a `stop-color` as well), and this parser files every one
+**unreadable**. So #64's invalid-value rule answers them wrongly — nothing in a
+`fill`, black in a `stop-color`, where a browser paints the colour — and for
+the `stop-color` cell #64 turned a loud throw into that silent black.
+
+Publicly unreachable today: the widget guard refuses these palettes first and
+`boringAvatarSvg` hands them to a browser that draws them correctly. Carried to
+the user with both halves measured rather than fixed or filed unasked — the
+disposition (learn the notations, fence them back to a throw, or accept) is a
+scope call, and it is entangled with the #80 guard question the same batch
+carries.
+
+**The rule this earns:** a ticket that partitions inputs into "learned" and
+"invalid" has made a claim about the *complement* of what it implemented, and
+the complement is where nobody looks. Verify the partition against the spec's
+own enumeration, not against the list of what was built — the same failure as
+#62's `#FF00`, one level up: there a value sat in the wrong cell of a ticket's
+table, here a whole family sat in the wrong cell of the vocabulary itself.
+
 ### Going asynchronous deletes guarantees nobody wrote down (#80)
 
 The completeness pass on the banded rasteriser found a defect the 752-test suite

@@ -31,8 +31,10 @@ First release. Reproduces upstream `boring-avatars` **1.6.1, 1.6.2 and 1.6.3**
   `rgb()` / `rgba()` / `hsl()` / `hsla()` — either separator, percentages or
   0–255, alpha as a number or a percentage, hue in `deg` / `grad` / `rad` /
   `turn`. Keywords are ASCII case-insensitive and tolerate surrounding
-  whitespace. Rather than draw a blank for anything outside that grammar, the
-  widget throws and names the argument.
+  whitespace. Anything outside that grammar draws what a browser draws for an
+  invalid declaration — the shape is not painted, and a gradient stop falls
+  back to black; measured against Chrome. The widget still rejects such a
+  palette up front, naming the argument, so a typo fails loudly.
 * A palette colour may carry its own transparency, and its alpha multiplies the
   shape's coverage, as a browser does with the same document.
 * The named-colour table is generated from the CSS Color 4 specification and

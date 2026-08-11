@@ -194,6 +194,28 @@ final _cases = <String, (SvgNode, int)>{
     buildSunsetScene(name: 'Clara Barton', colors: _named, size: 80),
     80,
   ),
+  // #64 — a palette with truly invalid entries, which ADR-0001's invalid-value
+  // rule answers: an unreadable `fill` or `stroke` paints nothing, an
+  // unreadable `stop-color` paints black. Same two variants as #62/#63 and for
+  // the same reason — the two paths a colour reaches a pixel through — plus the
+  // property split is exactly what these two separate: `bauhaus` puts the bad
+  // entries into `fill`/`stroke`, `sunset` into `stop-color`.
+  //
+  // The palette is **mixed** on purpose. All-invalid would render `bauhaus`
+  // blank and `sunset` as a solid black disc — and a blank agrees with a
+  // harness that drew nothing at all, while the black disc is byte-identical
+  // to the empty-palette case, so neither could tell the invalid-value rule
+  // from an accident. With valid neighbours the picture discriminates: the
+  // shapes that drew prove the scene ran, beside the ones the rule erased or
+  // blackened.
+  'bauhaus-invalid': (
+    buildBauhausScene(name: 'Clara Barton', colors: _invalid, size: 80),
+    80,
+  ),
+  'sunset-invalid': (
+    buildSunsetScene(name: 'Clara Barton', colors: _invalid, size: 80),
+    80,
+  ),
 };
 
 /// One of each notation, so a single run exercises the whole grammar: a name,
@@ -206,6 +228,11 @@ const _named = [
   'rgba(194, 113, 180, 0.75)',
   'hsl(0.85turn 88% 40% / 60%)',
 ];
+
+/// Both invalid rows of #64's Chrome table — a token no grammar admits and
+/// the empty string — interleaved with valid neighbours so the render
+/// discriminates (see the case comment).
+const _invalid = ['zzz', '#146A7C', '', '#C20D90', 'rgb(255,0)'];
 
 /// Five colours that all carry their own alpha, in the two short forms and the
 /// long one, so a run exercises the expansion as well as the compositing.

@@ -835,27 +835,29 @@ LinearGradientPaint _readLinearGradient(SvgNode node, double scale) {
     // are SVG's initial values, and the second is what makes an empty palette
     // paint `sunset` solid black instead of transparent. Confirmed in Chrome.
     //
-    // The same four states a `fill` reads, answered differently on purpose.
-    // `stop-color` takes `currentColor | <color> <icccolor> | inherit` (SVG
-    // 1.1, 13.2.4) and **`none` is not in that grammar**, where for `<paint>`
-    // it is the first alternative — so the value that means "no paint" over
-    // there is an invalid value here. It cannot mean "no paint" anyway: a
-    // gradient stop has no such state, only a colour.
+    // The same four states a `fill` reads, answered differently on purpose —
+    // and three of the four come out black, each by ADR-0001's rules rather
+    // than by a per-case choice. `stop-color` takes
+    // `currentColor | <color> <icccolor> | inherit` (SVG 1.1, 13.2.4);
+    // anything outside that grammar — `none`, which is a <paint> value, and
+    // every notation no grammar admits — is an *ignored* declaration (CSS 2.1
+    // §4.2), and an ignored declaration on a property that does not inherit
+    // takes the initial value (§6.1.1): black. Chrome measured black for
+    // both, not nothing (#64's table). One rule, three cells; `transparent`
+    // is not among them, because it is a valid <color> and arrives as a read
+    // colour with alpha 0.
+    //
+    // This seam threw on the last two cells from #69 to #64, and the throw
+    // was recorded as temporary the day ADR-0001 derived the answer —
+    // hidden-state #44 carried it as the one place `sunset` refused a palette
+    // the other five variants drew nothing for.
     final offset = _num(child.attribute('offset')) ?? 0;
     final declared = child.attribute('stop-color') as String?;
     final colour = switch (readColourDeclaration(declared)) {
       AbsentColour() => const RasterColour(0, 0, 0),
       ParsedColour(:final colour) => colour,
-      NoneColour() => throw UnsupportedSceneError(
-        'stop-color "none" is not in this property\'s grammar; `none` is a '
-        '<paint> value and a <stop> has no "do not paint" state',
-      ),
-      // Chrome paints an unreadable `stop-color` **black**, not nothing —
-      // measured. Refusing rather than guessing is today's answer and #64 is
-      // where it is taken, together with `fill`'s.
-      UnreadableColour(:final text) => throw UnsupportedSceneError(
-        'stop-color "$text" is not a colour this rasterizer can read',
-      ),
+      NoneColour() => const RasterColour(0, 0, 0),
+      UnreadableColour() => const RasterColour(0, 0, 0),
     };
     stops.add((offset, colour));
   }
@@ -926,12 +928,14 @@ List<RasterShape> _shapesOf(
   ///   with Chrome; it throws anyway, because a blank avatar is
   ///   indistinguishable from the bug where the paint was never *read* — which
   ///   is exactly what #40 fixed, and it was silent for a whole variant.
-  /// * **a colour** — `#RRGGBB` paints.
-  /// * **unreadable** — a form only a browser can read (`red`, `#F00`) keeps
-  ///   its recorded behaviour of painting nothing, which is hidden-state #20
-  ///   and the caller's palette, not upstream's output. **#64 is where this
-  ///   answer changes**; splitting it out of the two above is what lets it
-  ///   change alone.
+  /// * **a colour** — any notation the parser reads (#62, #63) paints.
+  /// * **unreadable** — a value no grammar admits (`zzz`, `""`) paints
+  ///   nothing, and since #64 that is the *ruled* answer rather than a
+  ///   refusal's side effect: Chrome ignores the declaration (CSS 2.1 §4.2)
+  ///   and the slot takes the inherited value — the root `<svg fill="none">`
+  ///   above — so it paints nothing too. Same answer, different mechanism
+  ///   (ADR-0001 discrepancy ②): this code never reads the root, so the two
+  ///   agree only while the first bullet's validity condition holds.
   RasterPaint? resolvePaint(String attribute) {
     final declared = node.attribute(attribute) as String?;
     if (declared != null && declared.startsWith('url(')) {
@@ -1115,12 +1119,20 @@ List<RasterShape> _shapesOf(
       // a different matter: outlining a rounded rectangle is a real capability
       // and no version in scope asks for one, so it fails loudly here instead
       // of drawing a rect that is missing its outline.
+      //
+      // An *unreadable* stroke also cannot paint — the invalid-value rule
+      // ignores it and `stroke` falls back to `none` (ADR-0001, #64) — so it
+      // passes. The one unreadable shape that must not ride that cell is
+      // `url(#…)`: a paint server is outside the colour vocabulary but names
+      // something that would paint, so its refusal keys on the url shape, the
+      // same way [resolvePaint] branches before reading the declaration.
       final declaredStroke = node.attribute('stroke');
       if (declaredStroke != null &&
-          readColourDeclaration(declaredStroke as String) is! NoneColour) {
+          (readColourDeclaration(declaredStroke as String) is ParsedColour ||
+              declaredStroke.startsWith('url('))) {
         throw UnsupportedSceneError(
           '<rect stroke="$declaredStroke"> would paint an outline, which is '
-          'not implemented; only stroke="none" is read',
+          'not implemented; only a stroke that paints nothing is read',
         );
       }
 
