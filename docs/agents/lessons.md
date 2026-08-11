@@ -1134,7 +1134,9 @@ Publicly unreachable today: the widget guard refuses these palettes first and
 the user with both halves measured rather than fixed or filed unasked — the
 disposition (learn the notations, fence them back to a throw, or accept) is a
 scope call, and it is entangled with the #80 guard question the same batch
-carries.
+carries. **Ruled the next day: learn them — #95**, filed as a sub-issue of #64
+and a conformance item under ADR-0001, with the rejected alternatives recorded
+in its body.
 
 **The rule this earns:** a ticket that partitions inputs into "learned" and
 "invalid" has made a claim about the *complement* of what it implemented, and

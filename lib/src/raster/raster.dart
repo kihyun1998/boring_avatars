@@ -207,9 +207,10 @@ final class ParsedColour extends ColourDeclaration {
 /// browser draws them (measured: `hwb(120 0% 0%)` is 0,255,0 in Chrome, in a
 /// `stop-color` as well). For those the #64 answer is wrong in the same
 /// direction the pre-#62 blank was; the widget's palette guard is what keeps
-/// them off the public surface. Surfaced in #64's completeness pass, carried
-/// to the user rather than decided here. [text] is kept so a seam that still
-/// refuses — that guard — can say what it could not read.
+/// them off the public surface. Surfaced in #64's completeness pass and ruled
+/// by the user: **learn them — #95**, after which this paragraph comes out.
+/// [text] is kept so a seam that still refuses — that guard — can say what it
+/// could not read.
 final class UnreadableColour extends ColourDeclaration {
   const UnreadableColour(this.text);
   final String text;
