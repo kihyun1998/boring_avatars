@@ -204,7 +204,7 @@ void main() {
     test('a fill naming a gradient that is not declared is refused', () {
       // A dangling paint reference makes a browser draw *nothing* — measured,
       // 0,0,0,0 everywhere, because a CSS <url> with no fallback and an invalid
-      // target resolves to . Throwing is still right: a blank is
+      // target resolves to `none`. Throwing is still right: a blank is
       // indistinguishable from the paint never having been read at all, which
       // is the bug #40 fixed and it was silent for a whole variant.
       expectRejected(

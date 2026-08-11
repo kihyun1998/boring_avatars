@@ -146,19 +146,24 @@ class RasterColour {
 /// What a colour-valued attribute declared, before any call site decides what
 /// to do about it.
 ///
-/// Four states, and three of them paint nothing today — so a picture cannot
-/// tell them apart and neither could the code, until this existed. Splitting
-/// them changes no output; it makes the *reason* inspectable, which is what
-/// lets `fill` and `stop-color` answer the same declaration differently on
-/// purpose rather than by accident.
+/// Four states. In a `fill` three of them paint nothing and in a `stop-color`
+/// three of them paint black — so within one property a picture cannot tell
+/// them apart, and neither could the code, until this existed. The split (#69)
+/// is what made "unreadable" nameable, which is what let #64 change that
+/// state's answer alone, and it keeps the *reason* inspectable now that the
+/// answers coincide again.
 ///
 /// The split matters because the two properties really do have different
 /// grammars. `fill` and `stroke` take `<paint>`, whose first alternative is
 /// `none` — "Indicates that no paint is applied" (SVG 1.1, 11.2). `stop-color`
 /// takes `currentColor | <color> <icccolor> | inherit` (13.2.4), which does
-/// **not** include `none`. A vocabulary that folded `none` into "unreadable"
-/// would make `beam`'s 204 `none` declarations right by coincidence, and a
-/// golden would freeze the coincidence.
+/// **not** include `none` — there it is an invalid value, ignored, and the
+/// slot takes the initial black (ADR-0001 R2). A vocabulary that folded
+/// `none` into "unreadable" would make `beam`'s 204 `none` declarations right
+/// by coincidence; since #64 the coincidence extends to every call site, so
+/// only the type-level tests hold the two apart — deliberately, because the
+/// day a property answers them differently again is the day the collapse
+/// would ship a wrong picture.
 sealed class ColourDeclaration {
   const ColourDeclaration();
 }
@@ -188,13 +193,23 @@ final class ParsedColour extends ColourDeclaration {
   final RasterColour colour;
 }
 
-/// A value in a notation this rasterizer has not learned.
+/// A value outside every colour grammar this rasterizer knows.
 ///
-/// `red`, `#F00`, `rgb(…)`, `#RRGGBBAA` — all of which a browser draws. The
-/// palette is consumer policy and upstream validates none of it, so these
-/// reach here and the SVG backend passes them through intact while this one
-/// cannot draw them (hidden-state #20). [text] is kept so the seam can say
-/// what it could not read.
+/// `zzz`, `rgb(255,0)`, the empty string — the grammars #62/#63 implemented
+/// reject these, and as of #64 every call site answers them the way a browser
+/// answers an ignored declaration (ADR-0001 R2) instead of refusing. The
+/// palette is consumer policy and upstream validates none of it, so they
+/// reach here (hidden-state #20).
+///
+/// **"Lands here" is not the same as "invalid", and the gap is known.** CSS
+/// Color 4 notations this parser has not learned — `hwb()`, `lab()`/`lch()`,
+/// `oklab()`/`oklch()`, `color()`, the system colours — file here too, and a
+/// browser draws them (measured: `hwb(120 0% 0%)` is 0,255,0 in Chrome, in a
+/// `stop-color` as well). For those the #64 answer is wrong in the same
+/// direction the pre-#62 blank was; the widget's palette guard is what keeps
+/// them off the public surface. Surfaced in #64's completeness pass, carried
+/// to the user rather than decided here. [text] is kept so a seam that still
+/// refuses — that guard — can say what it could not read.
 final class UnreadableColour extends ColourDeclaration {
   const UnreadableColour(this.text);
   final String text;
@@ -245,10 +260,11 @@ ColourDeclaration readColourDeclaration(String? declared) {
 /// doubled the colour digits and left the alpha alone would be 8/255 out on
 /// that one value and exact everywhere else.
 ///
-/// Returns `null` for anything the grammar does not admit, and that answer is
-/// still #64's to change, not this function's — a length of five or seven is
-/// hex without being a form, and rejecting it here is what lets "invalid" mean
-/// something later. A sign is rejected for the same reason it always was:
+/// Returns `null` for anything the grammar does not admit, and what that
+/// draws is the call sites' answer, not this function's — #64 ruled it
+/// (nothing in a `fill`, black in a `stop-color`), and a length of five or
+/// seven staying `null` here is what keeps "invalid" meaning something. A
+/// sign is rejected for the same reason it always was:
 /// `int.tryParse('+12345', radix: 16)` succeeds and would turn punctuation into
 /// a plausible colour.
 ///

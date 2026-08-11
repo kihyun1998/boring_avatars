@@ -1,0 +1,86 @@
+{
+  "issue": 64,
+  "what": "a truly invalid colour draws what a browser draws — nothing in a fill, black in a stop-color",
+  "test": null,
+  "note": [
+    "`test: null` — the whole suite. The change is three switch arms and a",
+    "vocabulary rule, and the discriminating assertions live in",
+    "raster_colour_test.dart; running everything is what proves nothing *else*",
+    "was holding the old throw in place.",
+    "",
+    "The two `reverts to the throw` cases are this ticket's own test-trust gate",
+    "made permanent: each puts back the exact behaviour #64 removed, so a green",
+    "run would mean the flipped tests never discriminated.",
+    "",
+    "`none is filed as unreadable` is the acceptance criterion's mutation. Since",
+    "#64 it is *output-neutral everywhere* — both states paint nothing in a",
+    "fill and black in a stop-color — so only the type-level assertions in",
+    "raster_colour_test.dart can kill it. That is deliberate (see the",
+    "ColourDeclaration doc): the day a property answers the two differently",
+    "again, the types are the only thing standing between the collapse and a",
+    "wrong picture.",
+    "",
+    "The two `white` cases are the acceptance criterion's other mutation: the",
+    "black is a derived initial value (ADR-0001 R2), not a taste, and white is",
+    "the nearest wrong constant — for the absent case it is also the value the",
+    "empty-palette golden (`sunset` solid black disc, hidden-state #39) pins."
+  ],
+  "cases": [
+    {
+      "name": "an unreadable stop-color falls back to white",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "      UnreadableColour() => const RasterColour(0, 0, 0),",
+      "to": "      UnreadableColour() => const RasterColour(255, 255, 255),",
+      "expectEdits": 1
+    },
+    {
+      "name": "an absent stop-color falls back to white",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "      AbsentColour() => const RasterColour(0, 0, 0),",
+      "to": "      AbsentColour() => const RasterColour(255, 255, 255),",
+      "expectEdits": 1
+    },
+    {
+      "name": "an unreadable stop-color reverts to the throw",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "      UnreadableColour() => const RasterColour(0, 0, 0),",
+      "to": "      UnreadableColour() => throw UnsupportedSceneError('reverted'),",
+      "expectEdits": 1
+    },
+    {
+      "name": "stop-color none reverts to the throw",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "      NoneColour() => const RasterColour(0, 0, 0),",
+      "to": "      NoneColour() => throw UnsupportedSceneError('reverted'),",
+      "expectEdits": 1
+    },
+    {
+      "name": "an unreadable fill paints black instead of nothing",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "      UnreadableColour() => null,",
+      "to": "      UnreadableColour() => SolidPaint(const RasterColour(0, 0, 0)),",
+      "expectEdits": 1
+    },
+    {
+      "name": "none is filed as unreadable",
+      "file": "lib/src/raster/raster.dart",
+      "from": "  if (_cssNormalise(declared) == 'none') return const NoneColour();",
+      "to": "  if (_cssNormalise(declared) == 'none') return UnreadableColour(declared);",
+      "expectEdits": 1
+    },
+    {
+      "name": "the rect stroke guard reverts to refusing unreadable",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "          (readColourDeclaration(declaredStroke as String) is ParsedColour ||\n              declaredStroke.startsWith('url('))) {",
+      "to": "          readColourDeclaration(declaredStroke as String) is! NoneColour) {",
+      "expectEdits": 1
+    },
+    {
+      "name": "the rect stroke guard lets a paint server ride the unreadable cell",
+      "file": "lib/src/raster/scene_raster.dart",
+      "from": "          (readColourDeclaration(declaredStroke as String) is ParsedColour ||\n              declaredStroke.startsWith('url('))) {",
+      "to": "          readColourDeclaration(declaredStroke as String) is ParsedColour) {",
+      "expectEdits": 1
+    }
+  ]
+}

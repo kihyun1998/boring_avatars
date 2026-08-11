@@ -182,8 +182,10 @@ disappearing, and the widget clears rather than leaving a stale avatar behind.
   or `turn`.
 
 Keywords are ASCII case-insensitive and tolerate surrounding whitespace, as CSS
-defines them. Rather than draw a blank avatar for something outside that
-grammar, the widget rejects it and names the argument.
+defines them. For something outside that grammar the rasterizer answers as a
+browser answers an invalid declaration — the shape is not painted, and a
+gradient stop falls back to black — but the widget rejects the palette first
+and names the argument, so a typo fails loudly instead of as a missing shape.
 
 The name table is **generated from the CSS Color 4 specification**, not typed
 out, and every one of the 148 was cross-checked against a real Chrome render —
