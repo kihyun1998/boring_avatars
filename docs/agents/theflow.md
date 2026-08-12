@@ -737,10 +737,27 @@ a contract: changing them silently rewrites every existing user's avatar
 identity. New upstream states are added as **new selector values only** — always
 additive, never an edit to a shipped state.
 
-**Cross-repo rules — currently N/A because nothing is published** (pub.dev
-returns `NoSuchKey` for `boring_avatars`). The SDK-floor constraint, the
-two-consumer signal, and the after-merge downstream loop all assume consumers
-that cannot be seen from here. Re-read them at first publish, not before.
+**`v1_6_1` is that selector, as of `0.1.0` — published 2026-08-12, queried not
+assumed** (`curl -s https://pub.dev/api/packages/boring_avatars` → `latest`
+`0.1.0`). This sentence stopped being a rule about the future on that date.
+Concretely: **Step 5's third unconditional trigger was vacuous until now** — "any
+change to a *published* version selector's layer-1 output" named no selector,
+because none was published. It names one today, so a change to what `v1_6_1`
+draws is a completeness-pass path whatever its diff looks like.
+
+**Cross-repo rules are live as of the same date.** They were N/A while pub.dev
+returned `NoSuchKey`; the SDK-floor constraint, the two-consumer signal and the
+after-merge downstream loop all assume consumers that cannot be seen from here,
+and now such consumers can exist. What that changes in practice:
+
+- **`environment: sdk: ^3.11.5` is now a published floor.** Raising it is a
+  breaking change for every dependent, carried down by the caret range whether
+  or not anyone here thinks of it as an API change.
+- **The two-consumer signal cannot be seen from inside one consumer**, which is
+  why the duty to report a local guard upstream applies even when the local fix
+  was correct.
+- **Consumers are derived at the moment they are needed and never stored** — see
+  "Downstream loop", which now runs rather than being deferred.
 
 ### The public surface — the rulings, as events (#59)
 
@@ -1206,7 +1223,10 @@ the second *refuting* lens is bought, on:
 
 - `lib/src/js/**` — the JS-semantics primitives shared by every variant
 - `lib/src/variants/**` — every per-state value generator
-- any change to a **published** version selector's layer-1 output
+- any change to a **published** version selector's layer-1 output. **This row was
+  vacuous until 2026-08-12** — it named no selector because nothing was
+  published. `0.1.0` shipped `v1_6_1`, so it names one now, and the trigger fires
+  on a one-line change to what that selector draws
 
 **Why these and not the rasterizer.** A rasterizer error is ±1/255 on an edge
 pixel: invisible, and fixable later at no cost to anyone. A layer-1 error
@@ -1944,12 +1964,27 @@ than assume which machine you are on.
 
 ### Downstream loop
 
-**N/A — nothing is published.** At first publish, derive consumers on the spot
-(`for d in ../*/; do grep -l 'boring_avatars:' "$d/pubspec.yaml"; done`) and
-never store the list here. Note that this package's releases are **additive by
-construction** (a new state is a new selector value), so a release will normally
-oblige consumers to do nothing — say so explicitly rather than leaving it
-implied.
+**Live as of `0.1.0` (2026-08-12).** Derive consumers on the spot and **never
+store the list here** — a stored list is a derivable fact that rots the day a
+consumer or a constraint changes:
+
+```bash
+for d in ../*/; do grep -l 'boring_avatars:' "$d/pubspec.yaml"; done
+```
+
+Run at `0.1.0`: **no sibling consumers.** That is the expected answer for a
+first release and it is not a standing one — re-derive, do not quote this line.
+
+**A `0.1.0` release obliges consumers to do nothing, and that is structural
+rather than lucky.** Releases here are additive by construction: a new upstream
+state is a new selector value, never an edit to a shipped one, so the loop's
+usual work — raise the constraint, delete the workaround the fix made
+unnecessary, flip the test that pinned the old bug — has nothing to act on.
+Say that explicitly in each release rather than leaving it implied; "nothing to
+do" and "nobody checked" look identical from outside.
+
+The one thing that *would* oblige them is a raised SDK floor, which is why it
+sits in the boundary section above rather than here.
 
 ---
 

@@ -11,6 +11,12 @@ Every supported upstream release is reachable at once — npm needs a downgrade 
 render an older version's avatar, here it is a parameter. `0.1.0` supports the
 first of them; the rest arrive as additional selector values.
 
+## Install
+
+```bash
+flutter pub add boring_avatars
+```
+
 ## Usage
 
 ```dart
