@@ -9,9 +9,12 @@ Identity & invariants live in `CLAUDE.md`. `CONTEXT.md` / `docs/adr/` do not
 exist yet — created lazily.
 
 **Environment:** Claude Code and the user share one machine, and **which one
-varies** — Windows (Flutter 3.41.9, Node v26.4.0, npm 11.17.0) through #58, and
-macOS (Flutter 3.44.8, Node v24.11.1) as of #59. Measure rather than assume:
-`flutter --version`, `node --version`. Either way, run `flutter test` /
+varies per session** — Windows (Flutter 3.41.9, Node v26.4.0, npm 11.17.0)
+through #58, macOS (Flutter 3.44.8, Node v24.11.1) at #59, **Windows again at
+#51 and #42**. It moves back and forth, so this list is history and not a
+current-state field; **measure, do not read it**: `flutter --version`,
+`node --version`, `uname -s`. The one thing that actually depends on the answer
+is `pana` — see Step 7. Either way, run `flutter test` /
 `analyze` / `dart format` and the Node parity harness directly (do not ask). The
 exception is anything that opens a window (`flutter run`) — ask the user to drive
 and say what to look for. **There are no CI gates**: the Step 7 gates are the
@@ -1957,10 +1960,28 @@ anything (`Sandbox output folder must not contain ":"` —
 `_detectGitRoot` → `GitTool` → `SandboxRunner.runSandboxed` runs
 unconditionally, and every absolute Windows path contains a drive colon; being
 outside a git repository does not avoid it). The 2026-08-10 score was
-therefore taken with 0.22.19, which predates the sandbox check. **On this
-machine that hole in the "gates run here" claim is closed** — the environment
-moved to macOS at #59, and the bindings' own rule applied: measure rather
-than assume which machine you are on.
+therefore taken with 0.22.19, which predates the sandbox check.
+
+**This section said the hole was closed. It is open again whenever the session
+is on Windows, which #42 measured it to be** (Flutter 3.41.9, Node v26.4.0,
+`MINGW64_NT`). The sentence had read "on this machine that hole is closed — the
+environment moved to macOS at #59", which quietly turned *one session's
+measurement* into a standing property of the project. The machine alternates;
+the hole alternates with it.
+
+So `pana` is the one gate whose availability is **machine-conditional**, and
+that is why it is not in the Step 7 block above. On macOS run 0.23.17 and expect
+160/160. On Windows it cannot run at all, and the honest substitute is
+**pub.dev's own analysis of the published version**, which is authoritative
+rather than a local approximation:
+
+```bash
+curl -s https://pub.dev/api/packages/boring_avatars/score
+```
+
+It reports `0/0` with only an `is:recent` tag until pub.dev has analysed the
+release — that is "not yet scored", not "scored zero", and the two are easy to
+confuse at a glance.
 
 ### Downstream loop
 
