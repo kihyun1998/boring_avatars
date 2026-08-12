@@ -58,10 +58,18 @@ them**, not when their source happens to match. `1.6.1`, `1.6.2` and `1.6.3`
 collapse into one value because all three were measured to render byte-identical
 documents, not because the code looked similar.
 
-**These are upstream's git tags, not its npm versions.** The two disagree: npm
-`1.2.1`, for instance, republished 0.1.4-era code. When you pin a version here,
-you are naming a tag in
-[the upstream repository](https://github.com/boringdesigners/boring-avatars/tags).
+**These are upstream's git tags, not its npm versions.** The two disagree in
+both directions. npm `1.2.1` republished 0.1.4-era code — a tag's worth of
+history under a number that suggests otherwise. And going the other way,
+upstream's **two most recent npm releases have no tag at all**: the tags stop at
+`v2.0.2`, while npm carries `2.0.3` and `2.0.4`, and `2.0.4` is what `npm
+install boring-avatars` gives you today.
+
+So when you pin a version here you are naming a tag in
+[the upstream repository](https://github.com/boringdesigners/boring-avatars/tags),
+and for the newest releases this package will name the source it read instead.
+Where the two numbering schemes point at the same code, they agree; where they
+do not, the tag is what a selector means.
 
 ### `version` has no default, on purpose
 
