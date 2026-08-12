@@ -160,6 +160,36 @@ scanline is indivisible and already costs milliseconds at that size.
 **A default is a measurement, not a derivation.** Especially one whose units
 belong to a platform the code does not run on while you are choosing it.
 
+### The claim that needed measuring was the one this repo had written down (#51)
+
+`#51` asks for a watcher over upstream's `src/lib`, and both the ticket and
+`theflow.md` justified the design with the same numbers: *"of 28 tags only ~16
+are real work"*, *"v1.9.0, v1.10.0, v2.0.1 and v2.0.2 changed nothing under
+`src/lib/`"*. The reference tree is a sibling directory and answers this in one
+loop, so it was measured rather than quoted:
+
+- **v2.0.2 did change `src/lib`** — `types.ts` and `index.tsx`, 8 lines between
+  them. Three of the four named versions were right and the fourth was not.
+- 28 tags carry **18** distinct `src/lib` trees, and **9** tags are identical to
+  their predecessor's — not 12, and not "~16 real".
+
+Neither error changed the decision, which is exactly why they had survived: a
+justification that points the right way is never re-read. What the measurement
+*did* change was the strength of the argument, in the direction nobody had
+looked. **`2.0.3` and `2.0.4` are on npm with no git tag at all** — the tags
+stop at `v2.0.2` and `latest` is `2.0.4` — so a release-triggered watcher is
+not merely noisy, it is **blind to upstream's two most recent releases**. The
+package's own README already warns callers that npm versions and git tags
+diverge here; nobody had carried that fact the twelve inches into the watcher's
+rationale.
+
+**The rule this earns:** the routing table's "external facts are verification
+targets" includes the facts *this repo asserts about the external thing*. A
+number written in a bindings doc reads as settled precisely because it is
+written down, and the ones that support a decision everybody agrees with are
+never audited. Measuring them costs one loop and can hand back a better
+argument than the one being defended.
+
 ## Step 2 — mechanism / policy boundary
 
 _(none yet)_
@@ -977,6 +1007,39 @@ together a statement that the widget's asynchronous half is structurally
 untestable here. They are listed in `test/widget_test.dart`'s header for that
 reason: a gap named four times in four places reads as four small compromises,
 and named once in one place reads as what it is.
+
+### Thirteen green tests, ten dead mutants, and the acceptance criterion was still broken (#51)
+
+The watcher's pure half went in test-first: 13 tests green, then 10 mutants
+under `tool/mutate` — including one that swaps the issue's compare link from
+commits back to trees — **all killed**. By every gate the change had, it was
+done.
+
+Then the round-trip ran. `#51`'s fourth acceptance criterion is *"a new tag with
+an unchanged `src/lib` files no issue"*, and the replay of `v2.0.0 → v2.0.1` —
+the exact transition that criterion describes — reported **a change**. The
+observer had put the *tag name* into the state's `ref` field, so every replay
+tripped the watcher's own ref-moved rule.
+
+No unit test could see it. They construct states by hand, and `ref` only means
+something once an **observer** decides what to put there; the field's meaning
+lives in the seam between the two halves, which is precisely the place a suite
+built from one half cannot reach. The mutants could not see it either — the
+pure half was, and still is, correct.
+
+The same round-trip then produced the second half of the lesson. Cross-checking
+the watcher against `git diff --name-only` over all 27 consecutive tag pairs,
+**three disagreed** — and all three were the probe: git's rename detection
+collapses a rename into one line, while the watcher compares path sets and
+reports one addition plus one removal. Re-run with `--no-renames`, the honest
+comparison, and it is **27 of 27**. A mismatch had been sitting there looking
+exactly like a defect in the thing under test.
+
+**The rule this earns:** a test suite proves the half it can construct. Where
+two halves meet, the *meaning* of a field is decided by the one that fills it,
+and only a real round-trip through both can catch a field filled with the wrong
+thing. And when that round-trip disagrees with a reference measurement, suspect
+the measurement first — the probe is the part nobody reviewed.
 
 ## Step 5 — adversarial completeness pass
 

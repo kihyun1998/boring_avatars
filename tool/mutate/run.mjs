@@ -67,8 +67,53 @@ const toFileEndings = (pattern, source) =>
     ? pattern.split(LF).join(CR + LF)
     : pattern.split(CR + LF).join(LF);
 
+/**
+ * The two suites this repo has, each with the way it reports how many tests
+ * actually ran. **`ran` is not a nicety** — it is what separates `NO TESTS`
+ * from `SURVIVED`, and a runner that cannot count is one whose survivors mean
+ * nothing (see the header). So a new runner is a `count` too, never just a
+ * command.
+ *
+ * `flutter` is the default so that every existing case file keeps working
+ * without a `runner` key. `node` arrived with #51, whose logic is a `.mjs`
+ * under `tool/` and therefore invisible to `flutter test` — the alternative
+ * was a second harness, which is exactly what this file's header says three
+ * people already tried.
+ */
+const RUNNERS = {
+  flutter: {
+    command: (target) =>
+      ['flutter', 'test', target ? `"${target}"` : null, '--reporter', 'compact']
+        .filter(Boolean)
+        .join(' '),
+    // Compact prints a running `+N`; the last one is the total.
+    count: (out) => {
+      const seen = out.match(/\+(\d+)/g) ?? [];
+      return seen.length ? Math.max(...seen.map((s) => +s.slice(1))) : 0;
+    },
+  },
+  node: {
+    // TAP rather than the default reporter: the default prints its totals
+    // behind an `ℹ`, and a count that depends on a non-ASCII character
+    // surviving a pipe on Windows is a count that can silently read 0 — which
+    // this harness reports as `NO TESTS`, the outcome that hides a survivor.
+    command: (target) =>
+      ['node', '--test', '--test-reporter=tap', target ? `"${target}"` : null]
+        .filter(Boolean)
+        .join(' '),
+    count: (out) => Number(/^# tests (\d+)$/m.exec(out)?.[1] ?? 0),
+  },
+};
+
 /** Runs one test target bare. Returns {failed, ran}. */
-function runTests(target) {
+function runTests(target, runnerName) {
+  const runner = RUNNERS[runnerName ?? 'flutter'];
+  if (!runner) {
+    console.error(
+      `unknown runner "${runnerName}" — known: ${Object.keys(RUNNERS).join(', ')}`,
+    );
+    process.exit(2);
+  }
   // `flutter` is a `.bat`, so it cannot be `execFile`d directly, and handing
   // `cmd.exe` a multi-part argv gets Node's own escaping applied on top of
   // cmd's — "The syntax of the command is incorrect". This runner reported
@@ -79,29 +124,16 @@ function runTests(target) {
   // prescription, not its prohibition — what #39 caught was an argv array
   // being concatenated *unquoted* by someone else. Only `target` can contain
   // anything surprising, and it is quoted.
-  const command = [
-    'flutter',
-    'test',
-    target ? `"${target}"` : null,
-    '--reporter',
-    'compact',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const command = runner.command(target);
   try {
     const out = execSync(command, {
       cwd: REPO,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    const seen = out.match(/\+(\d+)/g) ?? [];
-    const ran = seen.length ? Math.max(...seen.map((s) => +s.slice(1))) : 0;
-    return { failed: false, ran };
+    return { failed: false, ran: runner.count(out) };
   } catch (e) {
-    const out = `${e.stdout ?? ''}`;
-    const seen = out.match(/\+(\d+)/g) ?? [];
-    const ran = seen.length ? Math.max(...seen.map((s) => +s.slice(1))) : 0;
-    return { failed: true, ran };
+    return { failed: true, ran: runner.count(`${e.stdout ?? ''}`) };
   }
 }
 
@@ -136,7 +168,7 @@ for (const c of cases) {
   let outcome;
   let detail;
   try {
-    const { failed, ran } = runTests(c.test ?? spec.test);
+    const { failed, ran } = runTests(c.test ?? spec.test, c.runner ?? spec.runner);
     if (ran === 0) {
       outcome = 'NO TESTS';
       detail = 'the run covered zero tests — not a survivor';
