@@ -1368,8 +1368,15 @@ asserts. Measured over the 28 tags in the pinned reference tree:
 **And the stronger argument was the one nobody had made.** `2.0.3` and `2.0.4`
 are on npm with **no git tag at all** — the tags stop at `v2.0.2`, and `latest`
 is `2.0.4`. A release-triggered watcher is not merely noisy; it is **blind to
-upstream's two most recent releases**. The same asymmetry the README already
-warns callers about (npm versions ≠ git tags) reaches the watcher.
+upstream's two most recent releases**.
+
+**The fact was not new; carrying it here was.** `#45` has recorded it since it
+was written ("주의 — 태그가 없는 버전"), as a note about where to *read* those
+two versions from. Nobody had moved it the twelve inches into the watcher's
+rationale, or into README's npm-versus-tag section, which named only the
+opposite-direction example (npm `1.2.1` republishing older code) until #51.
+That is the shape worth noticing: a measured fact sitting correctly in one
+issue is not the same as a fact the project reasons with.
 
 This is a **deliberate exception to the house "no CI" convention**: it is a
 watcher, not a gate. It runs only on `schedule` and `workflow_dispatch`, never
