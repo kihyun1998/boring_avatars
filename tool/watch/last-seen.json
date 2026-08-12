@@ -1,7 +1,7 @@
 {
   "ref": "master",
-  "commit": "10d28b291b99b2de3db6b8b481fe134405c5c6e6",
-  "tree": "a54785ce30e9921aedace10d82aea680dcea9de9",
+  "commit": "d0ff2582a8921b643a89de4a4912be28938a828b",
+  "tree": "5790e5c5c9ef37af044d644eb75c48f200e5a7bd",
   "files": {
     "components/avatar-bauhaus.tsx": "161bde403c88e14c0f053215b198790e32359e90",
     "components/avatar-beam.tsx": "453f5d0b5db38da317ea175621dd20dc778e7a07",
@@ -9,8 +9,8 @@
     "components/avatar-pixel.tsx": "6ef167db379a913c726c3c40aff122e270f3af93",
     "components/avatar-ring.tsx": "3ffe08e0f05d18265457d34f7c164442d08644bf",
     "components/avatar-sunset.tsx": "7572b31153f9fc3e6735b23cc0aba75fa801ace4",
-    "components/types.ts": "829f2fadd0da4b911f782c2b3c48358c6cfb2eb5",
-    "index.tsx": "5a94745162c8b50361af28a95bc03f4de62b2d3c",
+    "components/types.ts": "3a841b5eb06c9ceb6316f942a8c1810de486826b",
+    "index.tsx": "e3ec218a6368a46a762fc32d0d32053217873163",
     "utilities.ts": "bf653ac266a4851e501f8775c92ea5d05adafa0d"
   }
 }
