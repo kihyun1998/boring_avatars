@@ -24,7 +24,14 @@ const apply = process.argv.includes('--apply');
 
 /** Authored, not derived — see the header. Keyed by release. */
 const NOTES = {
-  '0.1.0': '6개 variant 전부 + SVG 문자열 공개. 위젯과 픽셀 출력은 다음 릴리스.',
+  // 이 문장은 2026-08-10 까지 "위젯과 픽셀 출력은 다음 릴리스" 였습니다 —
+  // 사용자가 그날 범위를 넓혀 위젯(#80)과 색 어휘(#71 → #64, #95)를 0.1.0 에
+  // 넣었는데, 저작 문장인 이쪽이 따라오지 않았습니다. 배포된 뒤에야 발견됐고,
+  // 그 사이 GitHub 마일스톤 페이지는 실린 기능을 다음 릴리스 것이라고 말하고
+  // 있었습니다. NOTES 는 파생되지 않으므로 아무 검사도 이걸 잡지 못합니다.
+  '0.1.0':
+    '6개 variant 전부. SVG 문자열과 `BoringAvatar` 위젯(자체 소프트웨어 ' +
+    '래스터라이저 — flutter_svg 도 Canvas 도 쓰지 않습니다), CSS `<color>` 문법.',
   '0.2.0': '바뀌는 것은 `<title>` 하나 — 그림은 0.1.0 과 동일.',
   '0.3.0':
     '바뀌는 것은 `pixel` 색 인덱스 하나. **1.11.0 은 제외** — 자기 props 를 ' +
@@ -62,9 +69,19 @@ function describe({ release, selector, versions }) {
 
 const gh = (args) => execFileSync('gh', args, { encoding: 'utf8' }).trim();
 
+// `state=all`, and it is load-bearing. The API defaults to `state=open`, so a
+// milestone disappears from this tool's view the moment its release ships —
+// and the branch below then reports it as **missing**, telling you to create
+// something that already exists. Caught the day 0.1.0 was closed. It gets one
+// louder per release, which is how a report stops being read (the same failure
+// as a permanently-red example gate).
+//
+// A shipped release's description is also the one that matters most: it is the
+// permanent record, and nobody is coming back to fix it.
 const milestones = JSON.parse(
-  gh(['api', `repos/${REPO}/milestones`, '--paginate']),
+  gh(['api', `repos/${REPO}/milestones?state=all`, '--paginate']),
 );
+const shipped = (m) => (m.state === 'closed' ? ' (닫힘)' : '');
 const byTitle = new Map(milestones.map((m) => [m.title, m]));
 const table = readReleaseTable();
 
@@ -83,11 +100,11 @@ for (const row of table) {
     continue;
   }
   if (milestone.description === wanted) {
-    console.log(`  ${row.release}  이미 일치`);
+    console.log(`  ${row.release}  이미 일치${shipped(milestone)}`);
     continue;
   }
   changed++;
-  console.log(`\n  ${row.release}  다름`);
+  console.log(`\n  ${row.release}  다름${shipped(milestone)}`);
   console.log(`    현재: ${milestone.description || '(비어 있음)'}`);
   console.log(`    생성: ${wanted}`);
   if (apply) {
