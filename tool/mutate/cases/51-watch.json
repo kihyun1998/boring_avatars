@@ -1,0 +1,103 @@
+{
+  "issue": 51,
+  "what": "the upstream watcher's pure half — tree diffing and issue rendering",
+  "runner": "node",
+  "test": "tool/watch/diff.test.mjs",
+  "note": [
+    "The first case file to use `runner: node`. The watcher's logic is a .mjs",
+    "under tool/, so `flutter test` cannot see it at all — and a suite the",
+    "gate cannot reach is exactly where an unkilled mutant would sit forever.",
+    "",
+    "Group A is the diff itself: the four outcomes a watcher can report, plus",
+    "the two that only exist because git says so (a tree moving with no blob",
+    "moving; a tree SHA that disagrees with its own file list).",
+    "",
+    "Group B is the rendered issue. B-4 is the one worth reading: swapping the",
+    "compare link from commits back to trees produces a link that is a 404 on",
+    "github.com — measured, not assumed — while every other assertion about",
+    "the body still passes. It is the shape of defect this whole harness",
+    "exists for: satisfiable, plausible, and dead."
+  ],
+  "cases": [
+    {
+      "group": "A",
+      "name": "first run reports the baseline as additions",
+      "file": "tool/watch/diff.mjs",
+      "from": "  if (prev === null) return { kind: 'first-run', ...empty };",
+      "to": "  if (prev === null) prev = { ref: next.ref, commit: next.commit, tree: '', files: {} };",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "the tree/file-list consistency check is skipped",
+      "file": "tool/watch/diff.mjs",
+      "from": "  assertConsistent(prev, next);\n",
+      "to": "",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "a modified file is reported as an added one",
+      "file": "tool/watch/diff.mjs",
+      "from": "    if (before === undefined) added.push({ path, sha });",
+      "to": "    if (before === undefined || before !== sha) added.push({ path, sha });",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "removals are never detected",
+      "file": "tool/watch/diff.mjs",
+      "from": "    if (next.files[path] === undefined) removed.push({ path, sha });",
+      "to": "    if (false && next.files[path] === undefined) removed.push({ path, sha });",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "paths come back in object order instead of sorted",
+      "file": "tool/watch/diff.mjs",
+      "from": "    .sort()\n",
+      "to": "",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "a moved ref is not a change",
+      "file": "tool/watch/diff.mjs",
+      "from": "  const refMoved = prev.ref === next.ref ? null : { from: prev.ref, to: next.ref };",
+      "to": "  const refMoved = null;",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "a tree that moved with no blob moving is silently unchanged",
+      "file": "tool/watch/diff.mjs",
+      "from": "    treeOnly: treeMoved && !blobsMoved,",
+      "to": "    treeOnly: false,",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "an issue can be rendered for a non-change",
+      "file": "tool/watch/diff.mjs",
+      "from": "  if (diff.kind !== 'changed') {",
+      "to": "  if (false) {",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "empty sections are rendered with their headings",
+      "file": "tool/watch/diff.mjs",
+      "from": "  rows.length === 0 ? '' : `\\n**${heading}**\\n\\n${rows.join('\\n')}\\n`;",
+      "to": "  `\\n**${heading}**\\n\\n${rows.join('\\n')}\\n`;",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "the compare link is built from trees, which is a 404",
+      "file": "tool/watch/diff.mjs",
+      "from": "compare/${prev.commit}...${next.commit}`;",
+      "to": "compare/${prev.tree}...${next.tree}`;",
+      "expectEdits": 1
+    }
+  ]
+}

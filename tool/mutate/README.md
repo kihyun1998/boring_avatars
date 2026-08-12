@@ -32,10 +32,20 @@ the file rather than against it.
 | `from` / `to` | literal text, never a pattern. `to` may be absent, meaning deletion |
 | `expectEdits` | how many times it must apply. A different count is `NO MATCH`, not a result |
 | `test` | narrow the run. Defaults to `spec.test`, and `null` means the whole suite |
+| `runner` | which suite to run: `flutter` (default) or `node`. Defaults to `spec.runner` |
 
 The default is the **whole suite** on purpose: several `marble` mutants are
 killed by a file other than the obvious one, and a narrowed run would report a
 survivor.
+
+`runner: node` arrived with #51, whose logic is a `.mjs` under `tool/` and so is
+invisible to `flutter test` — a suite the gate cannot reach is exactly where an
+unkilled mutant would sit forever. A runner is a command **and** a way to count
+the tests that ran: without the count, `NO TESTS` collapses into `SURVIVED` and
+the third outcome below stops working. That is why adding one means adding both,
+and why the `node` runner asks for TAP output rather than the default reporter —
+the default prints its totals behind an `ℹ`, and a count that depends on a
+non-ASCII character surviving a pipe on Windows is a count that can read 0.
 
 ## Four outcomes, not two
 

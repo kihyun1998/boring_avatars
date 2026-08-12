@@ -1316,7 +1316,16 @@ exits non-zero, so it cannot rot quietly. Full description in its README.
 ```bash
 node tool/mutate/run.mjs cases/41-marble.json          # 32 cases, all killed
 node tool/mutate/run.mjs cases/41-marble.json --only=A # layer 1 only
+node tool/mutate/run.mjs cases/51-watch.json           # 10 cases, runner: node
 ```
+
+A case file may name a **`runner`** — `flutter` (the default, so every existing
+case file is untouched) or `node`. #51 added the second one because the
+watcher's logic is a `.mjs` under `tool/`, which `flutter test` cannot see at
+all; a suite the gate cannot reach is exactly where an unkilled mutant would
+sit forever. A runner is a command **and** a way to count tests that ran —
+without the count, `NO TESTS` collapses into `SURVIVED` and the harness's third
+outcome stops working.
 
 `tool/milestones/sync.mjs` renders the GitHub milestone descriptions from
 `CLAUDE.md`'s release table. **Run it whenever that table changes.** A milestone
@@ -1339,14 +1348,34 @@ state must be reproducible on demand.
 
 ### The upstream watcher (the one GitHub Actions workflow)
 
-A scheduled job that files an issue when upstream moves. **It watches
-`src/lib/` blob SHAs, not version numbers** — v1.9.0, v1.10.0, v2.0.1 and v2.0.2
-changed nothing under `src/lib/`, so a release-triggered watcher would be mostly
-noise. Of 28 tags, only ~16 are real work.
+`.github/workflows/upstream-watch.yml` + `tool/watch/`, as of #51. A weekly
+scheduled job that files an issue when upstream moves. **It watches `src/lib/`
+blob SHAs, not version numbers.** Full description, and the measured numbers
+behind every claim here, in `tool/watch/README.md`.
+
+**This paragraph used to say "v1.9.0, v1.10.0, v2.0.1 and v2.0.2 changed
+nothing under `src/lib/` … of 28 tags, only ~16 are real work". #51 measured
+it and two thirds of that was wrong**, which is what the routing table means by
+external facts being verification targets — including the ones this file
+asserts. Measured over the 28 tags in the pinned reference tree:
+
+| Claim | Measured |
+|---|---|
+| v1.9.0, v1.10.0, v2.0.1 unchanged | **true** |
+| v2.0.2 unchanged | **false** — `types.ts` and `index.tsx` both moved |
+| "only ~16 tags are real work" | 28 tags → **18** distinct `src/lib` trees; **9** tags identical to their predecessor |
+
+**And the stronger argument was the one nobody had made.** `2.0.3` and `2.0.4`
+are on npm with **no git tag at all** — the tags stop at `v2.0.2`, and `latest`
+is `2.0.4`. A release-triggered watcher is not merely noisy; it is **blind to
+upstream's two most recent releases**. The same asymmetry the README already
+warns callers about (npm versions ≠ git tags) reaches the watcher.
 
 This is a **deliberate exception to the house "no CI" convention**: it is a
-watcher, not a gate, so it cannot gate-block and its failure never blocks a
-merge.
+watcher, not a gate. It runs only on `schedule` and `workflow_dispatch`, never
+on push or pull_request, so it is a check on no branch and cannot block a merge
+— and `main` carries no branch protection to make it one (measured: the
+protection endpoint 404s). Its failure mode is silence, not obstruction.
 
 ### Release plan — one release per **output state**
 
@@ -1924,8 +1953,10 @@ hidden-state list above is *pre-incident* enumeration, not evidence; move a
 row's story into `lessons.md` the first time it actually catches a defect, and
 cite the issue number.
 
-Thirty-six entries as of #95. The ones that have caught something more than
-once:
+**Forty-eight entries as of #51** — counted, not incremented. The number read
+"thirty-six" until #51 added two and counted the file, which is its own small
+instance of the lesson that pass recorded: a number in a doc reads as settled
+because it is written down. The ones that have caught something more than once:
 
 | Rule | Caught in |
 |---|---|

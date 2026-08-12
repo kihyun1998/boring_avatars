@@ -1,0 +1,75 @@
+# The upstream watcher — the one GitHub Actions workflow this repo has, and a
+# deliberate exception to the house "no CI" convention (CLAUDE.md, and
+# docs/agents/theflow.md Step 7).
+#
+# **It is a watcher, not a gate.** It runs on a schedule and by hand, never on
+# push or pull_request, so it is not a check on any branch and cannot block a
+# merge. If it goes red, nothing is blocked — the only consequence is that
+# nobody is told upstream moved, which is the failure this file exists to make
+# visible rather than to cause.
+#
+# What it watches is `src/lib/` **blob SHAs**, not releases. Measured over
+# upstream's 28 tags: 9 carry a `src/lib` identical to their predecessor's, and
+# 2.0.3 / 2.0.4 were published to npm with no git tag at all — so releases are
+# noisy in one direction and blind in the other. The judgement lives in
+# tool/watch/, which is testable and replayable off the pinned reference tree.
+name: upstream watch
+
+on:
+  schedule:
+    # Mondays, 06:17 UTC. Upstream moves a few times a year; a weekly check is
+    # already far finer-grained than the thing it watches. The odd minute is
+    # GitHub's own advice — scheduled jobs on the hour queue behind everyone
+    # else's and are delayed the most.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+# Least privilege, and both are load-bearing: `issues` files the notification,
+# `contents` commits the new last-seen.json. Note the repository's default
+# workflow permission is read-only, so this block is what grants them.
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: upstream-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Pinned rather than taking the runner image's default: a Node bump
+          # arriving silently underneath a job that files issues is the kind of
+          # drift this repo measures instead of inheriting.
+          node-version: '22'
+
+      - name: the watcher's own tests
+        # Before it is allowed to act. A watcher with broken logic filing
+        # issues is worse than one that does nothing, because the issues look
+        # like upstream news.
+        run: node --test --test-reporter=tap tool/watch/diff.test.mjs
+
+      - name: look at upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tool/watch/upstream.mjs --apply
+
+      - name: record what was seen
+        # The issue is filed by the step above, *before* this commit — see the
+        # header of tool/watch/upstream.mjs. A duplicate issue is recoverable;
+        # a state that advanced without anyone being told is not.
+        run: |
+          if git diff --quiet -- tool/watch/last-seen.json; then
+            echo "last-seen.json 그대로 — 커밋할 것이 없습니다."
+            exit 0
+          fi
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tool/watch/last-seen.json
+          git commit -m 'chore(watch): 상류 src/lib 의 새 상태를 기록'
+          git push
