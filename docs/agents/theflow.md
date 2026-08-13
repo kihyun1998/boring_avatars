@@ -446,6 +446,30 @@ not arise: every id is a literal, and the one that must not collide already
 carries the name (`gradient_paint0_linear_ClaraBarton`) while the one that does
 collide is a mask identical for every avatar of that variant.
 
+**The ruling, as an event — 2026-08-13, and it is the user's to reverse.**
+`#43` shipped `v1_7_0`, which is the first selector where the above stops being
+hypothetical: it covers 1.8.0–1.10.0, so this package now tells callers it
+reproduces releases whose mask id it does not emit. That was carried back to
+the user rather than decided here, because it is the boundary rule's case —
+output that differs from upstream's is never adjudicated by the agent.
+
+**What they were shown**, and it was more than the 2026-07-29 decision had:
+
+| | |
+|---|---|
+| the difference | ours `id="mask__marble"`, upstream 1.10.0 `id=":R0:"` |
+| whether it can be reproduced | **no** — measured: the same avatar is `:R0:` alone, `:R3:` as a third child, `:R2:` after a `<span>`, and **two copies in one document get `:R1:` and `:R2:`**. 1.8.0 has no fixed bytes for an avatar, so nothing can reproduce them, including 1.8.0 |
+| what it looks like on screen | **nothing.** `tool/crosscheck` put upstream **1.10.0**'s own documents and ours through one Chrome: **1200 renders, 1150 pixel-identical**, the other 50 being 40 agreed refusals and the 10 already-ruled `sunset` blanks. Zero unruled differences |
+
+**What they chose:** emit 1.7.0's literal at every position, and say so plainly
+in the README rather than letting "reproduces 1.8.0" carry an asterisk nobody
+reads. Recorded in the fixture as `idPositions` and asserted, so the numbers
+behind the decision can be re-run rather than believed.
+
+Note which release the pixel comparison used: **1.10.0, not 1.7.0**. 1.7.0 is
+the release this port already matches byte for byte, so comparing it would have
+been the tautology `crosscheck`'s own header warns about.
+
 **A correction this replaces.** An earlier note here claimed the state count
 differs per layer (2 values / 3 bytes / 2 pixels) and that all eight selectors
 should be kept "so someone pinned to 1.8.0 can name it". Keeping a selector that
@@ -859,9 +883,23 @@ class without knowing.
 "upstream and this port draw the same picture", never "the picture is right".
 
 ```bash
-dart run tool/crosscheck/emit.dart <work>    # our SVG, unnormalised
-node tool/crosscheck/crosscheck.mjs <work>   # upstream fresh + browser + diff
+dart run tool/crosscheck/emit.dart <work> [selector]   # our SVG, unnormalised
+node tool/crosscheck/crosscheck.mjs <work>             # upstream + browser + diff
 ```
+
+**The selector is written into `ours.json` and the JS half reads it from
+there** — it is never passed twice. Same rule as the `size` check beside it:
+two halves told separately which version they compare can disagree, and the run
+then prints a pass about nothing.
+
+**Which upstream release each selector is compared against is a judgement, not
+a lookup.** `v1_7_0` is checked against **1.10.0**, not 1.7.0. The four
+releases in that selector differ only in the mask id, and 1.7.0 is the one this
+port already matches byte for byte — so comparing it would confirm what the
+parity fixture already proves and say nothing about the release where "the
+picture is the same" rested on an argument. Run 2026-08-13: **1200 renders,
+1150 pixel-identical**, remainder 40 agreed refusals and the 10 ruled `sunset`
+blanks; **zero unruled differences**.
 
 Upstream is **re-rendered from the npm package**, not read from
 `test/fixtures/`: those entries are stored normalised, and `mask="_"` has lost

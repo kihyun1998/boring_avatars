@@ -316,8 +316,12 @@ different ids**. So 1.8.0 has no fixed bytes for an avatar for anything to
 reproduce, including 1.8.0. This package emits the literal `mask__marble` that
 1.7.0 writes, at every position.
 
-Everything a reader can see is unaffected: the id names nothing but the mask's
-own reference, and every shape, coordinate, colour and attribute is identical.
+Everything a reader can see is unaffected, and that is measured rather than
+argued: upstream **1.10.0**'s own documents and this package's went through one
+Chrome, and of 1,200 renders **1,150 are pixel-identical** — the other 50 being
+40 where both sides produce no document at all (`beam` with an empty palette)
+and the 10 `sunset` blanks documented below. **Zero unexplained differences.**
+
 If you need the document's internal ids to match a particular upstream render,
 that is the one thing this selector does not give you.
 

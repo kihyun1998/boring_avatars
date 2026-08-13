@@ -67,13 +67,15 @@ SvgNode build(
   String name,
   List<String> colors, {
   required bool square,
+  required BoringAvatarsVersion version,
 }) => buildAvatarScene(
   name: name,
   colors: colors,
   size: renderSize,
-  version: BoringAvatarsVersion.v1_6_1,
-  // A picture comparison — <title> paints nothing. null takes the version's
-  // own answer, which at 1.6.1 is the unconditional element upstream renders.
+  version: version,
+  // A picture comparison — <title> paints nothing, and `crosscheck.mjs` passes
+  // upstream no `title` prop either. `null` takes each version's own answer:
+  // the unconditional element at 1.6.x, absent from 1.7.0.
   title: null,
   variant: BoringAvatarsVariant.values.firstWhere(
     (v) => v.upstreamName == variant,
@@ -84,9 +86,21 @@ SvgNode build(
 
 void main(List<String> args) {
   if (args.isEmpty) {
-    stderr.writeln('usage: dart run tool/crosscheck/emit.dart <work-dir>');
+    stderr.writeln(
+      'usage: dart run tool/crosscheck/emit.dart <work-dir> [selector]',
+    );
     exit(2);
   }
+  // Which selector to emit. It is written into `ours.json`, and
+  // `crosscheck.mjs` picks the matching upstream package from there rather
+  // than being told separately — the same rule the `size` check enforces,
+  // because two halves that disagree about *what* they are comparing print a
+  // pass about nothing.
+  final selectorName = args.length > 1 ? args[1] : 'v1_6_1';
+  final version = BoringAvatarsVersion.values.firstWhere(
+    (v) => v.name == selectorName,
+    orElse: () => throw ArgumentError('no selector "$selectorName"'),
+  );
   final dir = Directory(args.first)..createSync(recursive: true);
 
   final corpus =
@@ -137,6 +151,7 @@ void main(List<String> args) {
                 n['value'] as String,
                 (p['value'] as List).cast<String>(),
                 square: square,
+                version: version,
               ),
             );
           } on ArgumentError {
@@ -154,6 +169,8 @@ void main(List<String> args) {
       'upstreamVariants': upstreamVariants,
       'portedVariants': portedVariants,
       'size': renderSize,
+      'selector': version.name,
+      'upstreamReleases': version.upstreamVersions,
     }),
   );
   stdout.writeln(
