@@ -72,6 +72,9 @@ SvgNode build(
   colors: colors,
   size: renderSize,
   version: BoringAvatarsVersion.v1_6_1,
+  // A picture comparison — <title> paints nothing. null takes the version's
+  // own answer, which at 1.6.1 is the unconditional element upstream renders.
+  title: null,
   variant: BoringAvatarsVariant.values.firstWhere(
     (v) => v.upstreamName == variant,
     orElse: () => throw ArgumentError('no builder for "$variant"'),

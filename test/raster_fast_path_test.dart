@@ -44,6 +44,8 @@ List<RasterShape> _shapesAt(
     colors: _palette,
     size: side,
     version: BoringAvatarsVersion.v1_6_1,
+    // A raster comparison — <title> never reaches a pixel.
+    title: null,
     variant: variant,
     square: false,
   ),
@@ -129,6 +131,8 @@ void main() {
         colors: _palette,
         size: 80,
         version: BoringAvatarsVersion.v1_6_1,
+        // A raster comparison — <title> never reaches a pixel.
+        title: null,
         variant: BoringAvatarsVariant.pixel,
         square: false,
       ),

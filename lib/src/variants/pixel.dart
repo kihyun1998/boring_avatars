@@ -121,6 +121,15 @@ SvgNode buildPixelScene({
   required List<String> colors,
   required Object size,
   bool square = false,
+  // Upstream 1.7.0 writes `{props.title && <title>{props.name}</title>}` here,
+  // and `avatar.js` destructures `title = false`. The default is `true`
+  // rather than `false` because this parameter is what 1.6.x has no way to
+  // express: at that version the element is unconditional, and every direct
+  // caller of this builder — the tools, and 64 call sites across the parity and
+  // raster suites — is a 1.6.x caller. `buildAvatarScene` always passes it
+  // explicitly, so the default is what an internal caller gets and never what a
+  // public one does.
+  bool title = true,
 }) {
   final tileColors = pixelColors(name, colors);
 
@@ -135,9 +144,10 @@ SvgNode buildPixelScene({
       SvgAttribute('height', size),
     ],
     children: [
-      // 1.6.x has no `title` prop — the element is unconditional and there is
-      // no way to switch it off. The prop arrives in 1.7.0 (hidden-state #16).
-      SvgNode(SvgElement.title, text: name),
+      // `{props.title && <title>{props.name}</title>}` — 1.7.0 onward. At
+      // 1.6.x the element is unconditional and `buildAvatarScene` passes true
+      // (hidden-state #16).
+      if (title) SvgNode(SvgElement.title, text: name),
       SvgNode(
         SvgElement.mask,
         attributes: const [

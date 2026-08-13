@@ -46,7 +46,23 @@ Each release of this package supports one more upstream version. To add one:
    the exact build is pinned in the lockfile rather than resolved at run time.
 2. Add an entry to `SUPPORTED` in `dump.mjs` — its tag, its alias, and every
    upstream release the state covers.
-3. Run `node dump.mjs <version>` and commit the fixtures.
+3. **Say how each of those releases is measured.** A selector covering more than
+   one release makes a claim about all of them, and `fixtures_test.dart` will
+   refuse a selector that carries no evidence for one it names. Two kinds:
+   - `crossCheck` — releases that can be rendered. Each is rendered across the
+     full matrix, both values of `title`, and compared to the one the fixture
+     was taken from. Zero mismatches is the bar.
+   - `bySourceTree` — releases that **cannot** be rendered by anybody. 1.8.0 and
+     1.9.0 shipped npm tarballs with no JavaScript in them at all; their only
+     possible evidence is that their `src/lib` git tree is a rendered one's.
+4. Set `titleProp` if the release has one (1.7.0 onward). Without it the fixture
+   only ever sees the prop's default, and a port ignoring the argument entirely
+   would pass every assertion in the file.
+5. Run `node dump.mjs <version>` and commit the fixtures.
+
+Step 3 was added in #43 and immediately went red on the **already published**
+`v1_6_1`, which claimed three releases and carried a measurement of one. See
+`docs/agents/lessons.md`.
 
 ## Why two fixtures from two sources
 

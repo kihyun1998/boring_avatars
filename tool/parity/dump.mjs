@@ -31,9 +31,52 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');
 const REFS = resolve(REPO, '..', '.refs', 'boring-avatars');
 
-/** Every upstream version this package supports, and how to reach it. */
+/**
+ * Every upstream version this package supports, and how to reach it.
+ *
+ * `titleProp` says whether the release has a `title` prop at all. At 1.6.x it
+ * does not — `<title>` is unconditional — so there is no second set of renders
+ * to take. From 1.7.0 the prop exists and defaults to **off**, and both sides
+ * of it have to be in the fixture or half the release is unproven.
+ *
+ * `crossCheck` names the other releases inside the same selector that *can* be
+ * rendered, and `bySourceTree` the ones that cannot. Both exist because
+ * "these four versions produce the same thing" is a claim about a measurement,
+ * and a claim whose evidence cannot be re-run is one nobody can check.
+ */
 const SUPPORTED = {
-  v1_6_1: { tag: 'v1.6.1', pkg: 'upstream-1.6.1', releases: ['1.6.1', '1.6.2', '1.6.3'] },
+  v1_6_1: {
+    tag: 'v1.6.1',
+    pkg: 'upstream-1.6.1',
+    releases: ['1.6.1', '1.6.2', '1.6.3'],
+    titleProp: false,
+    // No `crossCheck`: 1.6.2 and 1.6.3 have nothing to cross-check *against*.
+    // Their `src/lib` tree is 1.6.1's, byte for byte, so rendering them would
+    // be running the same source twice and calling the second run evidence.
+    //
+    // **Backfilled in #43.** The shipped `0.1.0` selector claimed three
+    // releases and its fixture recorded no measurement that they agree — the
+    // grouping lived in `tool/versions/group.mjs` and a prose note, neither of
+    // which `flutter test` can see. #43's new fixture assertion, written for a
+    // four-release selector, went red on the three-release one that was
+    // already published.
+    bySourceTree: { '1.6.1': 'v1.6.1', '1.6.2': 'v1.6.2', '1.6.3': 'v1.6.3' },
+  },
+  v1_7_0: {
+    tag: 'v1.7.0',
+    pkg: 'upstream-1.7.0',
+    releases: ['1.7.0', '1.8.0', '1.9.0', '1.10.0'],
+    titleProp: true,
+    // 1.10.0 renders, and differs from 1.7.0 only in the mask id — a literal
+    // at 1.7.0, `React.useId()` from 1.8.0. Rendered and compared here rather
+    // than asserted in prose.
+    crossCheck: { '1.10.0': 'upstream-1.10.0' },
+    // 1.8.0 and 1.9.0 ship no JavaScript on npm at all (`main` points at a
+    // `build/index.js` that is not in the tarball — 0 JS files, verified by
+    // download), so nothing can render them. Their evidence is that their
+    // `src/lib` git tree *is* 1.10.0's, byte for byte.
+    bySourceTree: { '1.8.0': 'v1.8.0', '1.9.0': 'v1.9.0', '1.10.0': 'v1.10.0' },
+  },
 };
 
 const VARIANTS = ['marble', 'beam', 'pixel', 'sunset', 'ring', 'bauhaus'];
@@ -176,7 +219,7 @@ function dumpUtilities(u, corpus) {
  */
 const MATRIX_SIZE = 80;
 
-async function dumpSvg(pkg, corpus) {
+async function dumpSvg(pkg, corpus, titleProp) {
   const mod = await import(pkg);
   const Avatar = mod.default?.default ?? mod.default;
   // Some inputs make upstream throw rather than degrade — an empty palette
@@ -364,6 +407,31 @@ async function dumpSvg(pkg, corpus) {
     }
   }
 
+  /**
+   * The same matrix with `title: true` — the other side of 1.7.0's new prop.
+   *
+   * Without this the fixture would only ever have seen the prop's default, and
+   * a port that ignored the argument entirely would pass every assertion in
+   * the file. `<title>` carries the **name** as character data, so it is also
+   * the one element where an escaping rule can differ; every corpus name is
+   * here for that reason, against one palette, since the palette cannot reach
+   * a title.
+   */
+  const titleRenders = {};
+  if (titleProp) {
+    for (const variant of VARIANTS) {
+      for (const name of corpus.names) {
+        titleRenders[`${variant}|${name.id}`] = render({
+          variant,
+          name: name.value,
+          colors: corpus.palettes[0].value,
+          size: MATRIX_SIZE,
+          title: true,
+        });
+      }
+    }
+  }
+
   return {
     matrixSize: MATRIX_SIZE,
     renders,
@@ -372,8 +440,89 @@ async function dumpSvg(pkg, corpus) {
     derivedIdentifiers,
     sizePassthrough,
     sizePassthroughStrings,
+    ...(titleProp ? { titleRenders } : {}),
   };
 }
+
+/**
+ * The measurement behind "these releases are one selector".
+ *
+ * Two kinds of evidence, because the releases divide into two kinds:
+ *
+ * * **Rendered.** Every release in `crossCheck` is rendered across the full
+ *   matrix, both values of `title`, and compared to the one the fixture was
+ *   taken from. The comparison is the same `normalise` the parity tests use,
+ *   which is what makes it honest to record a mismatch count of zero: the mask
+ *   id really does differ (`mask__marble` at 1.7.0, `:R0:` from 1.8.0), and
+ *   `rawIdSamples` records that difference rather than hiding behind the
+ *   normalisation that erases it.
+ * * **By source tree.** A release whose npm tarball has no JavaScript cannot be
+ *   rendered by anything, ever. What can be measured is that its `src/lib` git
+ *   tree is identical to one that *was* rendered.
+ */
+async function dumpGroupProof(spec, corpus) {
+  if (!spec.crossCheck && !spec.bySourceTree) return null;
+
+  const base = await import(spec.pkg).then((m) => m.default?.default ?? m.default);
+  const renderWith = (Avatar, props) => {
+    try {
+      return normalise(renderToStaticMarkup(React.createElement(Avatar, props)));
+    } catch (e) {
+      return `__throws:${e?.constructor?.name ?? 'Error'}`;
+    }
+  };
+
+  const rendered = {};
+  const rawIdSamples = { [spec.releases[0]]: maskIdOf(base, corpus) };
+  for (const [release, pkg] of Object.entries(spec.crossCheck ?? {})) {
+    const other = await import(pkg).then((m) => m.default?.default ?? m.default);
+    let compared = 0;
+    const mismatches = [];
+    for (const variant of VARIANTS) {
+      for (const name of corpus.names) {
+        for (const palette of corpus.palettes) {
+          for (const title of [false, true]) {
+            const props = {
+              variant,
+              name: name.value,
+              colors: palette.value,
+              size: MATRIX_SIZE,
+              title,
+            };
+            compared++;
+            if (renderWith(base, props) !== renderWith(other, props)) {
+              mismatches.push(`${variant}|${name.id}|${palette.id}|title=${title}`);
+            }
+          }
+        }
+      }
+    }
+    rendered[release] = { compared, mismatches };
+    rawIdSamples[release] = maskIdOf(other, corpus);
+  }
+
+  const bySourceTree = {};
+  for (const [release, tag] of Object.entries(spec.bySourceTree ?? {})) {
+    bySourceTree[release] = execFileSync(
+      'git',
+      ['-C', REFS, 'rev-parse', `${tag}:src/lib`],
+      { encoding: 'utf8' },
+    ).trim();
+  }
+
+  return { renderedFrom: spec.releases[0], rendered, bySourceTree, rawIdSamples };
+}
+
+/** The mask id a release actually writes, unnormalised — the thing that differs. */
+const maskIdOf = (Avatar, corpus) =>
+  renderToStaticMarkup(
+    React.createElement(Avatar, {
+      variant: 'marble',
+      name: corpus.names[0].value,
+      colors: corpus.palettes[0].value,
+      size: MATRIX_SIZE,
+    }),
+  ).match(/<mask id="([^"]*)"/)[1];
 
 const version = process.argv[2];
 const spec = SUPPORTED[version];
@@ -394,9 +543,15 @@ writeFileSync(
   stableStringify({ upstreamReleases: spec.releases, tag: spec.tag, ...dumpUtilities(utilities, corpus) }),
 );
 
+const groupProof = await dumpGroupProof(spec, corpus);
+
 writeFileSync(
   join(outDir, 'svg.json'),
-  stableStringify({ upstreamReleases: spec.releases, ...(await dumpSvg(spec.pkg, corpus)) }),
+  stableStringify({
+    upstreamReleases: spec.releases,
+    ...(await dumpSvg(spec.pkg, corpus, spec.titleProp)),
+    ...(groupProof ? { groupProof } : {}),
+  }),
 );
 
 console.log(`wrote test/fixtures/${version}/{utilities,svg}.json from upstream ${spec.tag}`);

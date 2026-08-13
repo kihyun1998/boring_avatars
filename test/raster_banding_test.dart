@@ -46,6 +46,8 @@ SvgNode _scene(BoringAvatarsVariant variant, int size, {bool square = false}) =>
       colors: _palette,
       size: size,
       version: BoringAvatarsVersion.v1_6_1,
+      // A raster comparison — <title> never reaches a pixel.
+      title: null,
       variant: variant,
       square: square,
     );

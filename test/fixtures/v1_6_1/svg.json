@@ -1113,6 +1113,18 @@
       }
     }
   },
+  "groupProof": {
+    "bySourceTree": {
+      "1.6.1": "3cca55f521a591e987c07ba357307a276c86a0d2",
+      "1.6.2": "3cca55f521a591e987c07ba357307a276c86a0d2",
+      "1.6.3": "3cca55f521a591e987c07ba357307a276c86a0d2"
+    },
+    "rawIdSamples": {
+      "1.6.1": "mask__marble"
+    },
+    "rendered": {},
+    "renderedFrom": "1.6.1"
+  },
   "maskIdentifiers": {
     "bauhaus": {
       "ids": [

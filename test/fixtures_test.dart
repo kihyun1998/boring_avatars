@@ -145,12 +145,87 @@ void main() {
         for (final svg in rendered) {
           expect(svg, isNot(matches(RegExp('id="(?!_")'))));
         }
-        // 1.6.x emits <title> unconditionally and offers no prop to stop it, so
-        // it has to survive into the fixture — see hidden-state #16.
+
+        // `<title>` is the one thing `normalise` must **not** erase, because
+        // it is the whole difference between the two selectors — so the
+        // fixture has to show it on the side that emits it and its absence on
+        // the side that does not. Asserting "every render has one" would be
+        // right for 1.6.x and quietly wrong from 1.7.0, where the prop
+        // defaults off; asserting nothing would let a normalisation that ate
+        // the element pass at both.
+        final hasTitleProp = json.containsKey('titleRenders');
+        if (hasTitleProp) {
+          // 1.7.0 onward: the default renders carry none at all…
+          expect(
+            rendered.where((s) => s.contains('<title>')),
+            isEmpty,
+            reason: 'upstream defaults `title` to false from 1.7.0',
+          );
+          // …and the ones taken with `title: true` carry one each.
+          final titled = (json['titleRenders'] as Map<String, dynamic>).values
+              .whereType<String>()
+              .toList();
+          expect(titled, isNotEmpty);
+          expect(
+            titled.where((s) => s.contains('<title>')),
+            hasLength(titled.length),
+          );
+        } else {
+          // 1.6.x emits it unconditionally and offers no prop to stop it, so
+          // it has to survive into the fixture — see hidden-state #16.
+          expect(
+            rendered.where((s) => s.contains('<title>')),
+            hasLength(rendered.length),
+          );
+        }
+      });
+
+      test('a version covering more than one release proves it did', () {
+        // #43's acceptance is "evidence per version, even though the release
+        // is one". Four upstream releases share `v1_7_0`, and the claim that
+        // they produce the same thing is a **measurement** — recorded here by
+        // the harness rather than asserted in a ticket. Two kinds, because the
+        // releases divide into two kinds: 1.10.0 can be rendered and compared;
+        // 1.8.0 and 1.9.0 shipped npm tarballs with no JavaScript in them at
+        // all, so nothing can ever render those and their evidence is that
+        // their source tree *is* 1.10.0's.
+        final json =
+            jsonDecode(File('$dir/svg.json').readAsStringSync())
+                as Map<String, dynamic>;
+        if (version.upstreamVersions.length == 1) return;
+
+        final proof = json['groupProof'] as Map<String, dynamic>?;
         expect(
-          rendered.where((s) => s.contains('<title>')),
-          hasLength(rendered.length),
+          proof,
+          isNotNull,
+          reason:
+              '${version.name} claims ${version.upstreamVersions.length} '
+              'releases and carries no measurement that they agree',
         );
+
+        final rendered = proof!['rendered'] as Map<String, dynamic>;
+        final bySourceTree = proof['bySourceTree'] as Map<String, dynamic>;
+        for (final entry in rendered.entries) {
+          final row = entry.value as Map<String, dynamic>;
+          expect(row['mismatches'], isEmpty, reason: entry.key);
+          // A comparison that compared nothing is not a clean sweep. This is
+          // the same `NO TESTS` distinction the mutation harness draws.
+          expect(row['compared'] as int, greaterThan(0), reason: entry.key);
+        }
+
+        // The trees have to agree with each other, not merely be present.
+        expect(bySourceTree.values.toSet(), hasLength(1));
+
+        // Every release the selector claims is accounted for by one of the two
+        // kinds — otherwise a version could be listed and never measured.
+        final accounted = {
+          proof['renderedFrom'] as String,
+          ...rendered.keys,
+          ...bySourceTree.keys,
+        };
+        for (final release in version.upstreamVersions) {
+          expect(accounted, contains(release), reason: release);
+        }
       });
 
       test(

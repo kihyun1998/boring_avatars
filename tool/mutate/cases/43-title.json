@@ -1,0 +1,88 @@
+{
+  "issue": 43,
+  "what": "the title seam — v1_7_0's only observable difference from v1_6_1",
+  "test": null,
+  "note": [
+    "`test: null` means the whole suite, and here it is load-bearing rather",
+    "than cautious: the title rule lives in avatar.dart but is *observed* in",
+    "six variant builders, two parity files and a fixture assertion. A narrowed",
+    "run would report survivors for mutations another file kills.",
+    "",
+    "Group A is the version→flag decision in avatar.dart. A-3 is the one worth",
+    "reading: deleting the throw turns `title: false` at v1_6_1 into a silent",
+    "no-op, which is exactly the behaviour the ticket's acceptance forbids and",
+    "exactly what upstream does. It has to be a test that catches it, because",
+    "nothing about the output looks wrong.",
+    "",
+    "Group B is the emission itself, in two variants — enough to prove the",
+    "parity fixtures see the flag on both sides. B-3 replaces the title's text",
+    "with the empty string: the element is still there, still first, still",
+    "well-formed, and only a byte comparison against upstream can tell."
+  ],
+  "cases": [
+    {
+      "group": "A",
+      "name": "v1_7_0 defaults the title on instead of off",
+      "file": "lib/src/avatar.dart",
+      "from": "    BoringAvatarsVersion.v1_7_0 => title ?? false,",
+      "to": "    BoringAvatarsVersion.v1_7_0 => title ?? true,",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "v1_7_0 ignores the argument and never emits a title",
+      "file": "lib/src/avatar.dart",
+      "from": "    BoringAvatarsVersion.v1_7_0 => title ?? false,",
+      "to": "    BoringAvatarsVersion.v1_7_0 => false,",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "v1_6_1 stops emitting the title it has no way to switch off",
+      "file": "lib/src/avatar.dart",
+      "from": "      null || true => true,",
+      "to": "      null || true => false,",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "title: false at v1_6_1 becomes a silent no-op instead of throwing",
+      "file": "lib/src/avatar.dart",
+      "from": "      false => throw ArgumentError.value(",
+      "to": "      false => true, // ignore: dead_code\n      _ => throw ArgumentError.value(",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "marble emits the title unconditionally, as 1.6.x did",
+      "file": "lib/src/variants/marble.dart",
+      "from": "      if (title) SvgNode(SvgElement.title, text: name),",
+      "to": "      SvgNode(SvgElement.title, text: name),",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "pixel never emits the title at all",
+      "file": "lib/src/variants/pixel.dart",
+      "from": "      if (title) SvgNode(SvgElement.title, text: name),",
+      "to": "      if (false) SvgNode(SvgElement.title, text: name), // ignore: dead_code",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "beam's title carries the wrong text",
+      "file": "lib/src/variants/beam.dart",
+      "from": "      if (title) SvgNode(SvgElement.title, text: name),",
+      "to": "      if (title) SvgNode(SvgElement.title, text: ''),",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "ring's title default flips, so direct callers get 1.7.0 behaviour",
+      "file": "lib/src/variants/ring.dart",
+      "from": "  bool title = true,",
+      "to": "  bool title = false,",
+      "expectEdits": 1
+    }
+  ]
+}
