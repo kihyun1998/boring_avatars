@@ -1119,6 +1119,12 @@
       "1.6.2": "3cca55f521a591e987c07ba357307a276c86a0d2",
       "1.6.3": "3cca55f521a591e987c07ba357307a276c86a0d2"
     },
+    "npmProvenance": {
+      "1.6.1": {
+        "npmGitHead": "b82610a7f7bc7bdd1d1634c2e0a430367e6e82e8",
+        "tagCommit": "b82610a7f7bc7bdd1d1634c2e0a430367e6e82e8"
+      }
+    },
     "rawIdSamples": {
       "1.6.1": "mask__marble"
     },

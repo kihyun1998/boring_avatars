@@ -216,6 +216,24 @@ void main() {
         // The trees have to agree with each other, not merely be present.
         expect(bySourceTree.values.toSet(), hasLength(1));
 
+        // **The join between the two kinds of evidence.** The renders come
+        // from npm, the tree hashes from git — two true sentences about two
+        // different artifacts, with nothing saying the npm build came from
+        // that git tree. npm records the commit it was published from, so the
+        // chain can be closed rather than assumed.
+        final provenance = proof['npmProvenance'] as Map<String, dynamic>;
+        expect(provenance, isNotEmpty);
+        for (final entry in provenance.entries) {
+          final row = entry.value as Map<String, dynamic>;
+          expect(
+            row['npmGitHead'],
+            row['tagCommit'],
+            reason:
+                'npm ${entry.key} was published from a different commit than '
+                'the tag whose src/lib tree the evidence above hashes',
+          );
+        }
+
         // Every release the selector claims is accounted for by one of the two
         // kinds — otherwise a version could be listed and never measured.
         final accounted = {

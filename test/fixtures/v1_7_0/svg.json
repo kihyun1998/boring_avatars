@@ -1119,6 +1119,16 @@
       "1.8.0": "bd8b225d56faa3d0bdd3f3b99a94df1fecd14290",
       "1.9.0": "bd8b225d56faa3d0bdd3f3b99a94df1fecd14290"
     },
+    "npmProvenance": {
+      "1.10.0": {
+        "npmGitHead": "378c2cdff2c3737375485ae1ce4a653132b347b1",
+        "tagCommit": "378c2cdff2c3737375485ae1ce4a653132b347b1"
+      },
+      "1.7.0": {
+        "npmGitHead": "2f2ac13e4ee5557a58b1bd6c0af0414b7b11a663",
+        "tagCommit": "2f2ac13e4ee5557a58b1bd6c0af0414b7b11a663"
+      }
+    },
     "rawIdSamples": {
       "1.10.0": ":R0:",
       "1.7.0": "mask__marble"

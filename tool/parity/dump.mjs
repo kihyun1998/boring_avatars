@@ -19,7 +19,7 @@
 // Both are written under test/fixtures/<version>/ and committed. flutter test
 // reads those files and never runs this script.
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -510,7 +510,53 @@ async function dumpGroupProof(spec, corpus) {
     ).trim();
   }
 
-  return { renderedFrom: spec.releases[0], rendered, bySourceTree, rawIdSamples };
+  // **The join between the two kinds of evidence, which is otherwise assumed.**
+  // The renders come from the **npm** package; the tree hashes come from the
+  // **git** tag. So "1.8.0 is 1.10.0's source" and "1.10.0 renders like 1.7.0"
+  // are two true sentences about two different artifacts, and the chain between
+  // them has a gap: nothing said the npm build came from that git tree.
+  //
+  // npm records the commit it was published from. Measured: 1.7.0's `gitHead`
+  // is `2f2ac13` and 1.10.0's is `378c2cd`, each equal to its tag's commit —
+  // so the artifact that was rendered and the tree that was hashed are the
+  // same source. Note the tags are **annotated**, so `rev-parse v1.10.0` gives
+  // the tag object and only `^{commit}` gives the commit; comparing the former
+  // reports a mismatch that is not one.
+  const npmProvenance = {};
+  for (const [release, pkg] of Object.entries({
+    [spec.releases[0]]: spec.pkg,
+    ...(spec.crossCheck ?? {}),
+  })) {
+    // From the **registry**, not from `node_modules`: npm strips `gitHead` on
+    // install, so the copy on disk cannot answer this. A network call at tool
+    // time is fine — this harness already installs from npm, and `flutter
+    // test` never runs it.
+    //
+    // `execSync` with one command string, not `execFileSync`: on Windows `npm`
+    // is `npm.cmd`, and Node refuses to `execFile` a `.cmd` at all
+    // (`spawnSync npm.cmd EINVAL`). `tool/mutate/run.mjs` carries the same
+    // note for `flutter`, which is a `.bat` — this is that trap a second time,
+    // and the prescription there is this one. Nothing here is caller-supplied.
+    const head = execSync(`npm view boring-avatars@${release} gitHead`, {
+      encoding: 'utf8',
+    }).trim();
+    npmProvenance[release] = {
+      npmGitHead: head === '' ? null : head,
+      tagCommit: execFileSync(
+        'git',
+        ['-C', REFS, 'rev-parse', `v${release}^{commit}`],
+        { encoding: 'utf8' },
+      ).trim(),
+    };
+  }
+
+  return {
+    renderedFrom: spec.releases[0],
+    rendered,
+    bySourceTree,
+    rawIdSamples,
+    npmProvenance,
+  };
 }
 
 /** The mask id a release actually writes, unnormalised — the thing that differs. */
