@@ -85,8 +85,22 @@ const EXPECTED_DIVERGENCE = { sunset: new Set(['punctuation']) };
 // browser would render unmasked. The whole point here is the unnormalised
 // document.
 
-const upstreamModule = await import('upstream-1.6.1');
-const Avatar = upstreamModule.default?.default ?? upstreamModule.default;
+/**
+ * Which upstream release each selector is compared against.
+ *
+ * `v1_7_0` is checked against **1.10.0**, not 1.7.0, and that is the whole
+ * reason this file grew a second entry. The four releases in that selector are
+ * byte-identical except the mask id — a literal at 1.7.0, `React.useId()` from
+ * 1.8.0 — and the parity harness normalises exactly that away. So 1.7.0 is the
+ * release this port already matches byte for byte, and 1.10.0 is the one where
+ * "the picture is the same" rests on an argument instead of a measurement.
+ * Comparing the release we already match would be the tautological check this
+ * file's header warns about.
+ */
+const UPSTREAM_FOR = {
+  v1_6_1: 'upstream-1.6.1',
+  v1_7_0: 'upstream-1.10.0',
+};
 
 const corpus = JSON.parse(
   readFileSync(join(REPO, 'test/fixtures/corpus.json'), 'utf8'),
@@ -113,6 +127,23 @@ if (emitted.size !== SIZE) {
       `two must agree or the screenshots are of different drawings`,
   );
 }
+
+// Taken from what `emit.dart` wrote rather than from an argument, for the same
+// reason as `size` above: two halves told separately which version they are
+// comparing can disagree, and the run would print a pass about nothing.
+const selector = emitted.selector ?? 'v1_6_1';
+const upstreamPackage = UPSTREAM_FOR[selector];
+if (!upstreamPackage) {
+  throw new Error(
+    `no upstream package mapped for selector "${selector}" — add it to ` +
+      `UPSTREAM_FOR, naming the release the comparison is actually against`,
+  );
+}
+const upstreamModule = await import(upstreamPackage);
+const Avatar = upstreamModule.default?.default ?? upstreamModule.default;
+console.log(
+  `  ${selector} vs ${upstreamPackage}  (covers ${(emitted.upstreamReleases ?? []).join(', ')})`,
+);
 
 /** Decodes a non-interlaced 8-bit PNG to straight RGBA bytes. */
 function decodePng(buffer) {
