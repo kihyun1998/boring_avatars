@@ -1500,7 +1500,26 @@ only there.** Below is what each one has to *do* — the mapping is not repeated
 |---|---|
 | `0.1.0` | everything: harness, primitives, scene, all six variants, the public SVG surface, **the rasteriser's arbitrary scale (#58), the `BoringAvatar` widget (#80), the banded rasteriser that keeps it off the frame on both platforms (#80), the example (#78), and the colour vocabulary the rasteriser reads (#71 → #62 → #63 → #64, plus #95 — the Color 4 remainder the #64 pass found unlearned; user ruling 2026-08-11, same criterion as the 08-10 ruling below: publishing first would put a release that refuses valid colours in people's hands)** |
 | `0.2.0` | the `<title>` gate (hidden-state #16) — **one change** |
-| `0.3.0` | `pixel`'s second colour-index path — **one change**, and the only one in scope where the drawing moves |
+| `0.3.0` | `pixel`'s second colour-index path — **one change**, and the only one in scope where the drawing moves. **Plus the full Chrome pixel sweep (#50), which runs *inside* this release rather than before it** — see below |
+
+**Why the Chrome sweep runs inside `0.3.0` rather than before it — user ruling,
+2026-08-13.** `#50` counts **seven** combinations: five variants that draw the
+same in every supported state, `pixel`'s existing colour index, and `pixel`'s
+**second** one — which `#45` is the ticket that creates. Run first, it can only
+reach six, and its own first acceptance criterion says "all seven". So the
+sweep is a step in the release, after the code and **before the documents**.
+
+That last ordering is deliberate. `#50`'s acceptance already forbids the move
+this situation invites — *"기준 미달 조합이 있으면 게이트 기준을 낮추지 말고
+원인을 별도 이슈로 분리"* — and running the sweep before README and CHANGELOG
+are written means the pressure to relax a bar never builds in the first place.
+A rule that has to resist temptation is weaker than an order that removes it.
+
+**What was actually wrong was the prose, not the graph.** `#45`'s body said it
+was blocked by `#50` and no such edge existed; `#50`'s only edge was to `#48`,
+a release the plan deleted when eight collapsed to three. The cycle everyone
+could see was entirely in sentences. `#50` is now `#45`'s **sub-issue**, which
+is the tracker saying "inside" in the one place that renders it.
 
 **Why the colour work moved into `0.1.0` — user ruling, 2026-08-10.** It had no
 milestone at all, and the agent proposed `0.3.0` alongside the Chrome parity
