@@ -389,6 +389,7 @@ void main() {
       // and only one of those two is this file's business.
       final withBlend = rasterizeScene(
         buildMarbleScene(
+          title: true,
           name: 'Alice',
           colors: const ['#000000', '#FFFFFF'],
           size: 80,
@@ -399,6 +400,7 @@ void main() {
       final withoutBlend = rasterizeScene(
         _stripStyle(
           buildMarbleScene(
+            title: true,
             name: 'Alice',
             colors: const ['#000000', '#FFFFFF'],
             size: 80,
@@ -644,13 +646,23 @@ void main() {
       // The claim above, cashed on the real variant: the region is inert here,
       // and this is what fails the day a viewBox or a mask changes that.
       final withRegion = rasterizeScene(
-        buildMarbleScene(name: 'Clara Barton', colors: palette, size: 80),
+        buildMarbleScene(
+          title: true,
+          name: 'Clara Barton',
+          colors: palette,
+          size: 80,
+        ),
         width: 80,
         height: 80,
       );
       final withHugeRegion = rasterizeScene(
         _widenFilterRegion(
-          buildMarbleScene(name: 'Clara Barton', colors: palette, size: 80),
+          buildMarbleScene(
+            title: true,
+            name: 'Clara Barton',
+            colors: palette,
+            size: 80,
+          ),
         ),
         width: 80,
         height: 80,
@@ -660,8 +672,12 @@ void main() {
   });
 
   group('the scene seam still refuses what it cannot draw', () {
-    SvgNode marble() =>
-        buildMarbleScene(name: 'Clara Barton', colors: palette, size: 80);
+    SvgNode marble() => buildMarbleScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: palette,
+      size: 80,
+    );
 
     test('a filter chain that is not upstream\'s is refused, not reduced', () {
       // The three primitives are collapsed to "blur by sigma" only because the
@@ -739,7 +755,12 @@ void main() {
       // live wrong picture ("renders sharp rather than being refused") and it
       // does not: it throws.
       SvgNode withPrimitives(List<SvgNode> primitives) => _editFilterChildren(
-        buildMarbleScene(name: 'Clara Barton', colors: palette, size: 80),
+        buildMarbleScene(
+          title: true,
+          name: 'Clara Barton',
+          colors: palette,
+          size: 80,
+        ),
         primitives,
       );
 
@@ -879,7 +900,12 @@ void main() {
         // behaviour rather than committed as a blank file, which is the failure
         // #40 found in `sunset`.
         final image = rasterizeScene(
-          buildMarbleScene(name: 'Clara Barton', colors: const [], size: 80),
+          buildMarbleScene(
+            title: true,
+            name: 'Clara Barton',
+            colors: const [],
+            size: 80,
+          ),
           width: 80,
           height: 80,
         );
@@ -893,12 +919,22 @@ void main() {
   group('determinism', () {
     test('the same input produces identical bytes on every run', () {
       final a = rasterizeScene(
-        buildMarbleScene(name: 'Clara Barton', colors: palette, size: 80),
+        buildMarbleScene(
+          title: true,
+          name: 'Clara Barton',
+          colors: palette,
+          size: 80,
+        ),
         width: 80,
         height: 80,
       );
       final b = rasterizeScene(
-        buildMarbleScene(name: 'Clara Barton', colors: palette, size: 80),
+        buildMarbleScene(
+          title: true,
+          name: 'Clara Barton',
+          colors: palette,
+          size: 80,
+        ),
         width: 80,
         height: 80,
       );

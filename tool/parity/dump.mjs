@@ -475,6 +475,7 @@ async function dumpGroupProof(spec, corpus) {
 
   const rendered = {};
   const rawIdSamples = { [spec.releases[0]]: maskIdOf(base, corpus) };
+  const idPositions = { [spec.releases[0]]: idsByPosition(base, corpus) };
   for (const [release, pkg] of Object.entries(spec.crossCheck ?? {})) {
     const other = await import(pkg).then((m) => m.default?.default ?? m.default);
     let compared = 0;
@@ -500,6 +501,7 @@ async function dumpGroupProof(spec, corpus) {
     }
     rendered[release] = { compared, mismatches };
     rawIdSamples[release] = maskIdOf(other, corpus);
+    idPositions[release] = idsByPosition(other, corpus);
   }
 
   const bySourceTree = {};
@@ -573,6 +575,7 @@ async function dumpGroupProof(spec, corpus) {
     rendered,
     bySourceTree,
     rawIdSamples,
+    idPositions,
     npmProvenance,
   };
 }
@@ -624,6 +627,40 @@ function countJsFilesOnNpm(release) {
   } finally {
     rmSync(dest, { recursive: true, force: true });
   }
+}
+
+/**
+ * The same avatar's mask id at four positions in a render tree.
+ *
+ * **This is the measurement that decides what "reproduce 1.8.0" can even
+ * mean.** From 1.8.0 the id comes from `React.useId()`, whose value is the
+ * component's *path in the render tree* — so the identical name, palette and
+ * variant come out `:R0:` alone, `:R3:` as a third child, `:R2:` after a
+ * `<span>`, and **two of the same avatar in one document get two different
+ * ids**. There is therefore no single byte sequence that *is* 1.8.0's output
+ * for an avatar, and "byte-for-byte with 1.8.0" is not a claim anything could
+ * satisfy — including 1.8.0 itself.
+ *
+ * Recorded rather than argued, because the grouping decision (2026-07-29) was
+ * taken before this number existed.
+ */
+function idsByPosition(Avatar, corpus) {
+  const one = () =>
+    React.createElement(Avatar, {
+      variant: 'marble',
+      name: corpus.names[0].value,
+      colors: corpus.palettes[0].value,
+      size: MATRIX_SIZE,
+    });
+  const idsIn = (tree) =>
+    [...renderToStaticMarkup(tree).matchAll(/<mask id="([^"]*)"/g)].map((m) => m[1]);
+  const span = () => React.createElement('span');
+  return {
+    alone: idsIn(one()),
+    thirdChild: idsIn(React.createElement('div', null, span(), span(), one())),
+    afterSpan: idsIn(React.createElement('div', null, span(), one())),
+    twiceInOneDocument: idsIn(React.createElement('div', null, one(), one())),
+  };
 }
 
 /** The mask id a release actually writes, unnormalised — the thing that differs. */

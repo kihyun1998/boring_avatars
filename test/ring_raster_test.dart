@@ -28,7 +28,13 @@ void main() {
     List<String> colours, {
     bool square = false,
   }) => rasterizeScene(
-    buildRingScene(name: name, colors: colours, size: size, square: square),
+    buildRingScene(
+      title: true,
+      name: name,
+      colors: colours,
+      size: size,
+      square: square,
+    ),
     width: size,
     height: size,
   );
@@ -584,7 +590,12 @@ void main() {
       // exception. Nothing about the scene changed; the rasterizer grew the
       // capability the refusal was standing in for.
       final image = rasterizeScene(
-        buildRingScene(name: 'Clara Barton', colors: palette, size: 80),
+        buildRingScene(
+          title: true,
+          name: 'Clara Barton',
+          colors: palette,
+          size: 80,
+        ),
         width: 80,
         height: 80,
       );

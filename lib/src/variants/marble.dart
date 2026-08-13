@@ -128,11 +128,13 @@ SvgNode buildMarbleScene({
   required List<String> colors,
   required Object size,
   bool square = false,
-  // Defaults to the **1.6.x document**, which is the one shape this builder
-  // was written against — not to upstream 1.7.0's `title = false`. The
-  // public seam never reaches the default: `buildAvatarScene` resolves the
-  // version's answer and always passes it. See hidden-state #16.
-  bool title = true,
+  // **Required, with no default.** A default here would be one selector's
+  // answer baked into the sacred surface: 1.6.x renders the element always,
+  // 1.7.0 defaults it off, and a builder shared by both may not prefer one.
+  // The cost is that every direct caller states which document it wants,
+  // which is the information a parity test was relying on a default to
+  // supply. See hidden-state #16.
+  required bool title,
 }) {
   final properties = marbleProperties(name, colors);
 

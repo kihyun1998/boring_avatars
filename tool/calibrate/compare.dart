@@ -37,39 +37,75 @@ final _cases = <String, (SvgNode, int)>{
   // two numbers as the reason for this case selection; the #39 completeness
   // pass caught it.
   'bauhaus-clara-default': (
-    buildBauhausScene(name: 'Clara Barton', colors: _default, size: 80),
+    buildBauhausScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _default,
+      size: 80,
+    ),
     80,
   ),
   'bauhaus-alice-pair': (
-    buildBauhausScene(name: 'Alice', colors: ['#000000', '#FFFFFF'], size: 80),
+    buildBauhausScene(
+      title: true,
+      name: 'Alice',
+      colors: ['#000000', '#FFFFFF'],
+      size: 80,
+    ),
     80,
   ),
   'bauhaus-empty-name': (
-    buildBauhausScene(name: '', colors: _default, size: 80),
+    buildBauhausScene(title: true, name: '', colors: _default, size: 80),
     80,
   ),
   'pixel-clara-default': (
-    buildPixelScene(name: 'Clara Barton', colors: _default, size: 80),
+    buildPixelScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _default,
+      size: 80,
+    ),
     80,
   ),
   'ring-clara-default': (
-    buildRingScene(name: 'Clara Barton', colors: _default, size: 90),
+    buildRingScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _default,
+      size: 90,
+    ),
     90,
   ),
   'ring-alice-pair': (
-    buildRingScene(name: 'Alice', colors: ['#000000', '#FFFFFF'], size: 90),
+    buildRingScene(
+      title: true,
+      name: 'Alice',
+      colors: ['#000000', '#FFFFFF'],
+      size: 90,
+    ),
     90,
   ),
   'sunset-clara-default': (
-    buildSunsetScene(name: 'Clara Barton', colors: _default, size: 80),
+    buildSunsetScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _default,
+      size: 80,
+    ),
     80,
   ),
   'sunset-empty-palette': (
-    buildSunsetScene(name: 'Clara Barton', colors: const [], size: 80),
+    buildSunsetScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: const [],
+      size: 80,
+    ),
     80,
   ),
   'ring-clara-square': (
     buildRingScene(
+      title: true,
       name: 'Clara Barton',
       colors: _default,
       size: 90,
@@ -89,19 +125,30 @@ final _cases = <String, (SvgNode, int)>{
   // `translate(0 0)` — the identity — and the only thing under test is the blur
   // and the blend. The other two carry rotation and a non-unit scale.
   'marble-empty-name': (
-    buildMarbleScene(name: '', colors: _default, size: 80),
+    buildMarbleScene(title: true, name: '', colors: _default, size: 80),
     80,
   ),
   'marble-clara-default': (
-    buildMarbleScene(name: 'Clara Barton', colors: _default, size: 80),
+    buildMarbleScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _default,
+      size: 80,
+    ),
     80,
   ),
   'marble-alice-pair': (
-    buildMarbleScene(name: 'Alice', colors: ['#000000', '#FFFFFF'], size: 80),
+    buildMarbleScene(
+      title: true,
+      name: 'Alice',
+      colors: ['#000000', '#FFFFFF'],
+      size: 80,
+    ),
     80,
   ),
   'marble-clara-square': (
     buildMarbleScene(
+      title: true,
       name: 'Clara Barton',
       colors: _default,
       size: 80,
@@ -126,7 +173,12 @@ final _cases = <String, (SvgNode, int)>{
   // actually asks for — a 80-logical avatar at the 2.625 device pixel ratio
   // #58's derivation names — and it is where the row measured its worst count.
   'pixel-clara-100': (
-    buildPixelScene(name: 'Clara Barton', colors: _default, size: 100),
+    buildPixelScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _default,
+      size: 100,
+    ),
     100,
   ),
   // **The discriminating case.** Without the rounded mask every edge in the
@@ -136,6 +188,7 @@ final _cases = <String, (SvgNode, int)>{
   // removing it removes the noise this question would otherwise be buried in.
   'pixel-clara-square-100': (
     buildPixelScene(
+      title: true,
       name: 'Clara Barton',
       colors: _default,
       size: 100,
@@ -144,13 +197,23 @@ final _cases = <String, (SvgNode, int)>{
     100,
   ),
   'pixel-clara-210': (
-    buildPixelScene(name: 'Clara Barton', colors: _default, size: 210),
+    buildPixelScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _default,
+      size: 210,
+    ),
     210,
   ),
   // The second variant the row names. `ring` abuts along `y=45` in four places,
   // which is a pixel boundary at 90 and is not at 101.
   'ring-clara-101': (
-    buildRingScene(name: 'Clara Barton', colors: _default, size: 101),
+    buildRingScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _default,
+      size: 101,
+    ),
     101,
   ),
   // #62 — a translucent palette, which nothing in this harness had before and
@@ -168,11 +231,21 @@ final _cases = <String, (SvgNode, int)>{
   // the interpolation model was itself a measured question (straight, not
   // premultiplied).
   'bauhaus-translucent': (
-    buildBauhausScene(name: 'Clara Barton', colors: _translucent, size: 80),
+    buildBauhausScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _translucent,
+      size: 80,
+    ),
     80,
   ),
   'sunset-translucent': (
-    buildSunsetScene(name: 'Clara Barton', colors: _translucent, size: 80),
+    buildSunsetScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _translucent,
+      size: 80,
+    ),
     80,
   ),
   // #63 — a palette written in the notations the parser learned here.
@@ -187,11 +260,21 @@ final _cases = <String, (SvgNode, int)>{
   // the variant that stacks and the variant that runs a gradient, which are the
   // two paths a colour can reach a pixel through.
   'bauhaus-named': (
-    buildBauhausScene(name: 'Clara Barton', colors: _named, size: 80),
+    buildBauhausScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _named,
+      size: 80,
+    ),
     80,
   ),
   'sunset-named': (
-    buildSunsetScene(name: 'Clara Barton', colors: _named, size: 80),
+    buildSunsetScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _named,
+      size: 80,
+    ),
     80,
   ),
   // #64 — a palette with truly invalid entries, which ADR-0001's invalid-value
@@ -209,11 +292,21 @@ final _cases = <String, (SvgNode, int)>{
   // shapes that drew prove the scene ran, beside the ones the rule erased or
   // blackened.
   'bauhaus-invalid': (
-    buildBauhausScene(name: 'Clara Barton', colors: _invalid, size: 80),
+    buildBauhausScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _invalid,
+      size: 80,
+    ),
     80,
   ),
   'sunset-invalid': (
-    buildSunsetScene(name: 'Clara Barton', colors: _invalid, size: 80),
+    buildSunsetScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _invalid,
+      size: 80,
+    ),
     80,
   ),
   // #95 — a palette in the Color 4 notations learned there, same two-variant
@@ -221,11 +314,21 @@ final _cases = <String, (SvgNode, int)>{
   // family, including a wide-gamut `color()` (so the clip runs end-to-end)
   // and a system colour (the frozen-table path).
   'bauhaus-colour4': (
-    buildBauhausScene(name: 'Clara Barton', colors: _colour4, size: 80),
+    buildBauhausScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _colour4,
+      size: 80,
+    ),
     80,
   ),
   'sunset-colour4': (
-    buildSunsetScene(name: 'Clara Barton', colors: _colour4, size: 80),
+    buildSunsetScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: _colour4,
+      size: 80,
+    ),
     80,
   ),
 };

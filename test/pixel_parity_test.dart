@@ -43,6 +43,7 @@ void main() {
           final actual = normalise(
             emitSvg(
               buildPixelScene(
+                title: true,
                 name: n['value'] as String,
                 colors: (p['value'] as List).cast<String>(),
                 size: matrixSize,
@@ -68,6 +69,7 @@ void main() {
               as Map<String, dynamic>;
       final svg = emitSvg(
         buildPixelScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: matrixSize,
@@ -112,6 +114,7 @@ void main() {
       // byte-level gate can see.
       final svg = emitSvg(
         buildPixelScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000', '#00FF00'],
           size: 80,
@@ -147,6 +150,7 @@ void main() {
           normalise(
             emitSvg(
               buildPixelScene(
+                title: true,
                 name: name['value'] as String,
                 colors: (palette['value'] as List).cast<String>(),
                 size: matrixSize,
@@ -163,6 +167,7 @@ void main() {
     test('rx is absent when square is true, present when it is not', () {
       String svgFor({required bool square}) => emitSvg(
         buildPixelScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: 80,
@@ -183,6 +188,7 @@ void main() {
     test('it reaches width and height and nothing else', () {
       final small = emitSvg(
         buildPixelScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: 40,
@@ -190,6 +196,7 @@ void main() {
       );
       final large = emitSvg(
         buildPixelScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: 80,

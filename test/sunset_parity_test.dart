@@ -70,6 +70,7 @@ void main() {
           final actual = normalise(
             emitSvg(
               buildSunsetScene(
+                title: true,
                 name: n['value'] as String,
                 colors: (p['value'] as List).cast<String>(),
                 size: matrixSize,
@@ -112,6 +113,7 @@ void main() {
           final expected = sunset[id] as Map<String, dynamic>;
           final svg = emitSvg(
             buildSunsetScene(
+              title: true,
               name: n['value'] as String,
               colors: (palettes.first['value'] as List).cast<String>(),
               size: matrixSize,
@@ -161,6 +163,7 @@ void main() {
       for (final n in names) {
         final svg = emitSvg(
           buildSunsetScene(
+            title: true,
             name: n['value'] as String,
             colors: const ['#FF0000'],
             size: matrixSize,
@@ -204,6 +207,7 @@ void main() {
       // ECMAScript's WhiteSpace plus LineTerminator.
       final svg = emitSvg(
         buildSunsetScene(
+          title: true,
           name: 'a b\tc\nd',
           colors: const ['#FF0000'],
           size: 80,
@@ -223,6 +227,7 @@ void main() {
       for (final space in [' ', '　', ' ', '﻿']) {
         final svg = emitSvg(
           buildSunsetScene(
+            title: true,
             name: 'a${space}b',
             colors: const ['#FF0000'],
             size: 80,
@@ -244,7 +249,12 @@ void main() {
       // value for that is **black**, so the avatar comes out solid black.
       // Confirmed in Chrome. Reproducing the markup reproduces the behaviour.
       final svg = emitSvg(
-        buildSunsetScene(name: 'Clara Barton', colors: const [], size: 80),
+        buildSunsetScene(
+          title: true,
+          name: 'Clara Barton',
+          colors: const [],
+          size: 80,
+        ),
       );
       expect(svg, contains('<stop></stop>'));
       expect(svg, contains('<stop offset="1"></stop>'));
@@ -270,6 +280,7 @@ void main() {
           normalise(
             emitSvg(
               buildSunsetScene(
+                title: true,
                 name: name['value'] as String,
                 colors: (palette['value'] as List).cast<String>(),
                 size: matrixSize,
@@ -288,6 +299,7 @@ void main() {
     test('it reaches width and height and nothing else', () {
       String svgFor(int size) => emitSvg(
         buildSunsetScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: size,

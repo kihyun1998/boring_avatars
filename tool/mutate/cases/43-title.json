@@ -78,10 +78,10 @@
     },
     {
       "group": "B",
-      "name": "ring's title default flips, so direct callers get 1.7.0 behaviour",
+      "name": "ring emits the title exactly when it should not",
       "file": "lib/src/variants/ring.dart",
-      "from": "  bool title = true,",
-      "to": "  bool title = false,",
+      "from": "      if (title) SvgNode(SvgElement.title, text: name),",
+      "to": "      if (!title) SvgNode(SvgElement.title, text: name),",
       "expectEdits": 1
     }
   ]

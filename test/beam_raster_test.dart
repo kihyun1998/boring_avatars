@@ -141,6 +141,7 @@ void main() {
     // drawing against arithmetic rather than against a golden.
     RasterImage render(String name, {bool square = false}) => rasterizeScene(
       buildBeamScene(
+        title: true,
         name: name,
         colors: const ['#FF0000'],
         size: 36,
@@ -311,6 +312,7 @@ void main() {
       // three colours are all different.
       final image = rasterizeScene(
         buildBeamScene(
+          title: true,
           name: '',
           colors: const ['#FF0000', '#00FF00'],
           size: 36,

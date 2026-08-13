@@ -25,7 +25,13 @@ void main() {
     List<String> colours, {
     bool square = false,
   }) => rasterizeScene(
-    buildSunsetScene(name: name, colors: colours, size: size, square: square),
+    buildSunsetScene(
+      title: true,
+      name: name,
+      colors: colours,
+      size: size,
+      square: square,
+    ),
     width: size,
     height: size,
   );

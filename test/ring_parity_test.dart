@@ -52,6 +52,7 @@ void main() {
           final actual = normalise(
             emitSvg(
               buildRingScene(
+                title: true,
                 name: n['value'] as String,
                 colors: (p['value'] as List).cast<String>(),
                 size: matrixSize,
@@ -80,6 +81,7 @@ void main() {
               as Map<String, dynamic>;
       final svg = emitSvg(
         buildRingScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: matrixSize,
@@ -167,6 +169,7 @@ void main() {
           normalise(
             emitSvg(
               buildRingScene(
+                title: true,
                 name: name['value'] as String,
                 colors: (palette['value'] as List).cast<String>(),
                 size: matrixSize,
@@ -183,6 +186,7 @@ void main() {
     test('rx is absent when square is true, present when it is not', () {
       String svgFor({required bool square}) => emitSvg(
         buildRingScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: 80,
@@ -202,6 +206,7 @@ void main() {
     test('size reaches width and height and nothing else', () {
       String svgFor(int size) => emitSvg(
         buildRingScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: size,
@@ -220,6 +225,7 @@ void main() {
       expect(
         emitSvg(
           buildRingScene(
+            title: true,
             name: 'Clara Barton',
             colors: const ['#FF0000'],
             size: 40,
