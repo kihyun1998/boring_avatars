@@ -223,14 +223,40 @@ void main() {
         // chain can be closed rather than assumed.
         final provenance = proof['npmProvenance'] as Map<String, dynamic>;
         expect(provenance, isNotEmpty);
+        for (final release in version.upstreamVersions) {
+          expect(provenance, contains(release), reason: release);
+        }
         for (final entry in provenance.entries) {
           final row = entry.value as Map<String, dynamic>;
+          // **Trees, not commits.** The claim is "the npm build came from this
+          // source", and upstream does not always publish from the commit it
+          // tagged: npm's 1.8.0 came from `e393aaa` while `v1.8.0` points at
+          // `412a61e` — two commits, one `src/lib`. Comparing commits reported
+          // a mismatch that was not one; comparing trees says what was meant.
           expect(
-            row['npmGitHead'],
-            row['tagCommit'],
+            row['npmHeadTree'],
+            row['tagTree'],
             reason:
-                'npm ${entry.key} was published from a different commit than '
-                'the tag whose src/lib tree the evidence above hashes',
+                'npm ${entry.key} was published from a source tree that is not '
+                'the tag\'s, so the rendered evidence and the hashed tree are '
+                'about different code',
+          );
+          expect(row['tagTree'], isNotNull, reason: entry.key);
+        }
+
+        // The releases with no JavaScript on npm are exactly the ones that can
+        // have no rendered evidence. Recording the count keeps that argument a
+        // measurement — it is stated in README and CHANGELOG, and until #43's
+        // review it rested on a probe that had been deleted.
+        final unrenderable = [
+          for (final e in provenance.entries)
+            if ((e.value as Map<String, dynamic>)['npmJsFiles'] == 0) e.key,
+        ];
+        for (final release in unrenderable) {
+          expect(
+            rendered,
+            isNot(contains(release)),
+            reason: 'nothing can render $release — its npm tarball has no JS',
           );
         }
 
