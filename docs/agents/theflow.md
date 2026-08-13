@@ -1315,6 +1315,16 @@ empty. That is a real gap rather than a completed item — say so rather than
 letting the missing line read as coverage (the failure `flutter_table_plus` #55
 names from the other direction).
 
+**It runs before the dry-run for a reason, and the reason is a trap.** On
+Windows, analysing `example/` rewrites its three checked-in
+`windows/flutter/generated_plugin_registrant.*` files with the other line
+ending — **identical content**, `git diff` empty but for the CRLF warning — and
+`pub publish --dry-run` then reports "3 checked-in files are modified in git".
+A warning that is entirely about line endings, on a gate whose whole job is to
+be read literally. `git checkout -- example/windows/flutter/` restores them.
+Same root as `lessons.md`'s two CRLF incidents: the endings are a property of
+the checkout, not of the repo.
+
 Run each gate **bare, never piped** — a pipeline's exit status is the last
 command's, so `flutter test | tail -1 && commit` always commits.
 
