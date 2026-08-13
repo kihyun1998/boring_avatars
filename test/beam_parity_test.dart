@@ -43,6 +43,7 @@ void main() {
       normalise(
         emitSvg(
           buildBeamScene(
+            title: true,
             name: name,
             colors: colors,
             size: matrixSize,
@@ -70,8 +71,12 @@ void main() {
               reason: 'the fixture records which failure',
             );
             expect(
-              () =>
-                  buildBeamScene(name: name, colors: colors, size: matrixSize),
+              () => buildBeamScene(
+                title: true,
+                name: name,
+                colors: colors,
+                size: matrixSize,
+              ),
               throwsA(isA<ArgumentError>()),
               reason: '${n['id']}/${p['id']}',
             );
@@ -122,6 +127,7 @@ void main() {
         if (entry.value is Map) {
           expect(
             () => buildBeamScene(
+              title: true,
               name: name['value'] as String,
               colors: colors,
               size: matrixSize,
@@ -156,6 +162,7 @@ void main() {
               as Map<String, dynamic>;
       final svg = emitSvg(
         buildBeamScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: matrixSize,
@@ -176,6 +183,7 @@ void main() {
       // one for both would still emit a plausible `<svg>`.
       final svg = emitSvg(
         buildBeamScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: 320,
@@ -306,8 +314,12 @@ void main() {
         // The user's ruling was "throw, in a Dart-idiomatic way" — so what a
         // caller sees has to be about *their* input, not about a null slice.
         expect(
-          () =>
-              buildBeamScene(name: 'Clara Barton', colors: const [], size: 80),
+          () => buildBeamScene(
+            title: true,
+            name: 'Clara Barton',
+            colors: const [],
+            size: 80,
+          ),
           throwsA(
             isA<ArgumentError>().having(
               (e) => e.message.toString(),
@@ -324,6 +336,7 @@ void main() {
       // pass the test above and break every single-colour caller.
       expect(
         () => buildBeamScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: 80,

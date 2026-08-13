@@ -304,11 +304,22 @@ Four upstream releases share `v1_7_0` because a caller gets the same thing out
 of them, and that is **measured rather than asserted**. 1.10.0 is rendered and
 compared to 1.7.0 across 1,200 documents — zero differ. 1.8.0 and 1.9.0 cannot
 be rendered by anybody: their npm tarballs contain no JavaScript at all (`main`
-points at a `build/index.js` that is not in the package), so their evidence is
-that their source tree *is* 1.10.0's, byte for byte. The one thing that does
-differ inside the group is the mask's `id` — a literal at 1.7.0, React's
-`useId()` from 1.8.0 — which names nothing a reader sees and depends on where
-the component sits in the render tree rather than on the avatar.
+points at a `build/index.js` that is not in the package — 0 files, counted),
+so their evidence is that their source tree *is* 1.10.0's, byte for byte.
+
+**One attribute inside that group is not reproduced, and cannot be.** From
+1.8.0 upstream names its mask with React's `useId()`, which is the component's
+position in the render tree rather than anything about the avatar. Measured:
+the same avatar is `:R0:` alone, `:R3:` as a third child, `:R2:` after a
+`<span>` — and **two copies of one avatar in a single document get two
+different ids**. So 1.8.0 has no fixed bytes for an avatar for anything to
+reproduce, including 1.8.0. This package emits the literal `mask__marble` that
+1.7.0 writes, at every position.
+
+Everything a reader can see is unaffected: the id names nothing but the mask's
+own reference, and every shape, coordinate, colour and attribute is identical.
+If you need the document's internal ids to match a particular upstream render,
+that is the one thing this selector does not give you.
 
 The emitted documents are pinned by the test suite against fixtures generated
 from the real npm package — 600 of them, across six variants, twenty names and

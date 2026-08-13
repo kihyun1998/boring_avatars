@@ -1,0 +1,38 @@
+{
+  "issue": 43,
+  "what": "the compile-time guard that a new selector cannot silently reuse another's drawing",
+  "test": null,
+  "note": [
+    "One case, killed by the **compiler** rather than by an assertion, and that",
+    "is the point: `flutter test` cannot run a program that does not build, so",
+    "the harness reports the build failure as `killed`. The guard did its job",
+    "before a single test ran.",
+    "",
+    "Flattening the version dispatch in #43 bought one copy of the six-arm",
+    "variant switch instead of one per selector, and paid for it by narrowing",
+    "the guard `avatar.js`'s port used to have. `_Drawing` buys it back: a new",
+    "selector must name the picture it draws, and one that draws differently",
+    "must add a value — which makes the variant switch non-exhaustive. `0.3.0`",
+    "is the first release that will hit this.",
+    "",
+    "**A second case was written and deleted, and the deletion is the finding.**",
+    "Replacing `final drawing = switch (version) {…}` with a hardcoded",
+    "`_Drawing.v1_6_1` — deleting the guard outright — left all 937 tests green.",
+    "It is a survivor by construction rather than a gap: with exactly one",
+    "drawing in the enum, a switch that maps every version to it and a constant",
+    "that *is* it are the same program. The guard is **inert today** and goes",
+    "live the moment a second value exists, which is what the surviving case",
+    "above proves. Same shape as the hidden-state rows this repo marks inert —",
+    "recorded here so the missing case is a judgement and not a silent skip."
+  ],
+  "cases": [
+    {
+      "group": "A",
+      "name": "a second drawing exists and nothing dispatches it",
+      "file": "lib/src/avatar.dart",
+      "from": "enum _Drawing { v1_6_1 }",
+      "to": "enum _Drawing { v1_6_1, v1_10_1 }",
+      "expectEdits": 1
+    }
+  ]
+}

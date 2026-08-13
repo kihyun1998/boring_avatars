@@ -42,6 +42,7 @@ const goldenDefaultPalette = [
 final Map<String, (SvgNode, int)> goldenCases = {
   'pixel-clara-default': (
     buildPixelScene(
+      title: true,
       name: 'Clara Barton',
       colors: goldenDefaultPalette,
       size: 80,
@@ -49,7 +50,12 @@ final Map<String, (SvgNode, int)> goldenCases = {
     80,
   ),
   'pixel-alice-pair': (
-    buildPixelScene(name: 'Alice', colors: ['#000000', '#FFFFFF'], size: 80),
+    buildPixelScene(
+      title: true,
+      name: 'Alice',
+      colors: ['#000000', '#FFFFFF'],
+      size: 80,
+    ),
     80,
   ),
   // **`pixel` had no square golden until #80.** Its square case was asserted
@@ -59,6 +65,7 @@ final Map<String, (SvgNode, int)> goldenCases = {
   // only checks the files it already lists against the cases it already has.
   'pixel-clara-square': (
     buildPixelScene(
+      title: true,
       name: 'Clara Barton',
       colors: goldenDefaultPalette,
       size: 80,
@@ -67,11 +74,12 @@ final Map<String, (SvgNode, int)> goldenCases = {
     80,
   ),
   'pixel-empty-name': (
-    buildPixelScene(name: '', colors: ['#FF0000'], size: 80),
+    buildPixelScene(title: true, name: '', colors: ['#FF0000'], size: 80),
     80,
   ),
   'ring-clara-default': (
     buildRingScene(
+      title: true,
       name: 'Clara Barton',
       colors: goldenDefaultPalette,
       size: 90,
@@ -79,11 +87,17 @@ final Map<String, (SvgNode, int)> goldenCases = {
     90,
   ),
   'ring-alice-pair': (
-    buildRingScene(name: 'Alice', colors: ['#000000', '#FFFFFF'], size: 90),
+    buildRingScene(
+      title: true,
+      name: 'Alice',
+      colors: ['#000000', '#FFFFFF'],
+      size: 90,
+    ),
     90,
   ),
   'ring-clara-square': (
     buildRingScene(
+      title: true,
       name: 'Clara Barton',
       colors: goldenDefaultPalette,
       size: 90,
@@ -96,6 +110,7 @@ final Map<String, (SvgNode, int)> goldenCases = {
   // `Clara Barton`.
   'sunset-clara-default': (
     buildSunsetScene(
+      title: true,
       name: 'Clara Barton',
       colors: goldenDefaultPalette,
       size: 80,
@@ -103,15 +118,26 @@ final Map<String, (SvgNode, int)> goldenCases = {
     80,
   ),
   'sunset-empty-palette': (
-    buildSunsetScene(name: 'Clara Barton', colors: const [], size: 80),
+    buildSunsetScene(
+      title: true,
+      name: 'Clara Barton',
+      colors: const [],
+      size: 80,
+    ),
     80,
   ),
   'sunset-hangul': (
-    buildSunsetScene(name: '박기현', colors: goldenDefaultPalette, size: 80),
+    buildSunsetScene(
+      title: true,
+      name: '박기현',
+      colors: goldenDefaultPalette,
+      size: 80,
+    ),
     80,
   ),
   'sunset-clara-square': (
     buildSunsetScene(
+      title: true,
       name: 'Clara Barton',
       colors: goldenDefaultPalette,
       size: 80,
@@ -132,6 +158,7 @@ final Map<String, (SvgNode, int)> goldenCases = {
   // in `sunset`. `bauhaus_raster_test.dart` asserts the blank as behaviour.
   'bauhaus-clara-default': (
     buildBauhausScene(
+      title: true,
       name: 'Clara Barton',
       colors: goldenDefaultPalette,
       size: 80,
@@ -139,15 +166,26 @@ final Map<String, (SvgNode, int)> goldenCases = {
     80,
   ),
   'bauhaus-alice-pair': (
-    buildBauhausScene(name: 'Alice', colors: ['#000000', '#FFFFFF'], size: 80),
+    buildBauhausScene(
+      title: true,
+      name: 'Alice',
+      colors: ['#000000', '#FFFFFF'],
+      size: 80,
+    ),
     80,
   ),
   'bauhaus-empty-name': (
-    buildBauhausScene(name: '', colors: goldenDefaultPalette, size: 80),
+    buildBauhausScene(
+      title: true,
+      name: '',
+      colors: goldenDefaultPalette,
+      size: 80,
+    ),
     80,
   ),
   'bauhaus-clara-square': (
     buildBauhausScene(
+      title: true,
       name: 'Clara Barton',
       colors: goldenDefaultPalette,
       size: 80,
@@ -176,6 +214,7 @@ final Map<String, (SvgNode, int)> goldenCases = {
   // variant that throws on one, so there is no image to freeze.
   'beam-clara-default': (
     buildBeamScene(
+      title: true,
       name: 'Clara Barton',
       colors: goldenDefaultPalette,
       size: 36,
@@ -183,15 +222,26 @@ final Map<String, (SvgNode, int)> goldenCases = {
     36,
   ),
   'beam-alice-default': (
-    buildBeamScene(name: 'Alice', colors: goldenDefaultPalette, size: 36),
+    buildBeamScene(
+      title: true,
+      name: 'Alice',
+      colors: goldenDefaultPalette,
+      size: 36,
+    ),
     36,
   ),
   'beam-empty-name': (
-    buildBeamScene(name: '', colors: goldenDefaultPalette, size: 36),
+    buildBeamScene(
+      title: true,
+      name: '',
+      colors: goldenDefaultPalette,
+      size: 36,
+    ),
     36,
   ),
   'beam-clara-square': (
     buildBeamScene(
+      title: true,
       name: 'Clara Barton',
       colors: goldenDefaultPalette,
       size: 36,
@@ -231,6 +281,7 @@ final Map<String, (SvgNode, int)> goldenCases = {
   // as correct is the failure #40 found in `sunset`.
   'marble-clara-default': (
     buildMarbleScene(
+      title: true,
       name: 'Clara Barton',
       colors: goldenDefaultPalette,
       size: 80,
@@ -238,15 +289,26 @@ final Map<String, (SvgNode, int)> goldenCases = {
     80,
   ),
   'marble-alice-pair': (
-    buildMarbleScene(name: 'Alice', colors: ['#000000', '#FFFFFF'], size: 80),
+    buildMarbleScene(
+      title: true,
+      name: 'Alice',
+      colors: ['#000000', '#FFFFFF'],
+      size: 80,
+    ),
     80,
   ),
   'marble-empty-name': (
-    buildMarbleScene(name: '', colors: goldenDefaultPalette, size: 80),
+    buildMarbleScene(
+      title: true,
+      name: '',
+      colors: goldenDefaultPalette,
+      size: 80,
+    ),
     80,
   ),
   'marble-clara-square': (
     buildMarbleScene(
+      title: true,
       name: 'Clara Barton',
       colors: goldenDefaultPalette,
       size: 80,

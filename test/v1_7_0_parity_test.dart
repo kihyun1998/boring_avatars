@@ -258,5 +258,33 @@ void main() {
         expect(raw['1.7.0'], isNot(raw['1.10.0']));
       },
     );
+
+    test('from 1.8.0 there is no such thing as "the" bytes for an avatar', () {
+      // The measurement that decides what reproducing 1.8.0 could even mean.
+      // `useId()` is the component's **path in the render tree**, so the same
+      // name, palette and variant come out differently depending on what sits
+      // beside them — and two of the same avatar in one document get two
+      // different ids. A byte sequence that *is* 1.8.0's output for an avatar
+      // therefore does not exist, and no implementation could emit one.
+      final positions =
+          (fixture['groupProof'] as Map<String, dynamic>)['idPositions']
+              as Map<String, dynamic>;
+
+      final stable = (positions['1.7.0'] as Map<String, dynamic>).values
+          .expand((v) => (v as List).cast<String>())
+          .toSet();
+      expect(stable, {
+        'mask__marble',
+      }, reason: '1.7.0 writes a literal, so position cannot move it');
+
+      final generated = positions['1.10.0'] as Map<String, dynamic>;
+      String at(String key) => (generated[key] as List).first as String;
+      expect(at('alone'), isNot(at('thirdChild')));
+      expect(at('alone'), isNot(at('afterSpan')));
+      // The decisive one: one document, two identical avatars, two ids.
+      final twice = (generated['twiceInOneDocument'] as List).cast<String>();
+      expect(twice, hasLength(2));
+      expect(twice.first, isNot(twice.last));
+    });
   });
 }

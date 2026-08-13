@@ -54,6 +54,7 @@ void main() {
           final actual = normalise(
             emitSvg(
               buildBauhausScene(
+                title: true,
                 name: n['value'] as String,
                 colors: (p['value'] as List).cast<String>(),
                 size: matrixSize,
@@ -82,6 +83,7 @@ void main() {
               as Map<String, dynamic>;
       final svg = emitSvg(
         buildBauhausScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: matrixSize,
@@ -218,6 +220,7 @@ void main() {
     test('a palette gives it a stroke and never a fill', () {
       final svg = emitSvg(
         buildBauhausScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: 80,
@@ -235,7 +238,12 @@ void main() {
       // `stroke`, and a port that emitted `stroke=""` or fell back to black
       // would draw a line upstream does not.
       final svg = emitSvg(
-        buildBauhausScene(name: 'Clara Barton', colors: const [], size: 80),
+        buildBauhausScene(
+          title: true,
+          name: 'Clara Barton',
+          colors: const [],
+          size: 80,
+        ),
       );
       expect(svg, isNot(contains('stroke="')));
       expect(svg, contains('stroke-width="2"'));
@@ -265,6 +273,7 @@ void main() {
           normalise(
             emitSvg(
               buildBauhausScene(
+                title: true,
                 name: name['value'] as String,
                 colors: (palette['value'] as List).cast<String>(),
                 size: matrixSize,
@@ -283,6 +292,7 @@ void main() {
     test('it reaches width and height and nothing else', () {
       String svgFor(int size) => emitSvg(
         buildBauhausScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: size,

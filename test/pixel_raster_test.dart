@@ -22,7 +22,7 @@ void main() {
   const palette = ['#92A1C6', '#146A7C', '#F0AB3D', '#C271B4', '#C20D90'];
 
   RasterImage render(String name, List<String> colours) => rasterizeScene(
-    buildPixelScene(name: name, colors: colours, size: 80),
+    buildPixelScene(title: true, name: name, colors: colours, size: 80),
     width: 80,
     height: 80,
   );
@@ -114,6 +114,7 @@ void main() {
     test('square drops the radius entirely, filling the corners', () {
       final squared = rasterizeScene(
         buildPixelScene(
+          title: true,
           name: 'Clara Barton',
           colors: palette,
           size: 80,

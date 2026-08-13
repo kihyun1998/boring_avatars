@@ -1119,6 +1119,38 @@
       "1.8.0": "bd8b225d56faa3d0bdd3f3b99a94df1fecd14290",
       "1.9.0": "bd8b225d56faa3d0bdd3f3b99a94df1fecd14290"
     },
+    "idPositions": {
+      "1.10.0": {
+        "afterSpan": [
+          ":R2:"
+        ],
+        "alone": [
+          ":R0:"
+        ],
+        "thirdChild": [
+          ":R3:"
+        ],
+        "twiceInOneDocument": [
+          ":R1:",
+          ":R2:"
+        ]
+      },
+      "1.7.0": {
+        "afterSpan": [
+          "mask__marble"
+        ],
+        "alone": [
+          "mask__marble"
+        ],
+        "thirdChild": [
+          "mask__marble"
+        ],
+        "twiceInOneDocument": [
+          "mask__marble",
+          "mask__marble"
+        ]
+      }
+    },
     "npmProvenance": {
       "1.10.0": {
         "npmGitHead": "378c2cdff2c3737375485ae1ce4a653132b347b1",

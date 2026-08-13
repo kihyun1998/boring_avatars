@@ -201,59 +201,92 @@ SvgNode buildAvatarScene({
     BoringAvatarsVersion.v1_7_0 => title ?? false,
   };
 
-  return switch (variant.resolved) {
-    BoringAvatarsVariant.marble => buildMarbleScene(
-      name: name,
-      colors: colors,
-      size: size,
-      square: square,
-      title: emitsTitle,
-    ),
-    BoringAvatarsVariant.beam => buildBeamScene(
-      name: name,
-      colors: colors,
-      size: size,
-      square: square,
-      title: emitsTitle,
-    ),
-    BoringAvatarsVariant.pixel => buildPixelScene(
-      name: name,
-      colors: colors,
-      size: size,
-      square: square,
-      title: emitsTitle,
-    ),
-    BoringAvatarsVariant.sunset => buildSunsetScene(
-      name: name,
-      colors: colors,
-      size: size,
-      square: square,
-      title: emitsTitle,
-    ),
-    BoringAvatarsVariant.ring => buildRingScene(
-      name: name,
-      colors: colors,
-      size: size,
-      square: square,
-      title: emitsTitle,
-    ),
-    BoringAvatarsVariant.bauhaus => buildBauhausScene(
-      name: name,
-      colors: colors,
-      size: size,
-      square: square,
-      title: emitsTitle,
-    ),
-    // Unreachable: `resolved` is documented and tested to land in
-    // `BoringAvatarsVariant.renderable`, which these two are not in. The arm
-    // exists so the switch stays exhaustive over the enum — a new variant
-    // value then fails to compile here rather than falling through to a
-    // default and drawing the wrong thing. It is dead code by construction,
-    // not an unchecked guard: `api_surface_test.dart` pins the contract that
-    // makes it dead.
-    BoringAvatarsVariant.geometric ||
-    BoringAvatarsVariant.abstractStyle => throw StateError(
-      '$variant resolved to itself — BoringAvatarsVariant.resolved is broken',
-    ),
+  // **The second question a new selector has to answer, and the reason it is a
+  // type rather than a comment.** Flattening the dispatch bought one copy of
+  // the six-arm switch instead of one per version — but it also narrowed the
+  // guard `avatar.js`'s port used to have: before #43, adding a selector made
+  // the *whole dispatch* non-exhaustive, so nobody could add a version without
+  // looking at every variant. With only `emitsTitle` above, a version that
+  // draws differently would compile and silently render its neighbour's
+  // picture. `0.3.0` is exactly that version — it moves `pixel`'s colour index.
+  //
+  // So the drawing is named. A new selector must say which drawing it uses; a
+  // selector that draws differently must add a value here, and adding one makes
+  // the switch below non-exhaustive — which is the original guard, restored
+  // without the duplication that paid for it.
+  final drawing = switch (version) {
+    // Both selectors draw the same picture. That is `0.2.0`'s entire claim,
+    // and it is measured: with `title: true` the two render byte-identical
+    // documents for all six variants (`title_test.dart`).
+    BoringAvatarsVersion.v1_6_1 ||
+    BoringAvatarsVersion.v1_7_0 => _Drawing.v1_6_1,
+  };
+
+  return switch (drawing) {
+    _Drawing.v1_6_1 => switch (variant.resolved) {
+      BoringAvatarsVariant.marble => buildMarbleScene(
+        name: name,
+        colors: colors,
+        size: size,
+        square: square,
+        title: emitsTitle,
+      ),
+      BoringAvatarsVariant.beam => buildBeamScene(
+        name: name,
+        colors: colors,
+        size: size,
+        square: square,
+        title: emitsTitle,
+      ),
+      BoringAvatarsVariant.pixel => buildPixelScene(
+        name: name,
+        colors: colors,
+        size: size,
+        square: square,
+        title: emitsTitle,
+      ),
+      BoringAvatarsVariant.sunset => buildSunsetScene(
+        name: name,
+        colors: colors,
+        size: size,
+        square: square,
+        title: emitsTitle,
+      ),
+      BoringAvatarsVariant.ring => buildRingScene(
+        name: name,
+        colors: colors,
+        size: size,
+        square: square,
+        title: emitsTitle,
+      ),
+      BoringAvatarsVariant.bauhaus => buildBauhausScene(
+        name: name,
+        colors: colors,
+        size: size,
+        square: square,
+        title: emitsTitle,
+      ),
+      // Unreachable: `resolved` is documented and tested to land in
+      // `BoringAvatarsVariant.renderable`, which these two are not in. The arm
+      // exists so the switch stays exhaustive over the enum — a new variant
+      // value then fails to compile here rather than falling through to a
+      // default and drawing the wrong thing. It is dead code by construction,
+      // not an unchecked guard: `api_surface_test.dart` pins the contract that
+      // makes it dead.
+      BoringAvatarsVariant.geometric ||
+      BoringAvatarsVariant.abstractStyle => throw StateError(
+        '$variant resolved to itself — BoringAvatarsVariant.resolved is broken',
+      ),
+    },
   };
 }
+
+/// Which picture a selector draws.
+///
+/// One value today: every supported upstream release from 1.6.1 to 1.10.0
+/// produces the same drawing, and `0.2.0`'s only change is whether the
+/// document carries a `<title>`. The type exists for the release that breaks
+/// that — `0.3.0` moves `pixel`'s colour index — because adding a value here
+/// is what makes the variant dispatch fail to compile until the new picture is
+/// actually built. A comment saying "remember to split this" would not.
+enum _Drawing { v1_6_1 }

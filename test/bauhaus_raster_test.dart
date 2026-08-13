@@ -424,7 +424,13 @@ void main() {
     /// four-colour palette the elements take `colors[i]`, so each shape is
     /// identifiable by colour, and every edge lands on an integer.
     RasterImage identityRender({bool square = true}) => rasterizeScene(
-      buildBauhausScene(name: '', colors: palette, size: 80, square: square),
+      buildBauhausScene(
+        title: true,
+        name: '',
+        colors: palette,
+        size: 80,
+        square: square,
+      ),
       width: 80,
       height: 80,
     );
@@ -501,7 +507,7 @@ void main() {
       // The expected value is taken from a scene holding only the background,
       // so nothing here depends on the mask's own coverage number.
       final masked = rasterizeScene(
-        buildBauhausScene(name: '', colors: palette, size: 80),
+        buildBauhausScene(title: true, name: '', colors: palette, size: 80),
         width: 80,
         height: 80,
       );
@@ -565,7 +571,12 @@ void main() {
       // paints black instead, and `beam` is the one that throws. `bauhaus`
       // loses three `fill`s and one `stroke`, so nothing is painted at all.
       final image = rasterizeScene(
-        buildBauhausScene(name: 'Clara Barton', colors: const [], size: 80),
+        buildBauhausScene(
+          title: true,
+          name: 'Clara Barton',
+          colors: const [],
+          size: 80,
+        ),
         width: 80,
         height: 80,
       );
@@ -582,6 +593,7 @@ void main() {
       // assertion in this file would still pass.
       final image = rasterizeScene(
         buildBauhausScene(
+          title: true,
           name: 'Clara Barton',
           colors: palette,
           size: 80,

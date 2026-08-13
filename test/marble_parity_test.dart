@@ -52,6 +52,7 @@ void main() {
           final actual = normalise(
             emitSvg(
               buildMarbleScene(
+                title: true,
                 name: n['value'] as String,
                 colors: (p['value'] as List).cast<String>(),
                 size: matrixSize,
@@ -86,6 +87,7 @@ void main() {
 
     String svgFor(String name) => emitSvg(
       buildMarbleScene(
+        title: true,
         name: name,
         colors: const ['#FF0000', '#00FF00'],
         size: matrixSize,
@@ -286,6 +288,7 @@ void main() {
         }
         final svg = emitSvg(
           buildMarbleScene(
+            title: true,
             name: 'Clara Barton',
             colors: const ['#FF0000'],
             size: matrixSize,
@@ -396,6 +399,7 @@ void main() {
     test('element 0 contributes a colour and nothing else', () {
       final svg = emitSvg(
         buildMarbleScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#111111', '#222222', '#333333'],
           size: matrixSize,
@@ -421,6 +425,7 @@ void main() {
       final properties = marbleProperties('Clara Barton', const ['#FF0000']);
       final svg = emitSvg(
         buildMarbleScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: matrixSize,
@@ -458,6 +463,7 @@ void main() {
     test('mix-blend-mode is an inline style on exactly one path', () {
       final svg = emitSvg(
         buildMarbleScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: matrixSize,
@@ -482,6 +488,7 @@ void main() {
       // the picture, which is why it is asserted rather than assumed.
       final svg = emitSvg(
         buildMarbleScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: matrixSize,
@@ -504,7 +511,12 @@ void main() {
       // Hidden-state #8 is per call site: five variants degrade and `beam`
       // throws. `marble` degrades, on all three of its coloured elements.
       final svg = emitSvg(
-        buildMarbleScene(name: 'Clara Barton', colors: const [], size: 80),
+        buildMarbleScene(
+          title: true,
+          name: 'Clara Barton',
+          colors: const [],
+          size: 80,
+        ),
       );
       // Two `fill`s survive and neither comes from the palette: the root
       // `<svg fill="none">` and the mask's literal `#FFFFFF`. Counting them is
@@ -534,6 +546,7 @@ void main() {
           normalise(
             emitSvg(
               buildMarbleScene(
+                title: true,
                 name: name['value'] as String,
                 colors: (palette['value'] as List).cast<String>(),
                 size: matrixSize,
@@ -552,6 +565,7 @@ void main() {
     test('it reaches width and height and nothing else', () {
       String svgFor(int size) => emitSvg(
         buildMarbleScene(
+          title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
           size: size,
