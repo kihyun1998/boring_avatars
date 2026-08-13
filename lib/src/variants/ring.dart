@@ -81,14 +81,10 @@ SvgNode buildRingScene({
   required List<String> colors,
   required Object size,
   bool square = false,
-  // Upstream 1.7.0 writes `{props.title && <title>{props.name}</title>}` here,
-  // and `avatar.js` destructures `title = false`. The default is `true`
-  // rather than `false` because this parameter is what 1.6.x has no way to
-  // express: at that version the element is unconditional, and every direct
-  // caller of this builder — the tools, and 64 call sites across the parity and
-  // raster suites — is a 1.6.x caller. `buildAvatarScene` always passes it
-  // explicitly, so the default is what an internal caller gets and never what a
-  // public one does.
+  // Defaults to the **1.6.x document**, which is the one shape this builder
+  // was written against — not to upstream 1.7.0's `title = false`. The
+  // public seam never reaches the default: `buildAvatarScene` resolves the
+  // version's answer and always passes it. See hidden-state #16.
   bool title = true,
 }) {
   final bands = ringColors(name, colors);
@@ -104,9 +100,7 @@ SvgNode buildRingScene({
       SvgAttribute('height', size),
     ],
     children: [
-      // `{props.title && <title>{props.name}</title>}` — 1.7.0 onward. At
-      // 1.6.x the element is unconditional and `buildAvatarScene` passes true
-      // (hidden-state #16).
+      // `{props.title && <title>…</title>}` — upstream 1.7.0 onward (#16).
       if (title) SvgNode(SvgElement.title, text: name),
       SvgNode(
         SvgElement.mask,
