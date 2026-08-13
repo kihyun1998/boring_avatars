@@ -1122,7 +1122,24 @@
     "npmProvenance": {
       "1.6.1": {
         "npmGitHead": "b82610a7f7bc7bdd1d1634c2e0a430367e6e82e8",
-        "tagCommit": "b82610a7f7bc7bdd1d1634c2e0a430367e6e82e8"
+        "npmHeadTree": "3cca55f521a591e987c07ba357307a276c86a0d2",
+        "npmJsFiles": 1,
+        "tagCommit": "b82610a7f7bc7bdd1d1634c2e0a430367e6e82e8",
+        "tagTree": "3cca55f521a591e987c07ba357307a276c86a0d2"
+      },
+      "1.6.2": {
+        "npmGitHead": "4629170fb686dfeb170d969e565a9f77bbf8dd90",
+        "npmHeadTree": "3cca55f521a591e987c07ba357307a276c86a0d2",
+        "npmJsFiles": 1,
+        "tagCommit": "4629170fb686dfeb170d969e565a9f77bbf8dd90",
+        "tagTree": "3cca55f521a591e987c07ba357307a276c86a0d2"
+      },
+      "1.6.3": {
+        "npmGitHead": "0dd3c9fc92bdf225399382bdb27fe1a31634f3d8",
+        "npmHeadTree": "3cca55f521a591e987c07ba357307a276c86a0d2",
+        "npmJsFiles": 1,
+        "tagCommit": "0dd3c9fc92bdf225399382bdb27fe1a31634f3d8",
+        "tagTree": "3cca55f521a591e987c07ba357307a276c86a0d2"
       }
     },
     "rawIdSamples": {

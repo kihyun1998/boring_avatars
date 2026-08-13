@@ -21,6 +21,7 @@
 
 import { execFileSync, execSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -522,11 +523,11 @@ async function dumpGroupProof(spec, corpus) {
   // same source. Note the tags are **annotated**, so `rev-parse v1.10.0` gives
   // the tag object and only `^{commit}` gives the commit; comparing the former
   // reports a mismatch that is not one.
+  // **Every release the selector claims**, not only the rendered ones. The
+  // unrenderable ones are exactly where the JS-file count is the whole
+  // argument, so leaving them out would omit the measurement that matters most.
   const npmProvenance = {};
-  for (const [release, pkg] of Object.entries({
-    [spec.releases[0]]: spec.pkg,
-    ...(spec.crossCheck ?? {}),
-  })) {
+  for (const release of spec.releases) {
     // From the **registry**, not from `node_modules`: npm strips `gitHead` on
     // install, so the copy on disk cannot answer this. A network call at tool
     // time is fine — this harness already installs from npm, and `flutter
@@ -540,13 +541,30 @@ async function dumpGroupProof(spec, corpus) {
     const head = execSync(`npm view boring-avatars@${release} gitHead`, {
       encoding: 'utf8',
     }).trim();
+    const treeAt = (rev) => {
+      try {
+        return execFileSync('git', ['-C', REFS, 'rev-parse', `${rev}:src/lib`], {
+          encoding: 'utf8',
+        }).trim();
+      } catch {
+        return null; // a commit the reference tree does not have
+      }
+    };
     npmProvenance[release] = {
+      npmJsFiles: countJsFilesOnNpm(release),
       npmGitHead: head === '' ? null : head,
       tagCommit: execFileSync(
         'git',
         ['-C', REFS, 'rev-parse', `v${release}^{commit}`],
         { encoding: 'utf8' },
       ).trim(),
+      // **The trees, not the commits, are what the claim is about** — and the
+      // difference is not academic. npm's 1.8.0 was published from `e393aaa`
+      // while the tag `v1.8.0` points at `412a61e`: two different commits whose
+      // `src/lib` is the same `bd8b225`. Asserting commit equality reported a
+      // mismatch that was not one, on the release whose evidence matters most.
+      npmHeadTree: head === '' ? null : treeAt(head),
+      tagTree: treeAt(`v${release}`),
     };
   }
 
@@ -557,6 +575,55 @@ async function dumpGroupProof(spec, corpus) {
     rawIdSamples,
     npmProvenance,
   };
+}
+
+/**
+ * How many JavaScript files a release's npm tarball actually contains.
+ *
+ * **This number is the reason 1.8.0 and 1.9.0 have no rendered evidence**, and
+ * it is stated in README, CHANGELOG and `version.dart` — public claims, all of
+ * them, and until #43's review they rested on a throwaway probe that had been
+ * deleted. A claim whose evidence cannot be re-run is one nobody can check.
+ *
+ * Measured: 1.8.0 → 0, 1.9.0 → 0, 1.10.0 → 1. `main` points at
+ * `build/index.js`, which for the first two is simply not in the package, so
+ * nothing has ever been able to import them.
+ */
+function countJsFilesOnNpm(release) {
+  const dest = join(HERE, '.pack');
+  mkdirSync(dest, { recursive: true });
+  try {
+    // `execSync` with a command string for the same reason as `npm view`
+    // above: on Windows `npm` is `npm.cmd` and `execFile` refuses it outright.
+    const name = execSync(
+      `npm pack boring-avatars@${release} --pack-destination "${dest}" --silent`,
+      { encoding: 'utf8' },
+    )
+      .trim()
+      .split('\n')
+      .pop();
+    // Listed with `zlib` and a 512-byte header walk rather than by shelling
+    // out to `tar`. Git's GNU `tar` reads a Windows path as a *remote host*
+    // (`D:\…` → "Cannot connect to D"), and which `tar` is on PATH varies by
+    // machine — a portability trap in a harness whose whole point is that its
+    // measurements can be re-run anywhere.
+    const raw = gunzipSync(readFileSync(join(dest, name)));
+    let offset = 0;
+    let count = 0;
+    while (offset + 512 <= raw.length) {
+      const path = raw.toString('utf8', offset, offset + 100).replace(/\0.*$/, '');
+      if (path === '') break; // two zero blocks end the archive
+      const size = parseInt(
+        raw.toString('utf8', offset + 124, offset + 136).replace(/[\0 ]/g, ''),
+        8,
+      );
+      if (/\.(js|mjs|cjs)$/.test(path)) count++;
+      offset += 512 + Math.ceil((size || 0) / 512) * 512;
+    }
+    return count;
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
 }
 
 /** The mask id a release actually writes, unnormalised — the thing that differs. */

@@ -1,4 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:boring_avatars/boring_avatars.dart';
+import 'package:boring_avatars/src/avatar.dart';
+import 'package:boring_avatars/src/raster/scene_raster.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// The one thing that changes between `v1_6_1` and `v1_7_0`.
@@ -164,6 +168,44 @@ void main() {
       );
       expect(svg, contains('<title>&lt;Ampersand &amp; Co&gt;</title>'));
     });
+  });
+
+  group('the widget has no title argument, and that is measurable', () {
+    // `boring_avatar.dart` passes `title: null` and says a parameter there
+    // "would be a value nothing reads", because `<title>` is filtered before
+    // anything is drawn. That was read off `scene_raster.dart`; this measures
+    // it. If the element ever reached a pixel, the widget would be silently
+    // discarding a caller's choice instead of correctly declining to offer one.
+    for (final variant in BoringAvatarsVariant.renderable) {
+      test('${variant.name} rasters identically with and without it', () {
+        final side = variant == BoringAvatarsVariant.ring
+            ? 90
+            : variant == BoringAvatarsVariant.beam
+            ? 36
+            : 80;
+        Uint8List raster({required bool title}) => rasterizeScene(
+          buildAvatarScene(
+            name: name,
+            colors: palette,
+            size: side,
+            version: BoringAvatarsVersion.v1_7_0,
+            variant: variant,
+            square: false,
+            title: title,
+          ),
+          width: side,
+          height: side,
+        ).bytes;
+
+        final withTitle = raster(title: true);
+        final without = raster(title: false);
+        expect(withTitle.length, without.length);
+        expect(withTitle, orderedEquals(without));
+        // The side condition: an all-transparent buffer would satisfy the
+        // comparison above and prove nothing about either render.
+        expect(withTitle.any((b) => b != 0), isTrue);
+      });
+    }
   });
 
   group('square and size are untouched by the flag', () {

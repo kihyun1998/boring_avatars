@@ -1303,8 +1303,17 @@ skill's defaults govern.
 flutter analyze                                     # 0 issues
 dart format --output=none --set-exit-if-changed lib test
 flutter test                                        # includes fixture + golden PNG gates
+cd example && flutter analyze                       # separate package — its own run
 flutter pub publish --dry-run                       # 0 warnings, clean tree
 ```
+
+**The `example` line was owed from #78 and added in #43.** The module map says
+"when `example/` is created it becomes a separate package with its own analyzer
+run and suite — add both to Step 7 then", and `example/` arrived without the
+gate arriving with it. There is no suite to add: `example/test/` exists and is
+empty. That is a real gap rather than a completed item — say so rather than
+letting the missing line read as coverage (the failure `flutter_table_plus` #55
+names from the other direction).
 
 Run each gate **bare, never piped** — a pipeline's exit status is the last
 command's, so `flutter test | tail -1 && commit` always commits.
