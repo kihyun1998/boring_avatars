@@ -772,7 +772,17 @@ a contract: changing them silently rewrites every existing user's avatar
 identity. New upstream states are added as **new selector values only** — always
 additive, never an edit to a shipped state.
 
-**`v1_6_1` is that selector, as of `0.1.0` — published 2026-08-12, queried not
+**Two selectors are now frozen: `v1_6_1` (`0.1.0`, 2026-08-12) and `v1_7_0`
+(`0.2.0`, 2026-08-13)** — queried, not assumed
+(`curl -s https://pub.dev/api/packages/boring_avatars` → `latest` `0.2.0`,
+versions `0.1.0, 0.2.0`). **`0.2.0` is the first release that had to prove the
+freeze rather than merely state it**, and it did: `v1_6_1`'s 600 committed
+renders were regenerated from the real npm package while adding `v1_7_0` and
+came back **byte-identical**, golden PNGs untouched.
+
+The paragraph below was written when there was one.
+
+**`v1_6_1` was that selector, as of `0.1.0` — published 2026-08-12, queried not
 assumed** (`curl -s https://pub.dev/api/packages/boring_avatars` → `latest`
 `0.1.0`). This sentence stopped being a rule about the future on that date.
 Concretely: **Step 5's third unconditional trigger was vacuous until now** — "any
@@ -1274,7 +1284,8 @@ the second *refuting* lens is bought, on:
 - `lib/src/variants/**` — every per-state value generator
 - any change to a **published** version selector's layer-1 output. **This row was
   vacuous until 2026-08-12** — it named no selector because nothing was
-  published. `0.1.0` shipped `v1_6_1`, so it names one now, and the trigger fires
+  published. `0.1.0` shipped `v1_6_1` and `0.2.0` shipped `v1_7_0`, so it names
+  **two** now, and the trigger fires
   on a one-line change to what that selector draws
 
 **Why these and not the rasterizer.** A rasterizer error is ±1/255 on an edge
@@ -2058,8 +2069,17 @@ consumer or a constraint changes:
 for d in ../*/; do grep -l 'boring_avatars:' "$d/pubspec.yaml"; done
 ```
 
-Run at `0.1.0`: **no sibling consumers.** That is the expected answer for a
-first release and it is not a standing one — re-derive, do not quote this line.
+Run at `0.1.0` and again at `0.2.0`: **no sibling consumers** both times. Not a
+standing answer — re-derive, do not quote this line.
+
+**`0.2.0` is where the loop's "nothing to do" stopped being free, and it is
+still nothing to do.** The release is additive, so no constraint has to rise
+and no workaround becomes stale. But `BoringAvatarsVersion.latest` **moved**,
+from `v1_6_1` to `v1_7_0`, and a consumer that passed `latest` in `0.1.0` and
+relied on `<title>` loses the element on upgrade. That is what passing `latest`
+means, it is in the changelog, and it obliges the consumer to decide rather
+than the release to act — but it is the first time this loop had a sentence to
+write that was not "nothing changed".
 
 **A `0.1.0` release obliges consumers to do nothing, and that is structural
 rather than lucky.** Releases here are additive by construction: a new upstream
