@@ -1,3 +1,39 @@
+## 0.2.0
+
+Adds upstream `boring-avatars` **1.7.0, 1.8.0, 1.9.0 and 1.10.0** as
+`BoringAvatarsVersion.v1_7_0`. **Purely additive** — `v1_6_1` renders the same
+bytes it did in `0.1.0`, so nothing you have already shipped changes.
+
+* **`<title>` is optional from 1.7.0, and defaults to off** — upstream's own
+  default. That is the entire difference between the two selectors: measured
+  against the reference tree, the 1.6.3 → 1.7.0 source diff is 7 files and 14
+  lines, of which 6 are the title and 6 are whitespace inside a JSX expression
+  that reaches no output. With `title: true`, `v1_7_0` and `v1_6_1` render
+  byte-identical documents for every variant.
+* `boringAvatarSvg` takes a new `title` argument. It is `bool?` rather than
+  `bool` because the two selectors disagree about the default, and either
+  literal would be silently wrong for one of them. `title: false` with
+  `v1_6_1` throws an `ArgumentError` naming the argument — 1.6.x has no such
+  prop and cannot switch the element off, and upstream would ignore the
+  request rather than tell you.
+* `BoringAvatarsVersion.latest` **has moved** from `v1_6_1` to `v1_7_0`. If you
+  passed `latest` in `0.1.0` and relied on `<title>`, you lose it here — which
+  is what passing `latest` means. Name a selector to pin an avatar.
+* `BoringAvatar`, the widget, is unchanged and takes no `title` argument:
+  `<title>` is not drawn, so accepting the choice would be accepting a value
+  nothing reads. Use `Semantics` to announce an avatar in Flutter.
+* Four upstream releases share one selector, and each is measured rather than
+  assumed. 1.10.0 is rendered and compared to 1.7.0 across 1,200 documents —
+  **zero differ**. 1.8.0 and 1.9.0 shipped npm tarballs with no JavaScript in
+  them at all, so nothing can render those; their evidence is that their
+  `src/lib` git tree is 1.10.0's, byte for byte. Both records live in the
+  committed fixture, not in prose.
+* The one difference inside the group is the mask `id` — a literal at 1.7.0,
+  React's `useId()` from 1.8.0. It names nothing a reader sees and depends on
+  the component's position in the render tree, so this package emits the
+  literal. The fixture records both, unnormalised, rather than leaving the
+  exclusion implicit.
+
 ## 0.1.0
 
 First release. Reproduces upstream `boring-avatars` **1.6.1, 1.6.2 and 1.6.3**

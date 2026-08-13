@@ -97,6 +97,7 @@ void main() {
     test('declares only the upstream versions this release supports', () {
       expect(BoringAvatarsVersion.values, <BoringAvatarsVersion>[
         BoringAvatarsVersion.v1_6_1,
+        BoringAvatarsVersion.v1_7_0,
       ]);
     });
 
@@ -108,6 +109,30 @@ void main() {
       ]);
     });
 
+    test('v1_7_0 covers upstream 1.7.0 through 1.10.0', () {
+      expect(BoringAvatarsVersion.v1_7_0.upstreamVersions, <String>[
+        '1.7.0',
+        '1.8.0',
+        '1.9.0',
+        '1.10.0',
+      ]);
+    });
+
+    test('a shipped selector never loses or gains a release', () {
+      // `v1_6_1` is published. Its list is a contract in the same way its
+      // pixels are: an app pinned to it and told it reproduces 1.6.3 must keep
+      // being told that. The literal above already pins it — this states *why*
+      // the literal may not be edited, since the reason is invisible from the
+      // assertion and a future release will be tempted to "tidy" it.
+      //
+      // The general shape: every release appears under exactly one selector,
+      // so a version cannot be quietly moved from one to another.
+      final claimed = [
+        for (final v in BoringAvatarsVersion.values) ...v.upstreamVersions,
+      ];
+      expect(claimed.toSet(), hasLength(claimed.length));
+    });
+
     test('latest is the newest supported version', () {
       // Both assertions, because they fail on different things. The literal
       // catches `latest` moving to a value this release does not ship; the
@@ -115,8 +140,30 @@ void main() {
       // which nothing else does. The dispatch's exhaustive switch forces a new
       // selector to be rendered, but `latest` is a hand-maintained constant
       // and would sit on the old value with the suite green.
-      expect(BoringAvatarsVersion.latest, BoringAvatarsVersion.v1_6_1);
+      expect(BoringAvatarsVersion.latest, BoringAvatarsVersion.v1_7_0);
       expect(BoringAvatarsVersion.latest, BoringAvatarsVersion.values.last);
+    });
+
+    test('title has no bool default, because the versions disagree', () {
+      // `v1_6_1` renders `<title>` always; `v1_7_0` defaults it off, as
+      // upstream does. Either literal default would therefore be wrong for one
+      // of the two selectors, and wrong *silently* — the document would differ
+      // by an element nobody asked about. `null` means "you did not ask" and
+      // each version answers it its own way.
+      //
+      // Source text again: Dart cannot be asked at runtime whether a parameter
+      // has a default.
+      final source = File('lib/src/avatar.dart').readAsStringSync();
+      expect(
+        source,
+        contains('bool? title,'),
+        reason: 'title must stay nullable',
+      );
+      expect(
+        source,
+        isNot(contains('bool title = ')),
+        reason: 'a bool default is wrong for one of the two selectors',
+      );
     });
   });
 

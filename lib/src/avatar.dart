@@ -83,9 +83,29 @@ import 'version.dart';
 ///   upstream does. The two deprecated names resolve to their replacements.
 /// * [square] removes the mask's corner radius, giving a square avatar instead
 ///   of a round one.
+/// * [title] decides whether the document carries a `<title>` element — the
+///   accessible name a screen reader announces. **It means different things at
+///   different versions, because upstream changed it.** See below.
 ///
-/// Throws an [ArgumentError] if [size] is neither a [num] nor a [String], and
-/// for [BoringAvatarsVariant.beam] with an empty [colors].
+/// ## `title`, and why it is nullable
+///
+/// [BoringAvatarsVersion.v1_6_1] renders `<title>` unconditionally: upstream
+/// 1.6.x has no such prop and offers no way to switch the element off.
+/// [BoringAvatarsVersion.v1_7_0] added the prop and **defaults it off**, and
+/// this package defaults with it.
+///
+/// So the argument's default cannot be a `bool`: `true` would be wrong for one
+/// version and `false` for the other. `null` means "you did not ask", and each
+/// version answers it the way upstream does.
+///
+/// Asking for something a version cannot do is an [ArgumentError] rather than a
+/// silent no-op — `title: false` with `v1_6_1` throws. Upstream would ignore
+/// it (an unknown prop reaches a component that never reads it) and leave you
+/// believing the element was gone. Same reasoning as the [size] ruling.
+///
+/// Throws an [ArgumentError] if [size] is neither a [num] nor a [String], if
+/// [title] is `false` at a version with no `title` prop, and for
+/// [BoringAvatarsVariant.beam] with an empty [colors].
 String boringAvatarSvg({
   required String name,
   required List<String> colors,
@@ -93,6 +113,7 @@ String boringAvatarSvg({
   required BoringAvatarsVersion version,
   BoringAvatarsVariant variant = BoringAvatarsVariant.marble,
   bool square = false,
+  bool? title,
 }) => emitSvg(
   buildAvatarScene(
     name: name,
@@ -101,6 +122,7 @@ String boringAvatarSvg({
     version: version,
     variant: variant,
     square: square,
+    title: title,
   ),
 );
 
@@ -125,6 +147,7 @@ SvgNode buildAvatarScene({
   required BoringAvatarsVersion version,
   required BoringAvatarsVariant variant,
   required bool square,
+  required bool? title,
 }) {
   // **Upstream does not reject this, and throwing anyway is a ruling** — S-4
   // in the divergence ledger, decided by the user on 2026-08-08. Measured at
@@ -147,59 +170,90 @@ SvgNode buildAvatarScene({
     );
   }
 
-  return switch (version) {
-    // One arm today. The switch is exhaustive on purpose: the release that adds
-    // the second selector value will not compile until it is dispatched, which
-    // is the failure mode a `default` arm would turn into a silently wrong
-    // avatar in a caller's app.
-    BoringAvatarsVersion.v1_6_1 => switch (variant.resolved) {
-      BoringAvatarsVariant.marble => buildMarbleScene(
-        name: name,
-        colors: colors,
-        size: size,
-        square: square,
-      ),
-      BoringAvatarsVariant.beam => buildBeamScene(
-        name: name,
-        colors: colors,
-        size: size,
-        square: square,
-      ),
-      BoringAvatarsVariant.pixel => buildPixelScene(
-        name: name,
-        colors: colors,
-        size: size,
-        square: square,
-      ),
-      BoringAvatarsVariant.sunset => buildSunsetScene(
-        name: name,
-        colors: colors,
-        size: size,
-        square: square,
-      ),
-      BoringAvatarsVariant.ring => buildRingScene(
-        name: name,
-        colors: colors,
-        size: size,
-        square: square,
-      ),
-      BoringAvatarsVariant.bauhaus => buildBauhausScene(
-        name: name,
-        colors: colors,
-        size: size,
-        square: square,
-      ),
-      // Unreachable: `resolved` is documented and tested to land in
-      // `BoringAvatarsVariant.renderable`, which these two are not in. The arm
-      // exists so the switch stays exhaustive over the enum — a new variant
-      // value then fails to compile here rather than falling through to a
-      // default and drawing the wrong thing. It is dead code by construction,
-      // not an unchecked guard: `api_surface_test.dart` pins the contract that
-      // makes it dead.
-      BoringAvatarsVariant.geometric ||
-      BoringAvatarsVariant.abstractStyle => throw StateError(
-        '$variant resolved to itself — BoringAvatarsVariant.resolved is broken',
+  // **The whole of what the version decides, as of 0.2.0.** Upstream 1.7.0 put
+  // `<title>` behind a prop defaulting to off; 1.6.x emits it unconditionally
+  // and has no prop at all. Nothing else in this range differs — measured, the
+  // 1.6.3 → 1.7.0 source diff is the six title lines plus whitespace inside a
+  // JSX expression.
+  //
+  // The switch is exhaustive on purpose, and it is exhaustive over *this*
+  // question rather than over the whole dispatch: a release that adds a
+  // selector will not compile until it says what its `<title>` does. A release
+  // whose drawing differs — `0.3.0`, which moves `pixel`'s colour index — has
+  // to split the variant dispatch below as well, and that is the point at which
+  // the flat structure the module map describes stops being right.
+  final emitsTitle = switch (version) {
+    BoringAvatarsVersion.v1_6_1 => switch (title) {
+      // `true` is what happens anyway, so asking for it is not an error.
+      // `false` cannot be honoured, and a silent no-op would leave the caller
+      // believing the element was gone. Upstream would ignore it: an unknown
+      // prop reaches a component that never reads it.
+      null || true => true,
+      false => throw ArgumentError.value(
+        title,
+        'title',
+        'upstream 1.6.x renders <title> unconditionally and has no title prop '
+            '— it cannot be switched off. The prop arrives in 1.7.0, so pass '
+            'BoringAvatarsVersion.v1_7_0 to control it',
       ),
     },
+    // Upstream's own default, from `avatar.js`'s `title = false`.
+    BoringAvatarsVersion.v1_7_0 => title ?? false,
+  };
+
+  return switch (variant.resolved) {
+    BoringAvatarsVariant.marble => buildMarbleScene(
+      name: name,
+      colors: colors,
+      size: size,
+      square: square,
+      title: emitsTitle,
+    ),
+    BoringAvatarsVariant.beam => buildBeamScene(
+      name: name,
+      colors: colors,
+      size: size,
+      square: square,
+      title: emitsTitle,
+    ),
+    BoringAvatarsVariant.pixel => buildPixelScene(
+      name: name,
+      colors: colors,
+      size: size,
+      square: square,
+      title: emitsTitle,
+    ),
+    BoringAvatarsVariant.sunset => buildSunsetScene(
+      name: name,
+      colors: colors,
+      size: size,
+      square: square,
+      title: emitsTitle,
+    ),
+    BoringAvatarsVariant.ring => buildRingScene(
+      name: name,
+      colors: colors,
+      size: size,
+      square: square,
+      title: emitsTitle,
+    ),
+    BoringAvatarsVariant.bauhaus => buildBauhausScene(
+      name: name,
+      colors: colors,
+      size: size,
+      square: square,
+      title: emitsTitle,
+    ),
+    // Unreachable: `resolved` is documented and tested to land in
+    // `BoringAvatarsVariant.renderable`, which these two are not in. The arm
+    // exists so the switch stays exhaustive over the enum — a new variant
+    // value then fails to compile here rather than falling through to a
+    // default and drawing the wrong thing. It is dead code by construction,
+    // not an unchecked guard: `api_surface_test.dart` pins the contract that
+    // makes it dead.
+    BoringAvatarsVariant.geometric ||
+    BoringAvatarsVariant.abstractStyle => throw StateError(
+      '$variant resolved to itself — BoringAvatarsVariant.resolved is broken',
+    ),
   };
 }

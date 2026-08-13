@@ -243,6 +243,17 @@ Future<Uint8List> _rasterBytes(_RasterRequest request) async {
     version: request.version,
     variant: request.variant,
     square: request.square,
+    // **The widget has no `title` parameter, and adding one would be a value
+    // nothing reads.** `<title>` is an accessible name for an SVG *document*;
+    // this widget produces pixels, and `scene_raster.dart` filters the element
+    // out before anything is drawn. Whichever way the version resolves it, the
+    // raster is identical — so a parameter here would accept a caller's choice
+    // and discard it. `null` says "no opinion", which is the true one.
+    //
+    // A Flutter caller who wants the avatar announced has `Semantics`, which
+    // is the platform's own answer and reaches screen readers that never see
+    // an SVG document.
+    title: null,
   );
   final raster = await rasterizeSceneAsync(
     scene,

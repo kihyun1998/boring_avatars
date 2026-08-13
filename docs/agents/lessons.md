@@ -1041,6 +1041,36 @@ and only a real round-trip through both can catch a field filled with the wrong
 thing. And when that round-trip disagrees with a reference measurement, suspect
 the measurement first — the probe is the part nobody reviewed.
 
+### The shipped selector's central claim had no evidence the gate could see (#43)
+
+`v1_7_0` covers four upstream releases, so #43 added a fixture assertion: a
+selector claiming more than one release must carry the **measurement** that they
+agree — a rendered comparison for the releases that can be rendered, a source
+tree hash for the ones that cannot.
+
+It went red on `v1_6_1`. Which is **published**.
+
+`0.1.0` shipped a selector telling every user it reproduces 1.6.1, 1.6.2 *and*
+1.6.3, and nothing `flutter test` could reach said so. The grouping had been
+measured — `tool/versions/group.mjs` exists precisely because "a claim whose
+evidence cannot be re-run is one nobody can check" — but its output was never
+committed anywhere the gate reads. What the suite actually verified was the
+1.6.1 half of a three-release promise.
+
+Backfilling it cost one line of harness config, because the answer for 1.6.2 and
+1.6.3 is the same as for 1.8.0 and 1.9.0: their `src/lib` tree *is* the rendered
+one's, byte for byte. Regenerating `v1_6_1`'s fixture from the real npm package
+to add it moved **nothing else** — 12 insertions, 0 deletions, 600 renders
+identical to the ones committed months earlier, and the golden PNGs untouched.
+So the claim was true the whole time. It just was not evidence.
+
+**The rule this earns:** a claim that spans N things needs evidence about N
+things, and "the extra ones are obviously the same" is the form the gap takes —
+obvious enough to skip, cheap enough that skipping buys nothing. Write the
+assertion for the case that forced you to think about it, then **run it against
+the cases that came before**: the older ones were written when the question had
+not been asked, which is exactly why they are where the hole is.
+
 ## Step 5 — adversarial completeness pass
 
 ### Two lenses on the same material disagreed usefully (#37)

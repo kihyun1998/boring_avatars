@@ -47,14 +47,41 @@ upstream release:
 | `version` | which upstream release to reproduce. **Required** — see below |
 | `variant` | the style, defaulting to `marble` as upstream does |
 | `square` | drops the mask's corner radius |
+| `title` | whether the document carries a `<title>` — see below. Nullable, because the versions disagree about the default |
+
+### `title` means different things at different versions
+
+`<title>` is the accessible name a screen reader announces for the SVG.
+Upstream 1.6.x renders it **always** and offers no prop to stop it; 1.7.0 added
+the prop and **defaults it off**. This package defaults with each of them, which
+is why the argument is `bool?` rather than `bool` — either literal default
+would be wrong for one of the two selectors.
+
+```dart
+boringAvatarSvg(…, version: BoringAvatarsVersion.v1_6_1);              // has <title>
+boringAvatarSvg(…, version: BoringAvatarsVersion.v1_7_0);              // has none
+boringAvatarSvg(…, version: BoringAvatarsVersion.v1_7_0, title: true); // has <title>
+boringAvatarSvg(…, version: BoringAvatarsVersion.v1_6_1, title: false); // ArgumentError
+```
+
+That last line throws rather than quietly doing nothing. Upstream would ignore
+it — an unknown prop reaches a component that never reads it — and leave you
+believing the element was gone.
+
+With `title: true`, `v1_7_0` and `v1_6_1` render **byte-identical** documents.
+That is the entire difference between the two selectors.
+
+`BoringAvatar`, the widget, has no `title` parameter: it produces pixels, and
+`<title>` is not drawn. Use Flutter's own `Semantics` to announce an avatar.
 
 ## Supported upstream releases
 
-| Selector | Reproduces upstream |
-|---|---|
-| `BoringAvatarsVersion.v1_6_1` | `1.6.1`, `1.6.2`, `1.6.3` |
+| Selector | Reproduces upstream | What it changes |
+|---|---|---|
+| `BoringAvatarsVersion.v1_6_1` | `1.6.1`, `1.6.2`, `1.6.3` | — |
+| `BoringAvatarsVersion.v1_7_0` | `1.7.0`, `1.8.0`, `1.9.0`, `1.10.0` | `<title>` becomes optional, and defaults **off** |
 
-That is everything `0.1.0` supports. **Later releases of this package add
+That is everything `0.2.0` supports. **Later releases of this package add
 selector values; they never change one.** A shipped selector's output is frozen
 — an avatar you render today renders identically on every future version of this
 package — so support grows by addition only.
@@ -269,8 +296,19 @@ degraded would be an image upstream has never produced.
 
 ## Status
 
-`0.1.0` ships the SVG string and the widget, for upstream `1.6.1`–`1.6.3`.
-What follows: the remaining upstream releases, each as a new selector value.
+`0.2.0` adds upstream `1.7.0`–`1.10.0` as a second selector, alongside
+`1.6.1`–`1.6.3`. What follows: the remaining upstream releases, each as a new
+selector value.
+
+Four upstream releases share `v1_7_0` because a caller gets the same thing out
+of them, and that is **measured rather than asserted**. 1.10.0 is rendered and
+compared to 1.7.0 across 1,200 documents — zero differ. 1.8.0 and 1.9.0 cannot
+be rendered by anybody: their npm tarballs contain no JavaScript at all (`main`
+points at a `build/index.js` that is not in the package), so their evidence is
+that their source tree *is* 1.10.0's, byte for byte. The one thing that does
+differ inside the group is the mask's `id` — a literal at 1.7.0, React's
+`useId()` from 1.8.0 — which names nothing a reader sees and depends on where
+the component sits in the render tree rather than on the avatar.
 
 The emitted documents are pinned by the test suite against fixtures generated
 from the real npm package — 600 of them, across six variants, twenty names and
