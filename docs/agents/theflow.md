@@ -187,15 +187,14 @@ marble default are unchanged there too. Valid **as long as that stays true**; a
 release that changes the dispatch roster makes resolution version-dependent and
 this seam has to move.
 
-One measured asterisk, found by #45's completeness pass and **unruled**: the
-*failure mode* for an unknown variant string that collides with an
-`Object.prototype` key (`'constructor'`, `'toString'`, …) forks inside the
-covered range — 1.10.1–1.11.2 degrade to marble, 2.0.x's
-`AVATAR_VARIANTS[variant] || AvatarMarble` resolves the inherited function and
-React crashes. Upstream disagrees with itself, the port's version-less parser
-degrades to marble (matching 7 of 9 releases), and whether to reproduce the
-2.0.x crash is a crash-vs-degrade call — the ledger's territory, carried to
-the user in #45's batch rather than decided here.
+One measured asterisk, found by #45's completeness pass and **ruled S-5**
+(2026-08-14, keep the degrade): the *failure mode* for an unknown variant
+string that collides with an `Object.prototype` key (`'constructor'`,
+`'toString'`, …) forks inside the covered range — 1.10.1–1.11.2 degrade to
+marble, 2.0.x's `AVATAR_VARIANTS[variant] || AvatarMarble` resolves the
+inherited function and React crashes. Upstream disagrees with itself; the
+port's version-less parser degrades to marble, matching 7 of 9 releases. See
+the ledger for the event.
 
 Public surface is the barrel `lib/boring_avatars.dart`. As of #59 it exports
 **three** names: the two enums and `boringAvatarSvg`. The third export carries a
@@ -598,8 +597,9 @@ reachable in **zero** states.
 ### Upstream divergence ledger
 
 Suspected upstream defects and the **user's ruling** on each. Never append a row
-the user has not seen and ruled on. One ruling recorded so far, as an event
-below the table.
+the user has not seen and ruled on. Five rulings recorded, each as an event
+below the table — the sentence here used to say "one", written when that was
+true and never re-counted.
 
 | Ref | Upstream `file:line` @ tag | What it does | Ruling | Decided |
 |---|---|---|---|---|
@@ -607,6 +607,33 @@ below the table.
 | **S-1** | `avatar-sunset.js:20,36,41` @ v1.6.1 | builds a gradient id from the caller's name and references it as `url(#…)`. For any name containing `'`, `"`, `(`, `)`, `\` or a control character the reference is not a valid CSS url token, so **the browser paints nothing** and the avatar is blank. Reproduced in Chrome: `O'Brien-Smith, Jr.` → all pixels `0,0,0,0`; `Clara Barton` → the gradient. The corpus name `punctuation` is exactly this case, and an apostrophe in a name is common | **repair it — do not reproduce the blank** | 2026-07-29 |
 | **S-2** | `avatar-beam.js:9,17` + `utilities.js:42` @ v1.6.1 | an **empty palette** makes `getRandomColor` return `undefined`, which `getContrast` calls `.slice(0, 1)` on — a `TypeError`, and no document at all. `beam` is the only one of the six that does this; the other five drop an attribute and render. Measured: 20 of 20 names throw, against 0 of 100 for the rest (hidden-state #8) | **reproduce the failure, in a Dart-idiomatic exception** | 2026-08-06 |
 | **S-4** | `avatar.js:18` @ v1.6.1 — `size = 40`, forwarded untyped to `width={props.size}` | a `size` that is **neither a number nor a string** is not validated anywhere. Measured at 1.6.1: `true` / `false` / `null` make React **drop `width` and `height` entirely** (with a dev-console warning), `[80]` coerces to `width="80"`, and `{}` renders `width="[object Object]"`. This package throws `ArgumentError` for all of them — a crash where upstream degrades, which is the failure mode hidden-state #8 and #15 name | **throw. Do not reproduce the degradation** | 2026-08-08 |
+| **S-5** | `index.tsx:30` @ v2.0.0–master — `AVATAR_VARIANTS[variant] \|\| AvatarMarble` | an unknown `variant` string that collides with an `Object.prototype` key (`'constructor'`, `'toString'`, …) resolves the **inherited function** instead of falling through, and React crashes — while 1.10.1–1.11.2's roster check degrades the same string to marble. Upstream disagrees with itself inside one selector's covered range. The port's version-less parser (`BoringAvatarsVariant.fromUpstreamName`) degrades to marble, matching 7 of 9 releases | **keep the degrade — do not reproduce the 2.0.x crash** | 2026-08-14 |
+
+### S-5 — the ruling, as an event
+
+**What the user was shown (2026-08-14, #45's batch):** the measured fork —
+`'constructor'` handed to upstream as a `variant` degrades to marble at
+1.10.1–1.11.2 and crashes React at 2.0.x, because `AVATAR_VARIANTS[variant]`
+resolves an inherited `Object.prototype` member where the older roster check
+did not — beside the fact that the reference cannot arbitrate (it disagrees
+with itself inside one selector's covered range), that the port's parser
+degrades to marble matching 7 of 9 releases, that the enum-typed public API
+cannot even produce such a string except through
+`BoringAvatarsVariant.fromUpstreamName`, and the agent's recommendation to
+keep the degrade.
+
+**What they chose:** keep the degrade — *"1번은 현행 유지로 가고"*.
+
+**It is theirs to reverse.** A crash-vs-degrade product judgement, the same
+class as S-2 and S-4; a later argument that the port should reproduce 2.0.x
+faithfully does **not** reopen it — only the user does.
+
+**What it costs.** For exactly the prototype-key strings, a caller of
+`fromUpstreamName` gets a marble avatar where npm's `latest` would crash.
+Every other unknown string behaves identically to every covered release, and
+the six real names plus two aliases are untouched. The 2.0.x crash is a JS
+prototype-chain accident, not a designed refusal — reproducing it would mean
+reproducing the accident's mechanism.
 
 ### S-4 — the ruling, as an event
 
