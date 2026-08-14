@@ -22,7 +22,13 @@ void main() {
   const palette = ['#92A1C6', '#146A7C', '#F0AB3D', '#C271B4', '#C20D90'];
 
   RasterImage render(String name, List<String> colours) => rasterizeScene(
-    buildPixelScene(title: true, name: name, colors: colours, size: 80),
+    buildPixelScene(
+      colourIndex: PixelColourIndex.loopIndex,
+      title: true,
+      name: name,
+      colors: colours,
+      size: 80,
+    ),
     width: 80,
     height: 80,
   );
@@ -40,7 +46,11 @@ void main() {
 
   group('the geometry is right, independently of any golden', () {
     final image = render('Clara Barton', palette);
-    final colours = pixelColors('Clara Barton', palette);
+    final colours = pixelColors(
+      'Clara Barton',
+      palette,
+      PixelColourIndex.loopIndex,
+    );
 
     test('the centre pixel carries the tile that covers it', () {
       // (40, 40) falls in the tile at x=40, y=40, which upstream fills from
@@ -114,6 +124,7 @@ void main() {
     test('square drops the radius entirely, filling the corners', () {
       final squared = rasterizeScene(
         buildPixelScene(
+          colourIndex: PixelColourIndex.loopIndex,
           title: true,
           name: 'Clara Barton',
           colors: palette,
@@ -125,7 +136,9 @@ void main() {
       );
       // The top-left corner is tile 0, which has no fill — so check a corner
       // that does: bottom-right is the tile at x=70, y=70, index 63.
-      final expected = rgbOf(pixelColors('Clara Barton', palette)[63]!);
+      final expected = rgbOf(
+        pixelColors('Clara Barton', palette, PixelColourIndex.loopIndex)[63]!,
+      );
       expect(px(squared, 79, 79), [...expected, 255]);
       // And the round version leaves that same corner empty.
       expect(px(render('Clara Barton', palette), 79, 79), [0, 0, 0, 0]);
@@ -570,7 +583,7 @@ void main() {
       // Four since #80: `pixel-clara-square` was the one square golden the six
       // variants were missing, and the widget's "both square states" proof
       // could not reach that cell without it.
-      expect(cases, hasLength(4));
+      expect(cases, hasLength(5));
     });
 
     cases.forEach((key, value) {

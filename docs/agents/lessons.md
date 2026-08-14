@@ -616,6 +616,32 @@ than into a wrong picture. When such a seam fires on new work, treat it as a
 finding with the same weight as a lens's — and never discharge it by widening
 the allow-list alone.
 
+### A kill over a red baseline is not a kill (#45)
+
+`0.3.0`'s mutation run reported **7/7 killed** and every number in the report
+was real — each case ran 912–947 tests and the suite exited non-zero. The
+refuting lens then pointed at what the report could not say: the *unmutated*
+tree was already red. The release plan deliberately orders the docs after the
+Chrome sweep, so `release_metadata_test`'s two README gates were failing by
+design — and with a red baseline, "the suite exited non-zero" is true for a
+no-op edit. Every case reports `killed` whatever it does; a survivor is
+unrepresentable.
+
+The kills were almost certainly genuine — the per-case pass counts sat 40–70
+below the baseline's, and each case has named discriminating tests — but
+"almost certainly" is exactly what the runner exists to replace. It now runs
+each (test, runner) pair once unmutated before applying anything and refuses
+with **`BASELINE RED`** — a fifth outcome, after the four that five previous
+incidents earned. The re-run over the green tree is what the record cites.
+
+**The rule this earns:** a verdict's precondition is part of the verdict. The
+runner had learnt to say "I did not measure anything" for a substitution that
+never applied and a filter that matched zero tests — this is the same outcome
+one level up, for a *tree* that could not host a measurement. And an ordering
+rule that keeps gates deliberately red for a while (docs after the sweep)
+silently poisons any tool whose verdict assumes green; the two rules were both
+right and their interaction was the defect.
+
 ## Step 4 — real round-trip proof
 
 ### A bar can be recorded, believed, and never run (#33 → #37)
@@ -1290,6 +1316,33 @@ first `await` are all in that class.
 It is also why the pass was worth buying on a change whose own tests were green:
 this is invisible to a suite that asserts outputs, because every individual
 output was still correct.
+
+### The one builder that knows the version is the one place ids can drift (#45)
+
+`0.3.0` threads a `PixelColourIndex` into `buildPixelScene` — the first time
+any variant builder receives version information. The refuting lens asked what
+that seam newly makes possible and found it: rename pixel's mask id **and its
+reference together, only when the new index is selected**, and the entire
+suite stays green. Every byte gate normalises `id="…"`/`url(#…)`/`mask="…"`
+away on both sides, the goldens and the widget sweep are id-blind (a
+consistently renamed def+ref rasterises identically), and the one raw-literal
+pin for pixel was written against the *old* era's builder call.
+
+The five other variants cannot drift this way — their builders get no version,
+so the v1_10_1 path is the same function call the pinned eras make. The hole
+was exactly as wide as the new parameter, which is the point: **a knob's blast
+radius includes every property the knob's carrier could now vary, not only the
+one it was added to vary.** Closed with a raw-literal assertion through
+`boringAvatarSvg(version: v1_10_1)` for pixel's mask id and marble's filter
+id; the two-edit mutation was applied by hand, went red on exactly that test,
+and was reverted — recorded in `45-pixel-index.json`'s note, since a two-edit
+mutation cannot be a single-substitution case.
+
+**The rule this earns:** when a change hands version (or any mode) information
+to a layer that never had it, re-ask every "structurally impossible" claim in
+that layer — they were all proved under the old signature. And a normalisation
+is a hole in the gate wherever the *new* mode flows, so the first thing a new
+mode owes is a raw assertion of whatever the normalisation erases.
 
 ## Step 6 — surface sweep
 

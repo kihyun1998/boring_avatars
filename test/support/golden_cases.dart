@@ -42,6 +42,7 @@ const goldenDefaultPalette = [
 final Map<String, (SvgNode, int)> goldenCases = {
   'pixel-clara-default': (
     buildPixelScene(
+      colourIndex: PixelColourIndex.loopIndex,
       title: true,
       name: 'Clara Barton',
       colors: goldenDefaultPalette,
@@ -51,6 +52,7 @@ final Map<String, (SvgNode, int)> goldenCases = {
   ),
   'pixel-alice-pair': (
     buildPixelScene(
+      colourIndex: PixelColourIndex.loopIndex,
       title: true,
       name: 'Alice',
       colors: ['#000000', '#FFFFFF'],
@@ -65,6 +67,7 @@ final Map<String, (SvgNode, int)> goldenCases = {
   // only checks the files it already lists against the cases it already has.
   'pixel-clara-square': (
     buildPixelScene(
+      colourIndex: PixelColourIndex.loopIndex,
       title: true,
       name: 'Clara Barton',
       colors: goldenDefaultPalette,
@@ -74,7 +77,27 @@ final Map<String, (SvgNode, int)> goldenCases = {
     80,
   ),
   'pixel-empty-name': (
-    buildPixelScene(title: true, name: '', colors: ['#FF0000'], size: 80),
+    buildPixelScene(
+      colourIndex: PixelColourIndex.loopIndex,
+      title: true,
+      name: '',
+      colors: ['#FF0000'],
+      size: 80,
+    ),
+    80,
+  ),
+  // The 1.10.1 colour index — `0.3.0`'s one drawing change, and the only
+  // combination in the package where the same variant draws two different
+  // pictures. Tile 0 is filled here (the old era leaves it transparent), so
+  // the two Clara goldens cannot silently be the same file.
+  'pixel-clara-second-index': (
+    buildPixelScene(
+      colourIndex: PixelColourIndex.loopIndexPlusOne,
+      title: true,
+      name: 'Clara Barton',
+      colors: goldenDefaultPalette,
+      size: 80,
+    ),
     80,
   ),
   'ring-clara-default': (

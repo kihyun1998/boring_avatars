@@ -80,16 +80,29 @@ That is the entire difference between the two selectors.
 |---|---|---|
 | `BoringAvatarsVersion.v1_6_1` | `1.6.1`, `1.6.2`, `1.6.3` | — |
 | `BoringAvatarsVersion.v1_7_0` | `1.7.0`, `1.8.0`, `1.9.0`, `1.10.0` | `<title>` becomes optional, and defaults **off** |
+| `BoringAvatarsVersion.v1_10_1` | `1.10.1`, `1.10.2`, `1.11.1`, `1.11.2`, `2.0.0`, `2.0.1`, `2.0.2`, `2.0.3`, `2.0.4` | `pixel`'s colour index moves — every `pixel` avatar redraws |
 
-That is everything `0.2.0` supports. **Later releases of this package add
-selector values; they never change one.** A shipped selector's output is frozen
-— an avatar you render today renders identically on every future version of this
-package — so support grows by addition only.
+That is everything `0.3.0` supports — upstream's newest release included.
+**Later releases of this package add selector values; they never change one.**
+A shipped selector's output is frozen — an avatar you render today renders
+identically on every future version of this package — so support grows by
+addition only.
+
+**`1.11.0` is the one hole in that list, and it is deliberate.** It sits
+between two supported releases, so it deserves its own sentence: 1.11.0 spreads
+the component's own props onto the `<svg>` element — the markup carries
+`colors="…" name="…"` attributes no other release emits — and upstream fixed it
+in 1.11.1. Supporting it would mean reproducing those attributes. A caller
+pinned to 1.11.0 is told it is unsupported rather than quietly handed a
+neighbour's output.
 
 Upstream releases share a selector when **a caller gets the same thing out of
 them**, not when their source happens to match. `1.6.1`, `1.6.2` and `1.6.3`
 collapse into one value because all three were measured to render byte-identical
-documents, not because the code looked similar.
+documents, not because the code looked similar. The nine releases behind
+`v1_10_1` are the sharper case of the same rule: their *sources* differ plenty
+— a props rework, a full TypeScript rewrite — and rendering every one of them
+side by side is what shows a caller gets the same document out of all nine.
 
 **These are upstream's git tags, not its npm versions.** The two disagree in
 both directions. npm `1.2.1` republished 0.1.4-era code — a tag's worth of
@@ -296,38 +309,50 @@ degraded would be an image upstream has never produced.
 
 ## Status
 
-`0.2.0` adds upstream `1.7.0`–`1.10.0` as a second selector, alongside
-`1.6.1`–`1.6.3`. What follows: the remaining upstream releases, each as a new
-selector value.
+`0.3.0` reaches upstream's newest release: `v1_10_1` covers `1.10.1` through
+`2.0.4` (nine releases, `1.11.0` excluded — see the support table), alongside
+`v1_7_0` (`1.7.0`–`1.10.0`) and `v1_6_1` (`1.6.1`–`1.6.3`). With that, the
+public API is settled: every upstream release worth reproducing has a selector,
+and what follows is keeping up with upstream's future releases, each as a new
+value.
 
-Four upstream releases share `v1_7_0` because a caller gets the same thing out
-of them, and that is **measured rather than asserted**. 1.10.0 is rendered and
-compared to 1.7.0 across 1,200 documents — zero differ. 1.8.0 and 1.9.0 cannot
-be rendered by anybody: their npm tarballs contain no JavaScript at all (`main`
-points at a `build/index.js` that is not in the package — 0 files, counted),
-so their evidence is that their source tree *is* 1.10.0's, byte for byte.
+Releases share a selector because a caller gets the same thing out of them, and
+that is **measured rather than asserted**. For `v1_10_1`, each of the other
+eight releases is rendered and compared to 1.10.1 across **2,400 documents —
+variant × name × palette × title × square — zero differ**. For `v1_7_0`, the
+same comparison covers 1.10.0; 1.8.0 and 1.9.0 cannot be rendered by anybody —
+their npm tarballs contain no JavaScript at all (`main` points at a
+`build/index.js` that is not in the package — 0 files, counted) — so their
+evidence is that their source tree *is* 1.10.0's, byte for byte. `2.0.3` and
+`2.0.4` have no git tag; they are covered from the npm packages themselves,
+whose recorded publish commits resolve in upstream's history (both to the same
+source tree as `master`), and that resolution is recorded in the fixture.
 
-**One attribute inside that group is not reproduced, and cannot be.** From
+**One attribute inside those groups is not reproduced, and cannot be.** From
 1.8.0 upstream names its mask with React's `useId()`, which is the component's
 position in the render tree rather than anything about the avatar. Measured:
 the same avatar is `:R0:` alone, `:R3:` as a third child, `:R2:` after a
 `<span>` — and **two copies of one avatar in a single document get two
-different ids**. So 1.8.0 has no fixed bytes for an avatar for anything to
-reproduce, including 1.8.0. This package emits the literal `mask__marble` that
-1.7.0 writes, at every position.
+different ids**. So such a release has no fixed bytes for an avatar for
+anything to reproduce, including itself. This package emits the literal
+`mask__marble` that 1.7.0 writes, at every position — and the same goes for
+`marble`'s filter id, which is the literal `prefix__filter0_f` through 1.10.1
+and `useId()`-derived from 1.10.2.
 
 Everything a reader can see is unaffected, and that is measured rather than
-argued: upstream **1.10.0**'s own documents and this package's went through one
-Chrome, and of 1,200 renders **1,150 are pixel-identical** — the other 50 being
-40 where both sides produce no document at all (`beam` with an empty palette)
-and the 10 `sunset` blanks documented below. **Zero unexplained differences.**
+argued: upstream's own documents and this package's went through one Chrome,
+1,200 renders per selector — `v1_6_1` against 1.6.1, `v1_7_0` against 1.10.0,
+`v1_10_1` against **2.0.4**, the far end of its group. Each run: **1,150
+pixel-identical**, 40 where both sides produce no document at all (`beam` with
+an empty palette), and the 10 `sunset` blanks documented below. **Zero
+unexplained differences, in any run.**
 
 If you need the document's internal ids to match a particular upstream render,
-that is the one thing this selector does not give you.
+that is the one thing these selectors do not give you.
 
 The emitted documents are pinned by the test suite against fixtures generated
-from the real npm package — 600 of them, across six variants, twenty names and
-five palettes, plus square and size variations. The two divergences above were
+from the real npm package — 600 per selector, across six variants, twenty
+names and five palettes, plus title, square and size variations. The two divergences above were
 measured rather than reasoned about — the blank `sunset` avatar in Chrome, the
 `size` coercions by rendering upstream itself. Both the parity harness and the
 browser tooling live in the repository, so any of it can be re-measured rather

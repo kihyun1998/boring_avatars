@@ -213,8 +213,24 @@ void main() {
           expect(row['compared'] as int, greaterThan(0), reason: entry.key);
         }
 
-        // The trees have to agree with each other, not merely be present.
-        expect(bySourceTree.values.toSet(), hasLength(1));
+        // The trees have to agree with each other, not merely be present —
+        // `bySourceTree` exists for releases nothing can render (an empty npm
+        // tarball), whose whole evidence is that their source *is* a rendered
+        // release's. A group where every release rendered has no such rows,
+        // and that is the stronger position, not a gap: `v1_10_1`'s nine
+        // releases are nine different source trees producing one output,
+        // which only the render comparison above can establish.
+        if (bySourceTree.isNotEmpty) {
+          expect(bySourceTree.values.toSet(), hasLength(1));
+        } else {
+          expect(
+            {proof['renderedFrom'] as String, ...rendered.keys},
+            containsAll(version.upstreamVersions),
+            reason:
+                'with no source-tree evidence, every release must have been '
+                'rendered',
+          );
+        }
 
         // **The join between the two kinds of evidence.** The renders come
         // from npm, the tree hashes from git — two true sentences about two
@@ -228,6 +244,30 @@ void main() {
         }
         for (final entry in provenance.entries) {
           final row = entry.value as Map<String, dynamic>;
+          if (row['tagTree'] == null) {
+            // **A release upstream published without tagging** — 2.0.3 and
+            // 2.0.4; the tags stop at v2.0.2. The join runs the other way:
+            // npm's recorded `gitHead` must resolve in upstream's own history
+            // (`npmHeadTree` non-null proves it does), so the artifact that
+            // was rendered came from that history and not from a tag that
+            // does not exist. Its output evidence is the render comparison
+            // above, which such a release must therefore have.
+            expect(
+              row['npmHeadTree'],
+              isNotNull,
+              reason:
+                  'npm ${entry.key} has no tag, so its gitHead must resolve '
+                  'in the reference tree or its source is unaccounted for',
+            );
+            expect(
+              rendered.keys,
+              contains(entry.key),
+              reason:
+                  'a tag-less release has no source-tree evidence, so it '
+                  'must carry rendered evidence',
+            );
+            continue;
+          }
           // **Trees, not commits.** The claim is "the npm build came from this
           // source", and upstream does not always publish from the commit it
           // tagged: npm's 1.8.0 came from `e393aaa` while `v1.8.0` points at
@@ -241,7 +281,6 @@ void main() {
                 'the tag\'s, so the rendered evidence and the hashed tree are '
                 'about different code',
           );
-          expect(row['tagTree'], isNotNull, reason: entry.key);
         }
 
         // The releases with no JavaScript on npm are exactly the ones that can

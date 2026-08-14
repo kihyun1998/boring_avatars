@@ -16,8 +16,17 @@ import { inflateSync } from 'node:zlib';
 import { mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
+// The machine alternates between Windows and macOS (bindings, "Environment"),
+// so the default is resolved per platform rather than written down once —
+// the hardcoded Windows path stranded the first macOS run with ENOENT.
+// `CHROME` still overrides for anything unusual.
 const CHROME =
-  process.env.CHROME ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+  process.env.CHROME ??
+  (process.platform === 'darwin'
+    ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+    : process.platform === 'win32'
+      ? 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+      : 'google-chrome');
 
 const outDir = process.argv[2];
 if (!outDir) {

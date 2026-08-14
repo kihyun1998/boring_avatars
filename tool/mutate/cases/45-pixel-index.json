@@ -1,0 +1,104 @@
+{
+  "issue": 45,
+  "what": "the v1_10_1 selector — pixel's second colour index, the one drawing change in 0.3.0",
+  "test": null,
+  "note": [
+    "`test: null` — the whole suite — because the rule is decided in",
+    "avatar.dart and observed in pixel.dart, two parity files and the",
+    "cross-selector group in v1_10_1_parity_test.dart; a narrowed run would",
+    "report survivors for mutations another file kills.",
+    "",
+    "Group A is the version→drawing decision. A-1 collapses the eras the way",
+    "a reader 'tidying' the switch would; A-2 and A-3 swap or half-swap the",
+    "index rule. All three render a perfectly plausible avatar — only a",
+    "comparison against the other selector, or against upstream's measured",
+    "values, can tell.",
+    "",
+    "Group B is the arithmetic itself in pixel.dart. B-1 shifts the divisor",
+    "one further (i + 2): every tile still gets a colour from the palette, so",
+    "no structural assertion can see it — only the measured value list. B-2",
+    "collapses the new era onto the old inside the builder, below the",
+    "dispatch, which is the layer A-1 cannot reach.",
+    "",
+    "Group C is the title seam extended to the new selector: the shared",
+    "`v1_7_0 || v1_10_1` arm split so that only v1_10_1 defaults the title",
+    "on. The output is well-formed and correct for v1_7_0, so only a",
+    "v1_10_1-side default render can catch it.",
+    "",
+    "One mutation is verified BY HAND rather than by a case here, because it",
+    "needs two simultaneous edits and cases are single substitutions: rename",
+    "pixel's mask id AND its reference only when colourIndex is",
+    "loopIndexPlusOne. The #45 refuting lens found it surviving the whole",
+    "suite (every byte gate normalises ids; goldens are id-blind; pixel's",
+    "builder is the only one that receives version information). It now dies",
+    "on `the raw literals this port emits on the v1_10_1 path` in",
+    "v1_10_1_parity_test.dart — applied, watched red (exactly that test),",
+    "reverted, 2026-08-14.",
+    "",
+    "This file's first run (2026-08-14) was taken over a RED baseline — the",
+    "README gates were deliberately still failing — so its '7/7 killed' was",
+    "unfalsifiable; run.mjs now refuses that with BASELINE RED. Re-run after",
+    "the docs land. A known survivor if anyone adds it: replacing",
+    "`jsMod(numFromName, i + 1)` with `numFromName % (i + 1)` is a true",
+    "equivalence (the hash is non-negative), not a gap — do not add a case",
+    "that cannot die."
+  ],
+  "cases": [
+    {
+      "group": "A",
+      "name": "v1_10_1 maps to the old drawing — the eras collapse at the dispatch",
+      "file": "lib/src/avatar.dart",
+      "from": "    BoringAvatarsVersion.v1_10_1 => _Drawing.v1_10_1,",
+      "to": "    BoringAvatarsVersion.v1_10_1 => _Drawing.v1_6_1,",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "the index rule swapped between the two drawings",
+      "file": "lib/src/avatar.dart",
+      "from": "    _Drawing.v1_6_1 => PixelColourIndex.loopIndex,\n    _Drawing.v1_10_1 => PixelColourIndex.loopIndexPlusOne,",
+      "to": "    _Drawing.v1_6_1 => PixelColourIndex.loopIndexPlusOne,\n    _Drawing.v1_10_1 => PixelColourIndex.loopIndex,",
+      "expectEdits": 1
+    },
+    {
+      "group": "A",
+      "name": "v1_10_1 keeps the old index rule — a half swap",
+      "file": "lib/src/avatar.dart",
+      "from": "    _Drawing.v1_10_1 => PixelColourIndex.loopIndexPlusOne,",
+      "to": "    _Drawing.v1_10_1 => PixelColourIndex.loopIndex,",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "the divisor shifted one further — % (i + 2)",
+      "file": "lib/src/variants/pixel.dart",
+      "from": "      PixelColourIndex.loopIndexPlusOne => jsMod(numFromName, i + 1),",
+      "to": "      PixelColourIndex.loopIndexPlusOne => jsMod(numFromName, i + 2),",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "the new era collapses onto the old inside the builder",
+      "file": "lib/src/variants/pixel.dart",
+      "from": "      PixelColourIndex.loopIndexPlusOne => jsMod(numFromName, i + 1),",
+      "to": "      PixelColourIndex.loopIndexPlusOne => jsModOrNull(numFromName, i),",
+      "expectEdits": 1
+    },
+    {
+      "group": "B",
+      "name": "the old era collapses onto the new — the mirror direction",
+      "file": "lib/src/variants/pixel.dart",
+      "from": "      PixelColourIndex.loopIndex => jsModOrNull(numFromName, i),",
+      "to": "      PixelColourIndex.loopIndex => jsMod(numFromName, i + 1),",
+      "expectEdits": 1
+    },
+    {
+      "group": "C",
+      "name": "v1_10_1 defaults the title on while v1_7_0 keeps it off",
+      "file": "lib/src/avatar.dart",
+      "from": "    BoringAvatarsVersion.v1_7_0 ||\n    BoringAvatarsVersion.v1_10_1 => title ?? false,",
+      "to": "    BoringAvatarsVersion.v1_7_0 => title ?? false,\n    BoringAvatarsVersion.v1_10_1 => title ?? true,",
+      "expectEdits": 1
+    }
+  ]
+}

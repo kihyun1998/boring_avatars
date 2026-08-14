@@ -12,6 +12,15 @@
     "react-dom": "^18.3.1",
     "upstream-1.6.1": "npm:boring-avatars@1.6.1",
     "upstream-1.7.0": "npm:boring-avatars@1.7.0",
-    "upstream-1.10.0": "npm:boring-avatars@1.10.0"
+    "upstream-1.10.0": "npm:boring-avatars@1.10.0",
+    "upstream-1.10.1": "npm:boring-avatars@1.10.1",
+    "upstream-1.10.2": "npm:boring-avatars@1.10.2",
+    "upstream-1.11.1": "npm:boring-avatars@1.11.1",
+    "upstream-1.11.2": "npm:boring-avatars@1.11.2",
+    "upstream-2.0.0": "npm:boring-avatars@2.0.0",
+    "upstream-2.0.1": "npm:boring-avatars@2.0.1",
+    "upstream-2.0.2": "npm:boring-avatars@2.0.2",
+    "upstream-2.0.3": "npm:boring-avatars@2.0.3",
+    "upstream-2.0.4": "npm:boring-avatars@2.0.4"
   }
 }

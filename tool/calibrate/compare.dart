@@ -60,6 +60,7 @@ final _cases = <String, (SvgNode, int)>{
   ),
   'pixel-clara-default': (
     buildPixelScene(
+      colourIndex: PixelColourIndex.loopIndex,
       title: true,
       name: 'Clara Barton',
       colors: _default,
@@ -156,6 +157,21 @@ final _cases = <String, (SvgNode, int)>{
     ),
     80,
   ),
+  // #45 — the 1.10.1 colour index, the seventh combination #50 counts. The
+  // geometry is identical to `pixel-clara-default` (same tiles, same mask);
+  // what moves is which palette entry each tile takes, tile 0 included — so
+  // this case proves the *new* colour table survives the trip to pixels the
+  // same way the old one does.
+  'pixel-clara-second-index': (
+    buildPixelScene(
+      colourIndex: PixelColourIndex.loopIndexPlusOne,
+      title: true,
+      name: 'Clara Barton',
+      colors: _default,
+      size: 80,
+    ),
+    80,
+  ),
   // #83 — hidden-state #24, live for the first time since it was written.
   //
   // **Every case above renders at the variant's own viewBox side**, which is the
@@ -174,6 +190,7 @@ final _cases = <String, (SvgNode, int)>{
   // #58's derivation names — and it is where the row measured its worst count.
   'pixel-clara-100': (
     buildPixelScene(
+      colourIndex: PixelColourIndex.loopIndex,
       title: true,
       name: 'Clara Barton',
       colors: _default,
@@ -188,6 +205,7 @@ final _cases = <String, (SvgNode, int)>{
   // removing it removes the noise this question would otherwise be buried in.
   'pixel-clara-square-100': (
     buildPixelScene(
+      colourIndex: PixelColourIndex.loopIndex,
       title: true,
       name: 'Clara Barton',
       colors: _default,
@@ -198,6 +216,7 @@ final _cases = <String, (SvgNode, int)>{
   ),
   'pixel-clara-210': (
     buildPixelScene(
+      colourIndex: PixelColourIndex.loopIndex,
       title: true,
       name: 'Clara Barton',
       colors: _default,

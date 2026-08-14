@@ -43,6 +43,7 @@ void main() {
           final actual = normalise(
             emitSvg(
               buildPixelScene(
+                colourIndex: PixelColourIndex.loopIndex,
                 title: true,
                 name: n['value'] as String,
                 colors: (p['value'] as List).cast<String>(),
@@ -69,6 +70,7 @@ void main() {
               as Map<String, dynamic>;
       final svg = emitSvg(
         buildPixelScene(
+          colourIndex: PixelColourIndex.loopIndex,
           title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
@@ -95,6 +97,7 @@ void main() {
           final colours = pixelColors(
             n['value'] as String,
             (p['value'] as List).cast<String>(),
+            PixelColourIndex.loopIndex,
           );
           expect(colours, hasLength(64));
           expect(colours.first, isNull, reason: '${n['id']}/${p['id']}');
@@ -103,7 +106,11 @@ void main() {
     });
 
     test('an empty palette leaves every tile unfilled, and does not throw', () {
-      final colours = pixelColors('Clara Barton', const []);
+      final colours = pixelColors(
+        'Clara Barton',
+        const [],
+        PixelColourIndex.loopIndex,
+      );
       expect(colours.where((c) => c == null), hasLength(64));
     });
 
@@ -114,6 +121,7 @@ void main() {
       // byte-level gate can see.
       final svg = emitSvg(
         buildPixelScene(
+          colourIndex: PixelColourIndex.loopIndex,
           title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000', '#00FF00'],
@@ -126,6 +134,102 @@ void main() {
           .map((m) => int.parse(m.group(1) ?? '0'))
           .toList();
       expect(xs, <int>[0, 20, 40, 60, 10, 30, 50, 70]);
+    });
+  });
+
+  group('the second colour index — upstream 1.10.1 onward', () {
+    // Expected values are **measured from upstream**, not derived: the
+    // reference utilities at tag v1.10.1, driven through `generateColors`
+    // exactly as `avatar-pixel.js` writes it (`numFromName % (i + 1)`).
+    // The probe and its output are recorded in #45.
+    const defaultPalette = [
+      '#92A1C6',
+      '#146A7C',
+      '#F0AB3D',
+      '#C271B4',
+      '#C20D90',
+    ];
+
+    test('Clara Barton — the measured list, and tile 0 is now filled', () {
+      final colours = pixelColors(
+        'Clara Barton',
+        defaultPalette,
+        PixelColourIndex.loopIndexPlusOne,
+      );
+      // hash 645088871. Tile 0 is `hash % 1 == 0` → colors[0] — the NaN that
+      // left it unfilled in the old era (hidden-state #17) cannot occur here.
+      expect(colours.sublist(0, 8), const [
+        '#92A1C6',
+        '#146A7C',
+        '#F0AB3D',
+        '#C271B4',
+        '#146A7C',
+        '#92A1C6',
+        '#92A1C6',
+        '#F0AB3D',
+      ]);
+      expect(colours.sublist(62), const ['#146A7C', '#C20D90']);
+      expect(colours.whereType<Null>(), isEmpty);
+    });
+
+    test('the empty name — hash 0 takes colors[0] on every tile', () {
+      final colours = pixelColors(
+        '',
+        defaultPalette,
+        PixelColourIndex.loopIndexPlusOne,
+      );
+      expect(colours.toSet(), const {'#92A1C6'});
+    });
+
+    test('박기현 — a non-ASCII hash, measured', () {
+      final colours = pixelColors(
+        '박기현',
+        defaultPalette,
+        PixelColourIndex.loopIndexPlusOne,
+      );
+      // hash 47708329
+      expect(colours.sublist(0, 8), const [
+        '#92A1C6',
+        '#146A7C',
+        '#146A7C',
+        '#146A7C',
+        '#C20D90',
+        '#146A7C',
+        '#C20D90',
+        '#146A7C',
+      ]);
+      expect(colours.sublist(62), const ['#C20D90', '#146A7C']);
+    });
+
+    test('an empty palette still leaves every tile unfilled — range 0', () {
+      // The NaN moved: the old era reached `colors[NaN]` through `hash % 0`
+      // at tile 0 and through `range == 0` everywhere else; this era only has
+      // the range route. Same output — 64 dropped attributes — measured 64
+      // `undefined` upstream.
+      final colours = pixelColors(
+        'Clara Barton',
+        const [],
+        PixelColourIndex.loopIndexPlusOne,
+      );
+      expect(colours.where((c) => c == null), hasLength(64));
+    });
+
+    test('the two eras really differ, on the input that shows it', () {
+      // The discriminator: same name, same palette, the two index rules. If
+      // this ever passes with the rules collapsed, the parameter is dead.
+      final old = pixelColors(
+        'Clara Barton',
+        defaultPalette,
+        PixelColourIndex.loopIndex,
+      );
+      final now = pixelColors(
+        'Clara Barton',
+        defaultPalette,
+        PixelColourIndex.loopIndexPlusOne,
+      );
+      expect(old.first, isNull);
+      expect(now.first, isNotNull);
+      expect(old, isNot(now));
     });
   });
 
@@ -150,6 +254,7 @@ void main() {
           normalise(
             emitSvg(
               buildPixelScene(
+                colourIndex: PixelColourIndex.loopIndex,
                 title: true,
                 name: name['value'] as String,
                 colors: (palette['value'] as List).cast<String>(),
@@ -167,6 +272,7 @@ void main() {
     test('rx is absent when square is true, present when it is not', () {
       String svgFor({required bool square}) => emitSvg(
         buildPixelScene(
+          colourIndex: PixelColourIndex.loopIndex,
           title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
@@ -188,6 +294,7 @@ void main() {
     test('it reaches width and height and nothing else', () {
       final small = emitSvg(
         buildPixelScene(
+          colourIndex: PixelColourIndex.loopIndex,
           title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],
@@ -196,6 +303,7 @@ void main() {
       );
       final large = emitSvg(
         buildPixelScene(
+          colourIndex: PixelColourIndex.loopIndex,
           title: true,
           name: 'Clara Barton',
           colors: const ['#FF0000'],

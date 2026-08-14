@@ -98,6 +98,7 @@ void main() {
       expect(BoringAvatarsVersion.values, <BoringAvatarsVersion>[
         BoringAvatarsVersion.v1_6_1,
         BoringAvatarsVersion.v1_7_0,
+        BoringAvatarsVersion.v1_10_1,
       ]);
     });
 
@@ -116,6 +117,28 @@ void main() {
         '1.9.0',
         '1.10.0',
       ]);
+    });
+
+    test('v1_10_1 covers upstream 1.10.1 through 2.0.4, skipping 1.11.0', () {
+      // 1.11.0 is the hole on purpose: it spreads its own props onto the
+      // `<svg>` element, so covering it would mean reproducing junk attributes
+      // no other release emits. A caller pinned to it is told "unsupported"
+      // rather than handed a neighbour's output.
+      expect(BoringAvatarsVersion.v1_10_1.upstreamVersions, <String>[
+        '1.10.1',
+        '1.10.2',
+        '1.11.1',
+        '1.11.2',
+        '2.0.0',
+        '2.0.1',
+        '2.0.2',
+        '2.0.3',
+        '2.0.4',
+      ]);
+      expect(
+        BoringAvatarsVersion.v1_10_1.upstreamVersions,
+        isNot(contains('1.11.0')),
+      );
     });
 
     test('a shipped selector never loses or gains a release', () {
@@ -140,7 +163,7 @@ void main() {
       // which nothing else does. The dispatch's exhaustive switch forces a new
       // selector to be rendered, but `latest` is a hand-maintained constant
       // and would sit on the old value with the suite green.
-      expect(BoringAvatarsVersion.latest, BoringAvatarsVersion.v1_7_0);
+      expect(BoringAvatarsVersion.latest, BoringAvatarsVersion.v1_10_1);
       expect(BoringAvatarsVersion.latest, BoringAvatarsVersion.values.last);
     });
 

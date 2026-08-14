@@ -31,8 +31,15 @@
 // and a network install.
 import { inflateSync } from 'node:zlib';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { register } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// boring-avatars 2.0.x ships an ESM build whose relative imports have no file
+// extension — the hook (owned by tool/versions, which hit this first) adds it
+// back so the published package loads as-is. Registered before the upstream
+// import below; inert for the CJS-era packages.
+register('../versions/ext-hook.mjs', import.meta.url);
 
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -100,6 +107,14 @@ const EXPECTED_DIVERGENCE = { sunset: new Set(['punctuation']) };
 const UPSTREAM_FOR = {
   v1_6_1: 'upstream-1.6.1',
   v1_7_0: 'upstream-1.10.0',
+  // Same judgement one selector later: the v1_10_1 fixture's bytes come from
+  // npm 1.10.1, so 1.10.1 is the release the port already matches through the
+  // normalisation — and 2.0.4 is npm's `latest`, the TypeScript-era ESM
+  // build, and one of the two releases with no git tag. It is the covered
+  // release where "the picture is the same" rests on the most argument and
+  // the least byte identity, which is exactly what this harness exists to
+  // measure.
+  v1_10_1: 'upstream-2.0.4',
 };
 
 const corpus = JSON.parse(

@@ -12,6 +12,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "upstream-1.6.1": "npm:boring-avatars@1.6.1",
-    "upstream-1.10.0": "npm:boring-avatars@1.10.0"
+    "upstream-1.10.0": "npm:boring-avatars@1.10.0",
+    "upstream-2.0.4": "npm:boring-avatars@2.0.4"
   }
 }
