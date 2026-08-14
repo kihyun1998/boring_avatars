@@ -24,16 +24,16 @@
       "group": "A",
       "name": "v1_7_0 defaults the title on instead of off",
       "file": "lib/src/avatar.dart",
-      "from": "    BoringAvatarsVersion.v1_7_0 => title ?? false,",
-      "to": "    BoringAvatarsVersion.v1_7_0 => title ?? true,",
+      "from": "    BoringAvatarsVersion.v1_7_0 ||\n    BoringAvatarsVersion.v1_10_1 => title ?? false,",
+      "to": "    BoringAvatarsVersion.v1_7_0 ||\n    BoringAvatarsVersion.v1_10_1 => title ?? true,",
       "expectEdits": 1
     },
     {
       "group": "A",
       "name": "v1_7_0 ignores the argument and never emits a title",
       "file": "lib/src/avatar.dart",
-      "from": "    BoringAvatarsVersion.v1_7_0 => title ?? false,",
-      "to": "    BoringAvatarsVersion.v1_7_0 => false,",
+      "from": "    BoringAvatarsVersion.v1_7_0 ||\n    BoringAvatarsVersion.v1_10_1 => title ?? false,",
+      "to": "    BoringAvatarsVersion.v1_7_0 ||\n    BoringAvatarsVersion.v1_10_1 => false,",
       "expectEdits": 1
     },
     {

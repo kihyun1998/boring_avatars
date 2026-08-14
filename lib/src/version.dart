@@ -57,7 +57,42 @@ enum BoringAvatarsVersion {
   /// contain no JavaScript at all (`main` points at a `build/index.js` that is
   /// not in the package — verified by downloading both). They are covered here
   /// because their source is 1.10.0's, byte for byte.
-  v1_7_0(['1.7.0', '1.8.0', '1.9.0', '1.10.0']);
+  v1_7_0(['1.7.0', '1.8.0', '1.9.0', '1.10.0']),
+
+  /// Upstream 1.10.1, 1.10.2, 1.11.1, 1.11.2, and 2.0.0 through 2.0.4.
+  ///
+  /// The release where `pixel`'s colour index moved — `numFromName % i`
+  /// became `numFromName % (i + 1)` — which redraws every `pixel` avatar and
+  /// is the **only** drawing change in the whole supported range. The other
+  /// five variants render exactly what [v1_7_0] renders.
+  ///
+  /// **Why nine releases share one value.** Everything else in the range is
+  /// plumbing that leaves no mark on the document a caller gets: an internal
+  /// filter-id rename (1.10.2), prop destructuring (1.11.1, 1.11.2), the
+  /// TypeScript rewrite (2.0.0), and type-only edits (2.0.2 onward). Measured
+  /// by rendering every release side by side, not read off the diffs.
+  ///
+  /// **1.11.0 is deliberately not here.** It spreads its own props onto the
+  /// `<svg>` element (`colors="…" name="Clara Barton"`), which no other
+  /// release does; upstream fixed it in 1.11.1. Supporting it would mean
+  /// reproducing those junk attributes, so a caller pinned to 1.11.0 is told
+  /// it is unsupported rather than quietly given a neighbour's output.
+  ///
+  /// **2.0.3 and 2.0.4 have no git tag** (upstream's tags stop at v2.0.2).
+  /// They are covered from the npm packages themselves, whose recorded
+  /// `gitHead` commits resolve in upstream's history to the same `src/lib`
+  /// tree as `master` — measured, and recorded in this package's fixture.
+  v1_10_1([
+    '1.10.1',
+    '1.10.2',
+    '1.11.1',
+    '1.11.2',
+    '2.0.0',
+    '2.0.1',
+    '2.0.2',
+    '2.0.3',
+    '2.0.4',
+  ]);
 
   const BoringAvatarsVersion(this.upstreamVersions);
 
@@ -66,15 +101,14 @@ enum BoringAvatarsVersion {
 
   /// The newest supported release.
   ///
-  /// **This value moves, and it has already moved once.** It was [v1_6_1] in
-  /// `0.1.0` and is [v1_7_0] as of `0.2.0`, so an avatar rendered with it can
-  /// change when you upgrade this package — anyone who passed `latest` in
-  /// `0.1.0` and relied on the `<title>` element loses it here, because
-  /// `v1_7_0` defaults the title off as upstream does. `0.3.0` will redraw
-  /// every `pixel` avatar the same way.
+  /// **This value moves, and it has moved twice.** It was [v1_6_1] in `0.1.0`,
+  /// [v1_7_0] in `0.2.0`, and is [v1_10_1] as of `0.3.0` — which **redraws
+  /// every `pixel` avatar** rendered through it, because 1.10.1 moved the
+  /// variant's colour index. An avatar rendered with `latest` can change when
+  /// you upgrade this package; that is what passing it means.
   ///
   /// That is why nothing defaults to it: `boringAvatarSvg` requires a
   /// `version`, and passing `latest` is a deliberate choice to track upstream's
   /// newest rather than to pin an avatar. Name a value to pin one.
-  static const BoringAvatarsVersion latest = v1_7_0;
+  static const BoringAvatarsVersion latest = v1_10_1;
 }

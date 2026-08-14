@@ -357,7 +357,7 @@ void _bytesOnScreen() {
   test('the sweep below is not empty and is every clara case', () {
     // A `where` that matched nothing would make every case below vanish
     // silently rather than fail.
-    expect(clara, hasLength(12));
+    expect(clara, hasLength(13));
     expect(
       clara.where((k) => k.endsWith('-square')),
       hasLength(6),
@@ -370,6 +370,12 @@ void _bytesOnScreen() {
   for (final key in clara) {
     final variantName = key.split('-').first;
     final square = key.endsWith('-square');
+    // The golden roster names the drawing, the widget names the version —
+    // `pixel-clara-second-index` is the 1.10.1 colour index, which only
+    // `v1_10_1` (or `latest`) reaches through the public surface.
+    final version = key.endsWith('-second-index')
+        ? BoringAvatarsVersion.v1_10_1
+        : BoringAvatarsVersion.v1_6_1;
 
     testWidgets('$key is handed to Flutter byte-identical', (tester) async {
       final (_, side) = goldenCases[key]!;
@@ -381,7 +387,7 @@ void _bytesOnScreen() {
           name: 'Clara Barton',
           colors: claraPalette,
           pixels: side,
-          version: BoringAvatarsVersion.v1_6_1,
+          version: version,
           variant: BoringAvatarsVariant.fromUpstreamName(variantName),
           square: square,
         );

@@ -1,6 +1,6 @@
 name: boring_avatars
 description: "A bit-exact Dart port of boring-avatars. Same name in, same avatar out — with every upstream version selectable."
-version: 0.2.0
+version: 0.3.0
 repository: https://github.com/kihyun1998/boring_avatars
 issue_tracker: https://github.com/kihyun1998/boring_avatars/issues
 

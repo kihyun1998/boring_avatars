@@ -21,9 +21,17 @@
 
 import { execFileSync, execSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { register } from 'node:module';
 import { gunzipSync } from 'node:zlib';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// boring-avatars 2.0.x ships an ESM build whose relative imports have no file
+// extension, which Node's resolver rejects — the hook (owned by
+// tool/versions, which hit this first) adds the extension back so the real
+// published package loads as-is. Registered before any upstream import below;
+// inert for the CJS-era packages.
+register('../versions/ext-hook.mjs', import.meta.url);
 
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -77,6 +85,41 @@ const SUPPORTED = {
     // download), so nothing can render them. Their evidence is that their
     // `src/lib` git tree *is* 1.10.0's, byte for byte.
     bySourceTree: { '1.8.0': 'v1.8.0', '1.9.0': 'v1.9.0', '1.10.0': 'v1.10.0' },
+  },
+  v1_10_1: {
+    tag: 'v1.10.1',
+    pkg: 'upstream-1.10.1',
+    releases: [
+      '1.10.1',
+      '1.10.2',
+      '1.11.1',
+      '1.11.2',
+      '2.0.0',
+      '2.0.1',
+      '2.0.2',
+      '2.0.3',
+      '2.0.4',
+    ],
+    titleProp: true,
+    // Every covered release renders — this group has no 1.8.0-style empty
+    // tarball — so each of the other eight is compared to 1.10.1's render
+    // across the full matrix, and `bySourceTree` has nothing to carry. Note
+    // 1.11.0 is deliberately absent: it spreads its own props onto the
+    // `<svg>` element and is unsupported, not covered.
+    //
+    // The source trees of these nine are *not* one tree — the destructuring
+    // rework and the TypeScript rewrite are real diffs — which is exactly why
+    // the evidence here is the render and never the blob hash.
+    crossCheck: {
+      '1.10.2': 'upstream-1.10.2',
+      '1.11.1': 'upstream-1.11.1',
+      '1.11.2': 'upstream-1.11.2',
+      '2.0.0': 'upstream-2.0.0',
+      '2.0.1': 'upstream-2.0.1',
+      '2.0.2': 'upstream-2.0.2',
+      '2.0.3': 'upstream-2.0.3',
+      '2.0.4': 'upstream-2.0.4',
+    },
   },
 };
 
@@ -475,6 +518,14 @@ async function dumpGroupProof(spec, corpus) {
 
   const rendered = {};
   const rawIdSamples = { [spec.releases[0]]: maskIdOf(base, corpus) };
+  // Marble's **filter** id, recorded for the same reason as the mask id — but
+  // its history is different and the difference is worth a witness: it is the
+  // literal `prefix__filter0_f` through 1.10.1 and `filter_${useId}` from
+  // 1.10.2, so inside the v1_10_1 group the rendered-from release is the one
+  // that still writes a literal. `normalise` erases the divergence in the
+  // comparison above; this records it unnormalised so the exclusion is
+  // visible rather than implied (the #37/#40 rule).
+  const rawFilterIdSamples = { [spec.releases[0]]: filterIdOf(base, corpus) };
   const idPositions = { [spec.releases[0]]: idsByPosition(base, corpus) };
   for (const [release, pkg] of Object.entries(spec.crossCheck ?? {})) {
     const other = await import(pkg).then((m) => m.default?.default ?? m.default);
@@ -484,16 +535,27 @@ async function dumpGroupProof(spec, corpus) {
       for (const name of corpus.names) {
         for (const palette of corpus.palettes) {
           for (const title of [false, true]) {
-            const props = {
-              variant,
-              name: name.value,
-              colors: palette.value,
-              size: MATRIX_SIZE,
-              title,
-            };
-            compared++;
-            if (renderWith(base, props) !== renderWith(other, props)) {
-              mismatches.push(`${variant}|${name.id}|${palette.id}|title=${title}`);
+            // `square` crossed too — added in #45. The #59 lesson is that a
+            // prop is covered where it varies on a path something else varies
+            // on, and until then this loop held `square` at its default: the
+            // eight-way sibling equivalence on that axis rested on reading
+            // the components' unchanged `rx={square ? …}` text, not on a
+            // render. One extra axis turns that argument into a measurement.
+            for (const square of [false, true]) {
+              const props = {
+                variant,
+                name: name.value,
+                colors: palette.value,
+                size: MATRIX_SIZE,
+                title,
+                square,
+              };
+              compared++;
+              if (renderWith(base, props) !== renderWith(other, props)) {
+                mismatches.push(
+                  `${variant}|${name.id}|${palette.id}|title=${title}|${square ? 'sq' : 'rd'}`,
+                );
+              }
             }
           }
         }
@@ -501,6 +563,7 @@ async function dumpGroupProof(spec, corpus) {
     }
     rendered[release] = { compared, mismatches };
     rawIdSamples[release] = maskIdOf(other, corpus);
+    rawFilterIdSamples[release] = filterIdOf(other, corpus);
     idPositions[release] = idsByPosition(other, corpus);
   }
 
@@ -552,14 +615,27 @@ async function dumpGroupProof(spec, corpus) {
         return null; // a commit the reference tree does not have
       }
     };
+    // **A release may have no tag at all** — upstream's tags stop at v2.0.2
+    // while npm's `latest` is 2.0.4. For those the join runs the other way:
+    // the npm-recorded `gitHead` must resolve in the reference tree, which
+    // proves the published artifact came from upstream's own history even
+    // though nothing was tagged. Measured for 2.0.3 and 2.0.4: both commits
+    // exist and share one `src/lib` tree, which is `master`'s.
+    const tagCommit = (() => {
+      try {
+        return execFileSync(
+          'git',
+          ['-C', REFS, 'rev-parse', `v${release}^{commit}`],
+          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+        ).trim();
+      } catch {
+        return null; // no such tag
+      }
+    })();
     npmProvenance[release] = {
       npmJsFiles: countJsFilesOnNpm(release),
       npmGitHead: head === '' ? null : head,
-      tagCommit: execFileSync(
-        'git',
-        ['-C', REFS, 'rev-parse', `v${release}^{commit}`],
-        { encoding: 'utf8' },
-      ).trim(),
+      tagCommit,
       // **The trees, not the commits, are what the claim is about** — and the
       // difference is not academic. npm's 1.8.0 was published from `e393aaa`
       // while the tag `v1.8.0` points at `412a61e`: two different commits whose
@@ -575,10 +651,22 @@ async function dumpGroupProof(spec, corpus) {
     rendered,
     bySourceTree,
     rawIdSamples,
+    rawFilterIdSamples,
     idPositions,
     npmProvenance,
   };
 }
+
+/** Marble's filter id, unnormalised — `null` for a release that writes none. */
+const filterIdOf = (Avatar, corpus) =>
+  renderToStaticMarkup(
+    React.createElement(Avatar, {
+      variant: 'marble',
+      name: corpus.names[0].value,
+      colors: corpus.palettes[0].value,
+      size: MATRIX_SIZE,
+    }),
+  ).match(/<filter id="([^"]*)"/)?.[1] ?? null;
 
 /**
  * How many JavaScript files a release's npm tarball actually contains.

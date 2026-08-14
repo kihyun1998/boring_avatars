@@ -47,18 +47,27 @@ and why the `node` runner asks for TAP output rather than the default reporter �
 the default prints its totals behind an `ℹ`, and a count that depends on a
 non-ASCII character surviving a pipe on Windows is a count that can read 0.
 
-## Four outcomes, not two
+## Five outcomes, not two
 
-`killed` · `SURVIVED` · `NO MATCH` · `NO TESTS`.
+`killed` · `SURVIVED` · `NO MATCH` · `NO TESTS` · `BASELINE RED`.
 
-The last two are the ones that pay. A substitution that never applied is not a
-survivor, and a green run over zero tests is not one either — folding either
+The middle two are the ones that pay. A substitution that never applied is not
+a survivor, and a green run over zero tests is not one either — folding either
 into a verdict is how a report says the opposite of the truth in the one place
 whose job is to say which mechanisms are unguarded.
 
-The runner **caught itself** on the second of those the first time it ran: its
+The runner **caught itself** on the `NO TESTS` half the first time it ran: its
 `cmd.exe` invocation was malformed, every case failed to start, and it reported
 `NO TESTS` on all 32 rather than 32 survivors.
+
+`BASELINE RED` (#45) is the same honesty one level up: before applying
+anything, each (test, runner) pair the cases use is run once **unmutated**. If
+that run already fails, no verdict is possible — "the suite exited non-zero"
+is then true for a no-op edit, so every case would report `killed` whatever it
+did and a survivor would be unrepresentable. #45 recorded 7/7 kills over a
+tree whose README gates were deliberately red (the release plan orders docs
+after the browser sweep) before the refuting lens noticed the report was
+unfalsifiable; the runner now refuses instead, with exit 2.
 
 Exit status is 0 only when everything was killed. A stale case is a failure, so
 that nobody has to notice it in the log.

@@ -50,88 +50,88 @@
       "group": "A",
       "name": "ring dispatches to marble's builder",
       "file": "lib/src/avatar.dart",
-      "from": "      BoringAvatarsVariant.ring => buildRingScene(",
-      "to": "      BoringAvatarsVariant.ring => buildMarbleScene(",
+      "from": "    BoringAvatarsVariant.ring => buildRingScene(",
+      "to": "    BoringAvatarsVariant.ring => buildMarbleScene(",
       "expectEdits": 1
     },
     {
       "group": "A",
       "name": "bauhaus and sunset swap builders",
       "file": "lib/src/avatar.dart",
-      "from": "      BoringAvatarsVariant.bauhaus => buildBauhausScene(",
-      "to": "      BoringAvatarsVariant.bauhaus => buildSunsetScene(",
+      "from": "    BoringAvatarsVariant.bauhaus => buildBauhausScene(",
+      "to": "    BoringAvatarsVariant.bauhaus => buildSunsetScene(",
       "expectEdits": 1
     },
     {
       "group": "A",
       "name": "the deprecated aliases are not resolved before dispatch",
       "file": "lib/src/avatar.dart",
-      "from": "BoringAvatarsVersion.v1_6_1 => switch (variant.resolved) {",
-      "to": "BoringAvatarsVersion.v1_6_1 => switch (variant) {",
+      "from": "return switch (variant.resolved) {",
+      "to": "return switch (variant) {",
       "expectEdits": 1
     },
     {
       "group": "A",
       "name": "the default variant is beam, not upstream's marble",
       "file": "lib/src/avatar.dart",
-      "from": "  BoringAvatarsVariant variant = BoringAvatarsVariant.marble,\n  bool square = false,\n}) => emitSvg(",
-      "to": "  BoringAvatarsVariant variant = BoringAvatarsVariant.beam,\n  bool square = false,\n}) => emitSvg(",
+      "from": "  BoringAvatarsVariant variant = BoringAvatarsVariant.marble,\n  bool square = false,\n  bool? title,\n}) => emitSvg(",
+      "to": "  BoringAvatarsVariant variant = BoringAvatarsVariant.beam,\n  bool square = false,\n  bool? title,\n}) => emitSvg(",
       "expectEdits": 1
     },
     {
       "group": "A",
       "name": "square is dropped on the way to pixel",
       "file": "lib/src/avatar.dart",
-      "from": "      BoringAvatarsVariant.pixel => buildPixelScene(\n        name: name,\n        colors: colors,\n        size: size,\n        square: square,\n      ),",
-      "to": "      BoringAvatarsVariant.pixel => buildPixelScene(\n        name: name,\n        colors: colors,\n        size: size,\n        square: false,\n      ),",
+      "from": "    BoringAvatarsVariant.pixel => buildPixelScene(\n      name: name,\n      colors: colors,\n      size: size,\n      square: square,",
+      "to": "    BoringAvatarsVariant.pixel => buildPixelScene(\n      name: name,\n      colors: colors,\n      size: size,\n      square: false,",
       "expectEdits": 1
     },
     {
       "group": "A",
       "name": "size is hardcoded to the matrix size on the way to marble",
       "file": "lib/src/avatar.dart",
-      "from": "      BoringAvatarsVariant.marble => buildMarbleScene(\n        name: name,\n        colors: colors,\n        size: size,",
-      "to": "      BoringAvatarsVariant.marble => buildMarbleScene(\n        name: name,\n        colors: colors,\n        size: 80,",
+      "from": "    BoringAvatarsVariant.marble => buildMarbleScene(\n      name: name,\n      colors: colors,\n      size: size,",
+      "to": "    BoringAvatarsVariant.marble => buildMarbleScene(\n      name: name,\n      colors: colors,\n      size: 80,",
       "expectEdits": 1
     },
     {
       "group": "A",
       "name": "size is hardcoded to the matrix size on the way to ring",
       "file": "lib/src/avatar.dart",
-      "from": "      BoringAvatarsVariant.ring => buildRingScene(\n        name: name,\n        colors: colors,\n        size: size,",
-      "to": "      BoringAvatarsVariant.ring => buildRingScene(\n        name: name,\n        colors: colors,\n        size: 80,",
+      "from": "    BoringAvatarsVariant.ring => buildRingScene(\n      name: name,\n      colors: colors,\n      size: size,",
+      "to": "    BoringAvatarsVariant.ring => buildRingScene(\n      name: name,\n      colors: colors,\n      size: 80,",
       "expectEdits": 1
     },
     {
       "group": "A",
       "name": "size is hardcoded to the matrix size on the way to beam",
       "file": "lib/src/avatar.dart",
-      "from": "      BoringAvatarsVariant.beam => buildBeamScene(\n        name: name,\n        colors: colors,\n        size: size,",
-      "to": "      BoringAvatarsVariant.beam => buildBeamScene(\n        name: name,\n        colors: colors,\n        size: 80,",
+      "from": "    BoringAvatarsVariant.beam => buildBeamScene(\n      name: name,\n      colors: colors,\n      size: size,",
+      "to": "    BoringAvatarsVariant.beam => buildBeamScene(\n      name: name,\n      colors: colors,\n      size: 80,",
       "expectEdits": 1
     },
     {
       "group": "A",
       "name": "size is hardcoded to the matrix size on the way to pixel",
       "file": "lib/src/avatar.dart",
-      "from": "      BoringAvatarsVariant.pixel => buildPixelScene(\n        name: name,\n        colors: colors,\n        size: size,",
-      "to": "      BoringAvatarsVariant.pixel => buildPixelScene(\n        name: name,\n        colors: colors,\n        size: 80,",
+      "from": "    BoringAvatarsVariant.pixel => buildPixelScene(\n      name: name,\n      colors: colors,\n      size: size,",
+      "to": "    BoringAvatarsVariant.pixel => buildPixelScene(\n      name: name,\n      colors: colors,\n      size: 80,",
       "expectEdits": 1
     },
     {
       "group": "A",
       "name": "size is hardcoded to the matrix size on the way to sunset",
       "file": "lib/src/avatar.dart",
-      "from": "      BoringAvatarsVariant.sunset => buildSunsetScene(\n        name: name,\n        colors: colors,\n        size: size,",
-      "to": "      BoringAvatarsVariant.sunset => buildSunsetScene(\n        name: name,\n        colors: colors,\n        size: 80,",
+      "from": "    BoringAvatarsVariant.sunset => buildSunsetScene(\n      name: name,\n      colors: colors,\n      size: size,",
+      "to": "    BoringAvatarsVariant.sunset => buildSunsetScene(\n      name: name,\n      colors: colors,\n      size: 80,",
       "expectEdits": 1
     },
     {
       "group": "A",
       "name": "size is hardcoded to the matrix size on the way to bauhaus",
       "file": "lib/src/avatar.dart",
-      "from": "      BoringAvatarsVariant.bauhaus => buildBauhausScene(\n        name: name,\n        colors: colors,\n        size: size,",
-      "to": "      BoringAvatarsVariant.bauhaus => buildBauhausScene(\n        name: name,\n        colors: colors,\n        size: 80,",
+      "from": "    BoringAvatarsVariant.bauhaus => buildBauhausScene(\n      name: name,\n      colors: colors,\n      size: size,",
+      "to": "    BoringAvatarsVariant.bauhaus => buildBauhausScene(\n      name: name,\n      colors: colors,\n      size: 80,",
       "expectEdits": 1
     },
     {
@@ -146,8 +146,8 @@
       "group": "B",
       "name": "version gains a default, so it moves under callers on upgrade",
       "file": "lib/src/avatar.dart",
-      "from": "  required BoringAvatarsVersion version,\n  BoringAvatarsVariant variant = BoringAvatarsVariant.marble,\n  bool square = false,\n}) => emitSvg(",
-      "to": "  BoringAvatarsVersion version = BoringAvatarsVersion.latest,\n  BoringAvatarsVariant variant = BoringAvatarsVariant.marble,\n  bool square = false,\n}) => emitSvg(",
+      "from": "  required BoringAvatarsVersion version,\n  BoringAvatarsVariant variant = BoringAvatarsVariant.marble,\n  bool square = false,\n  bool? title,\n}) => emitSvg(",
+      "to": "  BoringAvatarsVersion version = BoringAvatarsVersion.latest,\n  BoringAvatarsVariant variant = BoringAvatarsVariant.marble,\n  bool square = false,\n  bool? title,\n}) => emitSvg(",
       "expectEdits": 1
     },
     {
@@ -162,32 +162,32 @@
       "group": "C",
       "name": "a String size is coerced away on the ring arm",
       "file": "lib/src/avatar.dart",
-      "from": "      BoringAvatarsVariant.ring => buildRingScene(\n        name: name,\n        colors: colors,\n        size: size,",
-      "to": "      BoringAvatarsVariant.ring => buildRingScene(\n        name: name,\n        colors: colors,\n        size: size is String ? 80 : size,",
+      "from": "    BoringAvatarsVariant.ring => buildRingScene(\n      name: name,\n      colors: colors,\n      size: size,",
+      "to": "    BoringAvatarsVariant.ring => buildRingScene(\n      name: name,\n      colors: colors,\n      size: size is String ? 80 : size,",
       "expectEdits": 1
     },
     {
       "group": "C",
       "name": "a String size is coerced away on the bauhaus arm",
       "file": "lib/src/avatar.dart",
-      "from": "      BoringAvatarsVariant.bauhaus => buildBauhausScene(\n        name: name,\n        colors: colors,\n        size: size,",
-      "to": "      BoringAvatarsVariant.bauhaus => buildBauhausScene(\n        name: name,\n        colors: colors,\n        size: size is String ? 80 : size,",
+      "from": "    BoringAvatarsVariant.bauhaus => buildBauhausScene(\n      name: name,\n      colors: colors,\n      size: size,",
+      "to": "    BoringAvatarsVariant.bauhaus => buildBauhausScene(\n      name: name,\n      colors: colors,\n      size: size is String ? 80 : size,",
       "expectEdits": 1
     },
     {
       "group": "C",
       "name": "size is honoured for one name only, on marble",
       "file": "lib/src/avatar.dart",
-      "from": "      BoringAvatarsVariant.marble => buildMarbleScene(\n        name: name,\n        colors: colors,\n        size: size,",
-      "to": "      BoringAvatarsVariant.marble => buildMarbleScene(\n        name: name,\n        colors: colors,\n        size: name == 'Clara Barton' ? size : 80,",
+      "from": "    BoringAvatarsVariant.marble => buildMarbleScene(\n      name: name,\n      colors: colors,\n      size: size,",
+      "to": "    BoringAvatarsVariant.marble => buildMarbleScene(\n      name: name,\n      colors: colors,\n      size: name == 'Clara Barton' ? size : 80,",
       "expectEdits": 1
     },
     {
       "group": "C",
       "name": "size is dropped whenever square is set, on sunset",
       "file": "lib/src/avatar.dart",
-      "from": "      BoringAvatarsVariant.sunset => buildSunsetScene(\n        name: name,\n        colors: colors,\n        size: size,",
-      "to": "      BoringAvatarsVariant.sunset => buildSunsetScene(\n        name: name,\n        colors: colors,\n        size: square ? 80 : size,",
+      "from": "    BoringAvatarsVariant.sunset => buildSunsetScene(\n      name: name,\n      colors: colors,\n      size: size,",
+      "to": "    BoringAvatarsVariant.sunset => buildSunsetScene(\n      name: name,\n      colors: colors,\n      size: square ? 80 : size,",
       "expectEdits": 1
     },
     {
@@ -210,7 +210,7 @@
       "group": "B",
       "name": "latest stops being the newest declared value",
       "file": "lib/src/version.dart",
-      "from": "  static const BoringAvatarsVersion latest = v1_6_1;",
+      "from": "  static const BoringAvatarsVersion latest = v1_10_1;",
       "to": "  static const BoringAvatarsVersion latest = BoringAvatarsVersion.values[0];",
       "expectEdits": 1
     },

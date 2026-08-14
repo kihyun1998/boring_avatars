@@ -23,15 +23,23 @@
     "that *is* it are the same program. The guard is **inert today** and goes",
     "live the moment a second value exists, which is what the surviving case",
     "above proves. Same shape as the hidden-state rows this repo marks inert —",
-    "recorded here so the missing case is a judgement and not a silent skip."
+    "recorded here so the missing case is a judgement and not a silent skip.",
+    "",
+    "#45 is the release the paragraphs above were waiting for, and both",
+    "predictions held: adding `v1_10_1` to `_Drawing` made the index switch",
+    "non-exhaustive and the compiler forced the dispatch before a test ran; the",
+    "once-inert guard is now live, so the case above moved from adding a second",
+    "value to adding a third. The from/to were refreshed to the #45 tree in the",
+    "same change (a stale case exits non-zero, but only when someone runs it —",
+    "#45 found two other case files stale since earlier refactors)."
   ],
   "cases": [
     {
       "group": "A",
-      "name": "a second drawing exists and nothing dispatches it",
+      "name": "a third drawing exists and nothing dispatches it",
       "file": "lib/src/avatar.dart",
-      "from": "enum _Drawing { v1_6_1 }",
-      "to": "enum _Drawing { v1_6_1, v1_10_1 }",
+      "from": "enum _Drawing { v1_6_1, v1_10_1 }",
+      "to": "enum _Drawing { v1_6_1, v1_10_1, vNext }",
       "expectEdits": 1
     }
   ]

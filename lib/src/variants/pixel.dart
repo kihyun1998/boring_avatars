@@ -5,11 +5,15 @@
 ///
 /// Two things about this variant are surprising enough to state up front:
 ///
-/// * **The first tile is never filled.** Upstream builds its colour list with
-///   `getRandomColor(numFromName % i, …)` starting at `i == 0`, and `hash % 0`
-///   is `NaN` in JavaScript, so `colors[NaN]` is `undefined` and React omits
-///   the attribute. It happens for every name and every palette, including the
-///   defaults — not an edge case (hidden-state #17).
+/// * **The first tile is never filled — until upstream 1.10.1.** The old era
+///   builds its colour list with `getRandomColor(numFromName % i, …)` starting
+///   at `i == 0`, and `hash % 0` is `NaN` in JavaScript, so `colors[NaN]` is
+///   `undefined` and React omits the attribute. It happens for every name and
+///   every palette, including the defaults — not an edge case (hidden-state
+///   #17). 1.10.1 changed the expression to `numFromName % (i + 1)` — the one
+///   drawing change in the whole 1.6.1–2.0.4 range — so the divisor is never
+///   zero and tile 0 takes `colors[0]`. [PixelColourIndex] names the two eras;
+///   the caller (the version dispatch) picks one.
 /// * **The tiles are not emitted in reading order.** The DOM order is
 ///   `x = 0, 20, 40, 60, 10, 30, 50, 70` across the top row, then column by
 ///   column. The table below is extracted from the component rather than
@@ -95,15 +99,46 @@ const List<List<int>> _tiles = [
   [70, 70, 63],
 ];
 
+/// Which expression indexes the palette per tile.
+///
+/// Upstream changed it exactly once, in 1.10.1 — the only change in the whole
+/// supported range that moves the drawing:
+///
+/// ```js
+/// 1.6.1 – 1.10.0   getRandomColor(numFromName % i,       colors, range)
+/// 1.10.1 – 2.0.4   getRandomColor(numFromName % (i + 1), colors, range)
+/// ```
+///
+/// The names say what the divisor is, because "old/new" would invert the day
+/// upstream changes it again.
+enum PixelColourIndex {
+  /// `numFromName % i` — `i == 0` gives `NaN`, so tile 0 is never filled.
+  loopIndex,
+
+  /// `numFromName % (i + 1)` — the divisor is never zero; tile 0 takes
+  /// `colors[0]`.
+  loopIndexPlusOne,
+}
+
 /// The 64 tile colours, or `null` where upstream produces `undefined`.
 ///
-/// Index 0 is always `null` — see the library doc.
-List<String?> pixelColors(String name, List<String> colors) {
+/// Under [PixelColourIndex.loopIndex], index 0 is always `null` — see the
+/// library doc. Under [PixelColourIndex.loopIndexPlusOne], `null` only appears
+/// with an empty palette (`range == 0` makes `colors[n % 0]` `undefined`).
+List<String?> pixelColors(
+  String name,
+  List<String> colors,
+  PixelColourIndex colourIndex,
+) {
   final numFromName = jsHashCode(name);
   final range = colors.length;
   return List<String?>.generate(64, (i) {
-    // `numFromName % i`, where i == 0 gives NaN upstream. jsMod would throw.
-    final index = jsModOrNull(numFromName, i);
+    final index = switch (colourIndex) {
+      // `numFromName % i`, where i == 0 gives NaN upstream. jsMod would throw.
+      PixelColourIndex.loopIndex => jsModOrNull(numFromName, i),
+      // `numFromName % (i + 1)` — the divisor starts at 1.
+      PixelColourIndex.loopIndexPlusOne => jsMod(numFromName, i + 1),
+    };
     if (index == null) return null;
     return jsGetRandomColor(index, colors, range);
   });
@@ -128,8 +163,11 @@ SvgNode buildPixelScene({
   // which is the information a parity test was relying on a default to
   // supply. See hidden-state #16.
   required bool title,
+  // Required for the same reason as `title`: two shipped selectors answer it
+  // differently, so a builder shared by both may not prefer one.
+  required PixelColourIndex colourIndex,
 }) {
-  final tileColors = pixelColors(name, colors);
+  final tileColors = pixelColors(name, colors, colourIndex);
 
   return SvgNode(
     SvgElement.svg,

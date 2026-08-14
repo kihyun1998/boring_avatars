@@ -1,3 +1,50 @@
+## 0.3.0
+
+Adds upstream `boring-avatars` **1.10.1, 1.10.2, 1.11.1, 1.11.2 and
+2.0.0–2.0.4** as `BoringAvatarsVersion.v1_10_1` — upstream's newest release
+included. **Purely additive** — `v1_6_1` and `v1_7_0` render the same bytes
+they did in `0.2.0`, re-proven by regenerating both fixtures from the real npm
+packages: not one render byte moved and the committed golden images are
+untouched.
+
+With this release the public API is settled: every upstream release worth
+reproducing has a selector, and future work is keeping up with upstream's
+future releases.
+
+* **`pixel` draws differently from 1.10.1, and that is the whole change.**
+  Upstream moved the variant's colour index — `getRandomColor(numFromName % i)`
+  became `getRandomColor(numFromName % (i + 1))` — so every tile shifts one
+  palette step and the first tile, which the old expression left unfilled
+  (`hash % 0` is `NaN` in JavaScript), is now filled with `colors[0]`. The
+  other five variants render byte-identically to `v1_7_0`, asserted across the
+  full corpus.
+* **Nine releases share the selector because a caller gets the same thing out
+  of all nine — measured, not read off the diffs.** Each of the other eight is
+  rendered and compared to 1.10.1 across 2,400 documents (variant × name ×
+  palette × title × square): zero differ, per release. Their sources genuinely
+  diverge — a props rework at 1.11.1/1.11.2, a TypeScript rewrite at 2.0.0 —
+  and none of it reaches the document.
+* **`1.11.0` is deliberately unsupported.** It spreads its own props onto the
+  `<svg>` element (`colors="…" name="…"` arrive as markup), which no other
+  release does; upstream fixed it in 1.11.1. Reproducing it would mean
+  reproducing those attributes. It is the one hole in an otherwise contiguous
+  range, documented on the enum and in the README.
+* **`2.0.3` and `2.0.4` have no git tag** — upstream's tags stop at `v2.0.2`.
+  They are covered from the npm packages themselves; npm records the commit
+  each was published from, both commits resolve in upstream's history to one
+  source tree (`master`'s), and that resolution is recorded in the committed
+  fixture rather than asserted here.
+* `BoringAvatarsVersion.latest` **has moved** from `v1_7_0` to `v1_10_1`. If
+  you passed `latest` before, every `pixel` avatar you render redraws on
+  upgrade — which is what passing `latest` means. Name a selector to pin an
+  avatar.
+* The whole range was put through a real browser, per selector: upstream's own
+  React output and this package's, rendered in one Chrome — `v1_10_1` checked
+  against **2.0.4**, the far end of its group. 1,200 renders per selector,
+  zero unexplained pixel differences in any run (the only differing cases are
+  the two divergences `0.1.0` shipped with: the repaired `sunset` blank and
+  `beam`'s empty-palette throw, both documented in the README).
+
 ## 0.2.0
 
 Adds upstream `boring-avatars` **1.7.0, 1.8.0, 1.9.0 and 1.10.0** as

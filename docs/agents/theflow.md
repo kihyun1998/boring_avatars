@@ -11,7 +11,9 @@ exist yet — created lazily.
 **Environment:** Claude Code and the user share one machine, and **which one
 varies per session** — Windows (Flutter 3.41.9, Node v26.4.0, npm 11.17.0)
 through #58, macOS (Flutter 3.44.8, Node v24.11.1) at #59, **Windows again at
-#51 and #42**. It moves back and forth, so this list is history and not a
+#51 and #42**, macOS again at #45 (which is when `tool/calibrate/render.mjs`'s
+hardcoded Windows Chrome path finally cost a run — it now resolves per
+platform). It moves back and forth, so this list is history and not a
 current-state field; **measure, do not read it**: `flutter --version`,
 `node --version`, `uname -s`. The one thing that actually depends on the answer
 is `pana` — see Step 7. Either way, run `flutter test` /
@@ -178,10 +180,22 @@ closed the `turbulence` variant: unreachable upstream code has no output to
 reproduce.
 
 **Variant resolution does not vary by version** across the whole supported
-range, so it is not parameterised by one — verified by reading `avatar.js` at
-every tag from 1.6.1 to 2.0.2. Valid **as long as that stays true**; a release
-that changes the dispatch roster makes resolution version-dependent and this
-seam has to move.
+range, so it is not parameterised by one — verified by reading `avatar.js` /
+`index.tsx` at every tag from 1.6.1 to 2.0.2, **and extended to `master`
+(= npm 2.0.3/2.0.4) in #45**: the roster, the two deprecated aliases and the
+marble default are unchanged there too. Valid **as long as that stays true**; a
+release that changes the dispatch roster makes resolution version-dependent and
+this seam has to move.
+
+One measured asterisk, found by #45's completeness pass and **unruled**: the
+*failure mode* for an unknown variant string that collides with an
+`Object.prototype` key (`'constructor'`, `'toString'`, …) forks inside the
+covered range — 1.10.1–1.11.2 degrade to marble, 2.0.x's
+`AVATAR_VARIANTS[variant] || AvatarMarble` resolves the inherited function and
+React crashes. Upstream disagrees with itself, the port's version-less parser
+degrades to marble (matching 7 of 9 releases), and whether to reproduce the
+2.0.x crash is a crash-vs-degrade call — the ledger's territory, carried to
+the user in #45's batch rather than decided here.
 
 Public surface is the barrel `lib/boring_avatars.dart`. As of #59 it exports
 **three** names: the two enums and `boringAvatarSvg`. The third export carries a
@@ -195,7 +209,7 @@ beside it.
 |---|---|---|
 | `js/` | **1 data** | JS-semantics primitives — `hashCode`, `getNumber`, `jsMod`, `toSigned32`, `getDigit`, `getBoolean`, `getUnit`, `getRandomColor`, `getContrast`. **Sacred.** |
 | `avatar.dart` | **1 dispatch** + public seam | upstream's `avatar.js`: `(version, variant) →` a scene, with the alias/degrade rules delegated to `variant.dart` rather than restated. Plus `boringAvatarSvg`, the only thing the barrel exports |
-| `variants/<name>.dart` | **1 data** + **2 scene** | per-variant value generation and its scene. Flat while one upstream state is supported; a second state that *draws differently* is what would split it. **Sacred.** |
+| `variants/<name>.dart` | **1 data** + **2 scene** | per-variant value generation and its scene. The second drawing state arrived in #45 and did **not** split the layout: `pixel.dart` carries both colour-index eras behind a required `PixelColourIndex` parameter, and `avatar.dart`'s `_Drawing` switch decides which one a selector gets. A state that redrew a variant's *geometry* is what would still split a file. **Sacred.** |
 | `scene/` | **2 scene** | resolved drawing description — paths, transforms, fills, gradients, filters. Backend-neutral. |
 | `svg/` | **2 scene** | scene → SVG string (the byte-parity surface) |
 | `raster/` | **3 raster** | deterministic software rasterizer — scanline coverage AA, path flattening, 3-box blur, blend modes, gradients, filter-region clipping |
@@ -291,13 +305,18 @@ grouping criterion moved from source to output.
 
 **States 16→17 and within 17, cleared concerns:** `v2.0.0` vs `v2.0.1`
 `index.tsx` is byte-identical (only `types.ts` moved, which has no runtime
-effect); `2.0.4` **changes** the default `size` from `40` to `'40px'`. Not adds —
-`avatar.js` already destructures `size = 40` at v1.6.1 (corrected in #37; the
-earlier wording implied there was no default before 2.0.4). What moves is the
-value and its unit. Either way it is **consumer policy under this project's
-boundary rule**, not part of the version state — the caller always supplies size
-here. Valid **as long as `size` stays consumer-owned**; if the package ever
-renders at an implicit default, 2.0.3/2.0.4 becomes its own state.
+effect). The default `size` history is **three-valued, and this row got it
+wrong twice before #45 measured every tag**: `size = 40` through 1.11.0; **no
+default at all from 1.11.1 to 2.0.1** (the destructuring omits it, so an
+unspecified size makes React drop `width`/`height` entirely); `'40px'` from
+**2.0.2** — not 2.0.4, and unchanged at master. *(The previous wording said
+"2.0.4 changes 40 → '40px'", which mislocated the release and missed the
+no-default window — the #51 lesson's shape, again: a number in a bindings doc
+reads as settled because it is written down.)* Either way it is **consumer
+policy under this project's boundary rule**, not part of the version state —
+the caller always supplies size here. Valid **as long as `size` stays
+consumer-owned**; if the package ever renders at an implicit default, the
+covered range splits **three** ways on this axis, not two.
 
 **States 7–9 are the trap.** v1.5.6/v1.5.7/v1.5.8 changed all six components and
 v1.6.0 restored v1.5.3's blobs exactly — upstream reverted them. Port them as
@@ -466,6 +485,18 @@ in the README rather than letting "reproduces 1.8.0" carry an asterisk nobody
 reads. Recorded in the fixture as `idPositions` and asserted, so the numbers
 behind the decision can be re-run rather than believed.
 
+**#45 applied the same ruling to `v1_10_1` — a derivation from this event,
+not a new one.** The facts are the ruling's own, one group later: all nine
+covered releases write `useId()` mask ids (`rawIdSamples`: nine `:R0:`s, with
+`idPositions` showing the same position-dependence), and `marble`'s filter id
+joins the same class from 1.10.2 (`rawFilterIdSamples`: the literal
+`prefix__filter0_f` at 1.10.1, `filter_${useId}` after). The port emits the
+pre-useId literals for both, now asserted **raw** through the public
+`v1_10_1` path — because the refuting lens measured that until that assertion,
+a port renaming its ids *only for the new selector* passed every gate
+(`normalise` erases ids, goldens are id-blind, and `buildPixelScene` is the
+one builder that receives version information).
+
 Note which release the pixel comparison used: **1.10.0, not 1.7.0**. 1.7.0 is
 the release this port already matches byte for byte, so comparing it would have
 been the tautology `crosscheck`'s own header warns about.
@@ -525,7 +556,7 @@ when a completeness pass surfaces another.
 | 23 | Rounding when shapes overlap | a browser draws each shape of a plain display list onto an **8-bit** surface, so it rounds once per shape too | assuming either model without measuring | **corrected in #37 — the row used to claim the opposite of what the code does.** `blend()` reads back the byte the previous shape wrote, so k stacked shapes round k times, and that is what matches the reference. Measured drift against a single float accumulation, over 1.2M stacks of 2–9 opaque shapes: **2/255 premultiplied** (16/255 straight at negligible alpha — #29, not a real difference). `pixel`'s tiles never overlap; `ring` stacks nine; marble, bauhaus and beam stack two to four. **The condition this row reserved is now discharged, and it went the other way.** `marble` does introduce an offscreen layer, and #41 implemented it: a filtered shape is drawn into a padded **float** buffer, blurred premultiplied, and composited once. So the layer rounds *once*, not per shape — the opposite of the model this row defends for a plain display list, and right for the same reason, because a browser also composites a filter result as one image. Measured against Chrome on the real variant: every remaining interior disagreement is exactly **1/255**, on at most 5 pixels of 6400 |
 | 18 | **Attribute order is per call site, not per element** | React emits props in the order the JSX author wrote them, so one element takes several orders: `circle` is `cx cy r fill` in `ring` and `cx cy fill r transform` in `bauhaus`; `rect` and `path` each take five or more | giving the emitter a canonical order per element | every render whose order differs — silently, since a browser does not care about attribute order. The scene node therefore carries **ordered** attributes and the rasterizer reads them by name |
 | 19 | React's serialisation details | no self-closing tags (`<rect …></rect>`, never `<rect/>` — zero `/>` in 480 renders); no whitespace between elements; `'` escapes to **`&#x27;`** not `&apos;`; tabs, newlines and non-ASCII pass through; element names keep camel case (`linearGradient`) while some attributes hyphenate (`mask-type`, `stop-color`) and others do not (`maskUnits`, `stdDeviation`) | any of the plausible alternatives | byte-level layer-2 failure that renders identically on screen. The hyphenation split is **a list, not a rule** — callers supply the emitted spelling |
-| 17 | **`pixel`'s first tile is never filled** | `avatar-pixel.js` builds its 64 colours with `getRandomColor(numFromName % i, …)` from `i == 0`. `hash % 0` is `NaN`, so `colors[NaN]` is `undefined` and the first `<rect>` ships **with no `fill` attribute at all** | filling tile 0 from the palette | wrong on **100% of pixel renders**, every name, every palette — including the defaults. Distinct from #8: that is a degenerate *palette*, this is a degenerate *loop index*, and it needs no unusual input to fire. Committed fixture `svg.json` → `pixel\|upstream-default\|upstream-default` shows it |
+| 17 | **`pixel`'s first tile is never filled — in the pre-1.10.1 drawing only** | `avatar-pixel.js` builds its 64 colours with `getRandomColor(numFromName % i, …)` from `i == 0`. `hash % 0` is `NaN`, so `colors[NaN]` is `undefined` and the first `<rect>` ships **with no `fill` attribute at all**. **1.10.1 changed the expression to `% (i + 1)`** — the one drawing change in the whole supported range — so the divisor is never zero and tile 0 takes `colors[0]` (`hash % 1 == 0`); the loop-index `NaN` route is unreachable there and only the empty-palette route (#8) remains | filling tile 0 from the palette at `v1_6_1`/`v1_7_0` — or leaving it unfilled at `v1_10_1` | wrong on **100% of pixel renders** of whichever era gets the other era's rule, every name, every palette — including the defaults. Distinct from #8: that is a degenerate *palette*, this is a degenerate *loop index*, and it needs no unusual input to fire. Committed fixtures show both: `v1_6_1/svg.json` → `pixel\|upstream-default\|upstream-default` has the bare `<rect>`, `v1_10_1/svg.json` has it filled. `PixelColourIndex` (pixel.dart) names the two eras; #45's measured lists pin both |
 | 16 | `<title>` | `1.6.1` emits `<title>{name}</title>` **unconditionally and has no `title` prop at all** — there is no way to switch it off; the prop arrives in `1.7.0`, defaulting off | giving `v1_6_1` a `title` parameter, or implementing the prop-gated form everywhere | `v1_6_1`'s SVG bytes are wrong while its pixels are right — a layer-2 failure a pixel test cannot see. **Ported in #43, and the row's warning shaped the API.** The public argument is `bool? title`: either literal default would be silently wrong for one of the two selectors, and `null` lets each answer as upstream does. The row's first trap — giving `v1_6_1` a `title` parameter — is avoided by making `title: false` there an `ArgumentError` rather than a no-op; the second is avoided by keeping the flag in `avatar.dart` and passing it down, so the six builders carry upstream's own `{props.title && …}` and nothing decides the rule twice. Measured: the 1.6.3 → 1.7.0 source diff is 7 files and 14 lines, **6 of them this element and 6 whitespace inside a JSX expression** that reaches no output, so this row is the whole of `0.2.0`. `v1_7_0` with `title: true` is byte-identical to `v1_6_1` for all six variants |
 | 25 | **SVG arc flags are single characters and may be packed against the number after them** | `ring` writes `a32 32 0 10-64 0`, where `10` is *two flags* — large-arc 1, sweep 0 — and `-64` is the endpoint | a tokeniser that scans numbers uniformly reads ten, then takes `-64` as the sweep flag | a plausible wrong picture that throws nothing. Upstream writes this form in four of `ring`'s six arcs, so it is not hypothetical. Pinned by `raster_path_test.dart` — two `d` strings differing in one byte must come out mirrored |
 | 26 | **The drawing space is per variant, and is not the display size** | **three** values, not two: `ring` is 90, `beam` is **36**, and `bauhaus`, `marble`, `pixel`, `sunset` are 80. `size` still only reaches `width`/`height` | assuming one canvas constant for the package | **until #58 the rasterizer refused a target that did not match the viewBox, so this surfaced as a throw rather than a squashed avatar; it now scales to any uniform target instead, and the throw is gone.** What the three numbers still decide is what 1:1 *means* per variant — the *goldens* have to be generated at the right number, and a per-package `size` in the golden tool silently produces the wrong reference. **This row said "the other five are 80" until #38 measured it**, and it was wrong for the whole time `beam` was unported — the fact sits in `avatar-beam.js:4` (`const SIZE = 36`) and in all 80 of its fixture renders, and nothing read either. A row nobody can act on yet is a row nobody checks; see `lessons.md` |
@@ -911,6 +942,23 @@ picture is the same" rested on an argument. Run 2026-08-13: **1200 renders,
 1150 pixel-identical**, remainder 40 agreed refusals and the 10 ruled `sunset`
 blanks; **zero unruled differences**.
 
+`v1_10_1` is checked against **2.0.4** by the same judgement: the fixture's
+bytes come from npm 1.10.1, so 1.10.1 is the release the port already matches
+through the normalisation — and 2.0.4 is npm's `latest`, the TypeScript-era
+ESM build, and tag-less, the covered release where "the picture is the same"
+rests on the most argument and the least byte identity.
+
+**Run 2026-08-14 (#45) — all three selectors, the #50 sweep:** per selector,
+1200 renders (20 names × 5 palettes × `square` on/off × 6 variants) at size
+320: `v1_6_1` vs 1.6.1, `v1_7_0` vs 1.10.0, `v1_10_1` vs 2.0.4 — each run
+**1150 pixel-identical, 10 ruled S-1 blanks, 40 agreed S-2 refusals, zero
+unruled differences, worst unruled delta 0/255**. The seventh combination #50
+counts — `pixel`'s second colour index — is the `v1_10_1` run's 200 pixel
+cases, all identical to 2.0.4's own render. One environmental note: the first
+attempt ran concurrently with fixture regeneration and `flutter test`, and
+Playwright timed out taking a screenshot — re-run alone, everything passed;
+the harness shares the machine with whatever else is running, so run it alone.
+
 Upstream is **re-rendered from the npm package**, not read from
 `test/fixtures/`: those entries are stored normalised, and `mask="_"` has lost
 its `url()` wrapper, so a fixture entry handed to a browser renders unmasked.
@@ -1094,6 +1142,7 @@ it. Measured, comparing premultiplied (hidden-state #29):
 | `marble-clara-default` | 2 | 71/255 | #41 |
 | `marble-alice-pair` | 5 | 71/255 | #41 |
 | `marble-clara-square` | 2 | **9/255** | #41 |
+| `pixel-clara-second-index` | **0** | 71/255 | #45 |
 | `pixel-clara-100` | 0 | 53/255 | #83 |
 | `pixel-clara-square-100` | **0** | **3/255** | #83 |
 | `pixel-clara-210` | 0 | 63/255 | #83 |
@@ -1408,9 +1457,15 @@ claim about a measurement whose evidence cannot be re-run is one nobody can
 check. Cases live in `tool/mutate/cases/<issue>-<area>.json` and are literal
 substitutions, never patterns.
 
-It has **four** outcomes — `killed`, `SURVIVED`, `NO MATCH`, `NO TESTS` — and
-the last two are the ones this repo has been burnt by five times. A stale case
-exits non-zero, so it cannot rot quietly. Full description in its README.
+It has **five** outcomes — `killed`, `SURVIVED`, `NO MATCH`, `NO TESTS`, and
+since #45 `BASELINE RED` — and the middle two are the ones this repo has been
+burnt by five times. A stale case exits non-zero, so it cannot rot quietly.
+`BASELINE RED` refuses to run at all when the *unmutated* tree already fails:
+with a red baseline every case reports `killed` whatever it does — a no-op
+edit included — so no verdict is possible. #45 recorded "7/7 killed" over a
+tree whose README gates were deliberately still red, and the refuting lens
+showed the report was unfalsifiable as written; the runner now says so itself.
+Full description in its README.
 
 ```bash
 node tool/mutate/run.mjs cases/41-marble.json          # 32 cases, all killed
@@ -2120,10 +2175,12 @@ hidden-state list above is *pre-incident* enumeration, not evidence; move a
 row's story into `lessons.md` the first time it actually catches a defect, and
 cite the issue number.
 
-**Forty-eight entries as of #51** — counted, not incremented. The number read
-"thirty-six" until #51 added two and counted the file, which is its own small
-instance of the lesson that pass recorded: a number in a doc reads as settled
-because it is written down. The ones that have caught something more than once:
+**Fifty-one entries as of #45 (2026-08-14)** — counted
+(`grep -c '^### ' lessons.md`), not incremented. The number read "thirty-six"
+until #51 counted the file, and "forty-eight" until #45 counted it again after
+adding two — sessions in between had added entries without touching this line,
+which is its own small instance of the lesson: a number in a doc reads as
+settled because it is written down. The ones that have caught something more than once:
 
 | Rule | Caught in |
 |---|---|
