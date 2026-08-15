@@ -23,7 +23,22 @@
     "third-decimal Bradford drift moves no measured byte through rounding, so",
     "it became a realistic digit swap; and the linear-space clamp turned out",
     "to be a second copy of the byte clamp behind a monotone transfer, so the",
-    "copy was deleted (#40) and the case now targets the one clip that exists."
+    "copy was deleted (#40) and the case now targets the one clip that exists.",
+    "",
+    "**The sRGB-primary case never applied, from the day it was written**, and",
+    "was re-derived in #106. It is not a case that went stale: `git log -S` on",
+    "the one-line `[0.64, 0.33, ...]` form finds it in exactly one file — this",
+    "one — and never in `colour_spaces.dart`, whose only commit (`efe49de`)",
+    "already had the list broken one-element-per-line by `dart format`. The",
+    "`from` was written against the source as it was held in mind, not as it",
+    "was on disk.",
+    "",
+    "So `efe49de`'s **\"13/13 mutations killed\"** was not a measurement. The",
+    "re-runnable result at that commit is `12 killed · 0 survived · 1 never",
+    "applied`, which `run.mjs` exits 1 on. Measured on the re-derived `from`",
+    "in #106, the thirteenth does die — the conclusion was right and the",
+    "evidence was absent, which is the only direction of that error this",
+    "harness cannot detect for you."
   ],
   "cases": [
     {
@@ -50,8 +65,8 @@
     {
       "name": "a sRGB primary digit moves, and every derived matrix with it",
       "file": "lib/src/raster/colour_spaces.dart",
-      "from": "  [0.64, 0.33, 0.30, 0.60, 0.15, 0.06],",
-      "to": "  [0.65, 0.33, 0.30, 0.60, 0.15, 0.06],",
+      "from": "  0.64,",
+      "to": "  0.65,",
       "expectEdits": 1
     },
     {

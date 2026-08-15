@@ -2202,7 +2202,7 @@ hidden-state list above is *pre-incident* enumeration, not evidence; move a
 row's story into `lessons.md` the first time it actually catches a defect, and
 cite the issue number.
 
-**Fifty-one entries as of #45 (2026-08-14)** — counted
+**Fifty-two entries as of #106 (2026-08-14)** — counted
 (`grep -c '^### ' lessons.md`), not incremented. The number read "thirty-six"
 until #51 counted the file, and "forty-eight" until #45 counted it again after
 adding two — sessions in between had added entries without touching this line,
