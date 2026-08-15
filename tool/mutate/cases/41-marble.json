@@ -13,7 +13,15 @@
     "satisfied.",
     "",
     "Group B is layer 2, the emitted document. Group C is the rasterizer.",
-    "Group D deletes whole capabilities rather than perturbing them."
+    "Group D deletes whole capabilities rather than perturbing them.",
+    "",
+    "**Group D's vertical-pass case went stale at `b5be6c8` (#80)** and was",
+    "re-derived in #106. The banding rework turned every costly loop into a",
+    "`sync*` generator, so `_boxPass(...)` became `yield* _boxPassSteps(...)`",
+    "and this file's `from` stopped matching — silently, because nothing",
+    "re-ran it between #80 and #45's gate check. The mutation is the same",
+    "mechanism (delete the vertical pass, keep the horizontal one), not a",
+    "string touched up to compile."
   ],
   "cases": [
     {
@@ -268,7 +276,7 @@
       "group": "D",
       "name": "the vertical blur pass is skipped",
       "file": "lib/src/raster/raster.dart",
-      "from": "  _boxPass(layer, 4, lh, lw * 4, lw, 4, d); // vertical",
+      "from": "    yield* _boxPassSteps(layer, 4, lh, lw * 4, lw, 4, d); // vertical",
       "to": "",
       "expectEdits": 1
     }

@@ -642,6 +642,48 @@ rule that keeps gates deliberately red for a while (docs after the sweep)
 silently poisons any tool whose verdict assumes green; the two rules were both
 right and their interaction was the defect.
 
+### A case file defends itself only on the days someone runs it (#106)
+
+#45's gate check found two of the 45 committed cases matching nothing
+(`hits=0`). Both were `NO MATCH` — the outcome five earlier incidents bought —
+and neither had ever been printed, because printing it requires running the
+file.
+
+The two got there by opposite routes, which is the point:
+
+- **`41-marble`'s vertical-pass case went stale at `b5be6c8` (#80).** The
+  banding rework turned every costly loop into a `sync*` generator, so
+  `_boxPass(layer, …)` became `yield* _boxPassSteps(layer, …)`. The refactor
+  was correct and the case was correct; only their overlap rotted. Nobody
+  re-ran `cases/41-marble.json` between #80 and #45 — a stretch of thirty-odd
+  commits over four days, during which the file read as coverage.
+- **`95-colour4`'s sRGB-primary case never applied at all.** `git log -S` on
+  the one-line `[0.64, 0.33, 0.30, 0.60, 0.15, 0.06]` form finds it in exactly
+  one file in the history — the case JSON itself — and never in
+  `colour_spaces.dart`, whose only commit already had the list broken
+  one-element-per-line by `dart format`. The `from` was written against the
+  source as it was held in mind rather than as it was on disk. So `efe49de`'s
+  commit message, **"13/13 mutations killed"**, is not a re-runnable claim: the
+  result at that commit is `12 killed · 0 survived · 1 never applied`, which
+  `run.mjs` exits 1 on.
+
+Re-derived against the moved code and measured in #106, both mutants die. The
+conclusions were right and the evidence was missing — and that is the direction
+this harness cannot flag on its own, because a claim recorded in prose does not
+know it was never produced by a run.
+
+**The rule this earns:** the third outcome protects **a run**, not a
+repository. `NO MATCH` is decidable in milliseconds — it is a string search, no
+test process involved — while the run that would print it costs a full suite
+per case and so gets scheduled roughly never. The two costs are four orders of
+magnitude apart and the harness currently charges the high one for both.
+
+The cheap half is **owed and not built**: a `--check` mode that validates every
+case file's `from` against the tree, on the Step 7 gate list, would have caught
+`95-colour4` on the day it was written and `41-marble` in `b5be6c8` itself.
+That is a real gap, tracked as **#107** — not something this entry's re-run
+closed. What #106 did close is the two cases and the "13/13" claim.
+
 ## Step 4 — real round-trip proof
 
 ### A bar can be recorded, believed, and never run (#33 → #37)
