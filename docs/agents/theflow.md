@@ -1425,12 +1425,25 @@ skill's defaults govern.
 **No CI gates.** Run these locally, in order — they are the only gates:
 
 ```
+node tool/mutate/run.mjs --check                    # 0 stale cases; starts no tests
 flutter analyze                                     # 0 issues
 dart format --output=none --set-exit-if-changed lib test
 flutter test                                        # includes fixture + golden PNG gates
 cd example && flutter analyze                       # separate package — its own run
 flutter pub publish --dry-run                       # 0 warnings, clean tree
 ```
+
+**The `--check` line is the mutation harness's cheap half, and only that half**
+(#107). The run costs a full suite per case and stays a tool nobody schedules;
+whether a case's `from` still matches its target is a string search, and that
+is what runs here. It goes first because it is the only gate that can fail in
+milliseconds.
+
+It answers exactly one question — *do the cases still point at their targets* —
+and a clean result is **not** evidence that any mutant dies. #106 is what it
+costs to conflate those: two cases matched nothing for months, one of them
+since the day it was written, while a commit message recorded `13/13 mutations
+killed`.
 
 **The `example` line was owed from #78 and added in #43.** The module map says
 "when `example/` is created it becomes a separate package with its own analyzer

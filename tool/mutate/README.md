@@ -1,10 +1,15 @@
 # `tool/mutate` — the mutation harness
 
-A **tool, not a gate**. `flutter test` never runs it.
+The **run** is a tool, not a gate — `flutter test` never invokes it, and it
+costs a full suite per case. **`--check` is a gate** (#107): it starts no test
+process, finishes in milliseconds, and is on Step 7's list.
 
 ```bash
 node tool/mutate/run.mjs cases/41-marble.json           # every case
 node tool/mutate/run.mjs cases/41-marble.json --only=A  # one group
+
+node tool/mutate/run.mjs --check                        # every case file, no tests
+node tool/mutate/run.mjs cases/41-marble.json --check   # one file
 ```
 
 ## Why it is committed
@@ -71,6 +76,31 @@ unfalsifiable; the runner now refuses instead, with exit 2.
 
 Exit status is 0 only when everything was killed. A stale case is a failure, so
 that nobody has to notice it in the log.
+
+## `--check` is not a sixth outcome
+
+It asks **one of the five, early and cheaply**. Whether a `from` still applies
+is a string search; *printing* `NO MATCH` costs a full suite per case, because
+the runner has to reach that case to say it. The two are four orders of
+magnitude apart, and the harness used to charge the high price for both — so
+the cheap question went unasked, and two cases rotted for months. One of them
+had never applied at all, under a commit message claiming `13/13 mutations
+killed` (#106).
+
+`--check` and the run share `staleReason` rather than each implementing the
+rule. Two copies would eventually disagree about what stale means, and the
+copy nobody re-derived would be the cheap one on the gate.
+
+**What a clean `--check` says, and what it does not.** It says every case still
+points at its target. It says **nothing** about whether any mutant dies — that
+still costs the run. Reading `110 checked · 0 stale` as coverage is the same
+error as reading a stale case file as coverage, which is the error that bought
+this flag. The output says so on its own line for that reason.
+
+Three ways it fails, all of them stale in the same way: the substitution never
+applies, it applies a different number of times than `expectEdits` says, or the
+target file cannot be read at all (a case pointing at something deleted or
+renamed — which reads as `0` unless the two are distinguished).
 
 ## What this harness structurally cannot measure
 
