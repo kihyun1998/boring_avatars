@@ -678,11 +678,16 @@ test process involved — while the run that would print it costs a full suite
 per case and so gets scheduled roughly never. The two costs are four orders of
 magnitude apart and the harness currently charges the high one for both.
 
-The cheap half is **owed and not built**: a `--check` mode that validates every
-case file's `from` against the tree, on the Step 7 gate list, would have caught
-`95-colour4` on the day it was written and `41-marble` in `b5be6c8` itself.
-That is a real gap, tracked as **#107** — not something this entry's re-run
-closed. What #106 did close is the two cases and the "13/13" claim.
+The cheap half is now built and on the gate list (**#107**, the commit after
+this one): `--check` validates every case file's `from` against the tree,
+starts no test process, and finishes in milliseconds. Replayed against the
+case files as they stood before the fix, it names exactly the two cases and
+nothing else — so it would have caught `95-colour4` on the day it was written
+and `41-marble` in `b5be6c8` itself.
+
+It was deferred at first and that was the wrong call, for the reason this entry
+is about: a cheap safeguard nobody schedules is the thing that rots. The
+backlog ticket would have been the fourth instance of the same shape.
 
 ## Step 4 — real round-trip proof
 
