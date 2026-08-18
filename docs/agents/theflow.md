@@ -1142,6 +1142,47 @@ placement never was.
   intact under an inner boundary — 69 device pixels for a 68-pixel buffer, 272
   of them partly covered. Vary the ancestor, or the harness never ran in the
   condition (`lessons.md`, #83).
+**And the backend claim is now checked on a backend, not argued.**
+`example/integration_test/pixel_snap_test.dart` runs the same placement
+assertion under `IntegrationTestWidgetsFlutterBinding`, so it draws on whatever
+engine the device really has rather than on `flutter test`'s Skia. Run it
+manually, like `tool/crosscheck` — it needs a device and opens a window:
+
+```bash
+cd example && flutter test integration_test/pixel_snap_test.dart -d windows
+```
+
+**Measured 2026-08-18, Windows at ratio 1.5** (the machine's own scaling, which
+is one of the two #110 reported): a 61-pixel buffer painted **61x61 device
+pixels at (21, 21)**, where `inset x ratio` is 20.5. Green.
+
+Three things about that file are load-bearing and each cost a red run first:
+
+- **The size is derived from the ratio, not fixed.** The defect needs
+  `size x dpr` fractional, *not* a fractional ratio — so on a machine at 100%
+  every integer `size` lands whole and the test passes without entering the
+  condition. It solves for a box exactly half a device pixel past an integer at
+  whatever ratio the device reports.
+- **The avatar is `square`.** The extent is read off the alpha channel, and a
+  disc's topmost row can round to zero coverage because the scanline integrator
+  quantises the vertical direction. Measured: the disc reported **61x60** where
+  the square reports 61x61, on the same engine and the same buffer — a lost row
+  that nothing had lost.
+- **The capture boundary is outside the padding.** `toImage` renders
+  `Offset.zero & size` of the boundary it is called on, so a boundary wrapped
+  tightly around the avatar **is** a clip at the box — and the drawing is
+  deliberately up to one device pixel wider than that. Measured that way it
+  reported 61x60 at (0, 1): the harness reproducing the known clip limitation
+  and reading it as an engine defect.
+
+**Web is still unmeasured this way**, and the obstacle is named rather than
+skipped: `flutter test -d chrome` answers *"Web devices are not supported for
+integration tests yet"*, and the `flutter drive` route needs a `chromedriver`
+this machine does not have. What *was* done is the #78 bar — the example built,
+served, and **looked at in a real Chrome forced to `devicePixelRatio` 1.25**
+(the picker's `size: 30` is 37.5 device pixels there, squarely in the
+condition): every avatar round, no shaved edge. An observation, not a number.
+
 - **The backend rounds for you, so a rendered pixel cannot price the snap.**
   Skia with `isAntiAlias` off already rounds a destination rectangle whose
   width is a whole number of device pixels, so deleting the origin snap
