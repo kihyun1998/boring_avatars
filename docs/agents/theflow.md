@@ -1522,7 +1522,7 @@ enumeration-risk judgement.
   | Record | Status | Area it governs | Conformance items |
   |---|---|---|---|
   | [ADR-0001](../adr/0001-what-a-colour-declaration-means.md) — what a colour declaration means | **Accepted** 2026-08-10 (#71) | every colour-valued attribute the rasterizer reads: `fill`, `stroke`, `stop-color`, and any that follow | **all done**: #69, #62, #63, #64 |
-  | [ADR-0002](../adr/0002-when-the-box-and-the-pixel-grid-disagree.md) — when the box and the pixel grid disagree | **Accepted** 2026-08-18 (#110) | where the widget's buffer lands: grid alignment, containment, tangency, and what gives when `size × dpr` is fractional | **all done**: #110 |
+  | [ADR-0002](../adr/0002-when-the-box-and-the-pixel-grid-disagree.md) — when the box and the pixel grid disagree | **Accepted** 2026-08-18 (#110), amended the same day (#117, R5) | where the widget's buffer lands: grid alignment, containment, tangency, what gives when `size × dpr` is fractional, and — since R5 — what is claimed when the drawing cannot land one pixel per pixel at all | **all done**: #110, #117 |
 
   A **proposed** record counts for this check exactly as an accepted one does —
   it is already doing a spine's job (a hypothesis, a roster, an explicit
@@ -2348,7 +2348,7 @@ hidden-state list above is *pre-incident* enumeration, not evidence; move a
 row's story into `lessons.md` the first time it actually catches a defect, and
 cite the issue number.
 
-**Fifty-two entries as of #106 (2026-08-14)** — counted
+**Fifty-seven entries as of #117 (2026-08-18)** — counted
 (`grep -c '^### ' lessons.md`), not incremented. The number read "thirty-six"
 until #51 counted the file, and "forty-eight" until #45 counted it again after
 adding two — sessions in between had added entries without touching this line,

@@ -152,7 +152,9 @@ So the determinism guarantee — the same bytes on every platform, GPU, Flutter
 version and rendering backend — covers the widget as well as the SVG string.
 That guarantee is about the image the widget **produces**: it is rasterised at
 the box's physical pixel size, painted onto **whole** device pixels, and handed
-over with `FilterQuality.none`, so nothing resamples it.
+over with `FilterQuality.none`, so nothing resamples it. That is the ordinary
+case; where an ancestor puts it out of reach, see *Where one pixel cannot cover
+one pixel* below.
 
 Whole device pixels is the part that has to be arranged rather than assumed. A
 45-logical box at 150% display scaling is 67.5 physical pixels, and no buffer is
@@ -183,8 +185,31 @@ repaints. This is a Flutter-level limitation rather than one this package can
 close (flutter/flutter#111302); Flutter's own text caret snaps to physical
 pixels the same way and inherits the same gap.
 
+### Where one pixel cannot cover one pixel
+
+Everything above arranges for one buffer pixel to cover one device pixel, and
+`FilterQuality.none` is exact exactly while that holds. Two ordinary situations
+put it out of reach, and no placement fixes either: an ancestor that **scales or
+rotates**, where this box's grid is not the device's grid at all, and a
+**buffer that is not the destination's size** — a parent squeezing the box, or a
+display-scale change that leaves the previous buffer up until the new one is
+drawn.
+
+There, `FilterQuality.none` is the *worst* available choice rather than the
+safest. Nearest neighbour cannot spend a fraction of a pixel, so it drops or
+duplicates whole columns — on a smooth `marble` gradient that reads as a fold
+straight across the avatar. So the widget draws those with a filter instead:
+half a pixel of softness in place of a fold.
+
+This narrows the determinism guarantee's stated scope without spending any of
+it. Where the avatar lands one pixel per pixel — the overwhelming majority — the
+bytes are exactly what they have always been. Where it does not, the output was
+already the backend's: which column nearest neighbour keeps is the sampler's
+rounding, so Skia and Impeller were never obliged to agree there either.
+
 Layout that then squeezes the box smaller than the size you asked for is outside
-the package, and Flutter's sampler runs there like it would for any image.
+the package, and Flutter's sampler runs there like it would for any image — a
+filtered one, now that the drawing is knowingly a scaled copy.
 
 ### The avatar arrives a beat after the widget does
 

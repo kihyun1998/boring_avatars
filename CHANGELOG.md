@@ -1,3 +1,49 @@
+## 0.3.2
+
+Stops claiming an **unfiltered draw** where one buffer pixel cannot cover one
+device pixel (#117). No avatar's *values* change, and no avatar that was already
+landing on the grid changes at all — the bytes there are identical to `0.3.1`.
+
+* **`FilterQuality.none` is exact under one condition, and it was being asserted
+  unconditionally.** The widget rasterises at the box's physical size and hands
+  the buffer over with no filter, which is right while the drawing lands one
+  buffer pixel per device pixel. `0.3.1` bought the origin and the extent for
+  that (#110), and a *translation* is all a placement can fix.
+* **Two ordinary situations are outside what any placement reaches**: an
+  ancestor that **scales or rotates**, where this box's grid is not the device's
+  grid at all; and a **buffer that is not the destination's size** — a parent
+  squeezing the box, or a display-scale change that leaves the previous buffer
+  up until the new one is drawn.
+* **There, nearest neighbour is the worst available choice rather than the
+  safest.** It cannot spend a fraction of a pixel, so it drops or duplicates
+  whole columns. Measured under a 1.1 scale: **7** columns of the drawing came
+  out byte-identical to their neighbour — a straight fold across `marble`'s
+  gradient, which is the shape #117 reported.
+* **So those draws are filtered now** — half a pixel of softness in place of a
+  fold. A **fractional translation is deliberately not** one of them: the snap
+  moves the drawing by the same fraction the ancestors moved it, so the pixels
+  still land whole, and treating it as misaligned would put a filter under every
+  ordinary padding.
+* **This narrows the determinism guarantee's stated scope without spending any
+  of it.** Where the avatar lands one pixel per pixel — the overwhelming
+  majority — the bytes are unchanged. Where it does not, the output was already
+  the backend's: which source column nearest neighbour keeps is the sampler's
+  rounding, so Skia and Impeller were never obliged to agree there. The ruling
+  (2026-08-18) chose between a fold whose position is the backend's and a
+  softness whose position is the backend's.
+* **What this does not reach, stated rather than implied.** The decision is made
+  while painting, so a layer that moves *without* its child repainting — a
+  scrolling `ListView` — is outside it exactly as it is outside `0.3.1`'s
+  alignment (flutter/flutter#111302). It comes back the moment the row repaints.
+* **The anti-aliased rounded clip named in the report is not the cause**, and
+  that is measured rather than argued: on a real engine at ratio 1.5, five cells
+  — no ancestor, a clip on the canvas path, the same clip forced onto a real
+  layer by a compositing sibling, the same with a `RepaintBoundary` around the
+  avatar, and that one at a whole-pixel origin — all rendered `66x66` with zero
+  repeated columns or rows. The fixture is kept as the control that says so.
+
+The rule and the ruling behind it are ADR-0002 (R5).
+
 ## 0.3.1
 
 Fixes a **shaved edge** on `BoringAvatar` when the widget lands on fractional
