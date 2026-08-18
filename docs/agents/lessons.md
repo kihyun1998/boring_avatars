@@ -1591,3 +1591,41 @@ constant, not of how carefully the pixels were counted. Within one frame,
 compare freely. Across rebuilds, screenshots or machines, the only honest move
 is to retract — and to retract *in writing where the number was published*, so
 the next reader does not pick it back up.
+
+### The instrument was upstream of the defect, and four green fixtures said so (#117)
+
+Four fixtures were written to reproduce #117 — a clip matrix (5 cells), a
+viewport set (3), a factor grid (14), and the consuming app's own standalone
+ladder (6). All twenty-eight cells came back clean, and each clean run was read
+as "this environment does not reproduce it". The reading was wrong in a way no
+amount of adding cells would have fixed.
+
+Two separate faults, stacked.
+
+**The metric was a proxy for one form of the defect.** Counting byte-identical
+adjacent columns detects *nearest-neighbour* duplication. The resampling here is
+interpolated, so it never produces two identical neighbours — the count is
+structurally zero while two thirds of the avatar's pixels are wrong. Switching to
+a direct pixel comparison against an untreated avatar in the same frame is what
+made the signal appear at all.
+
+**The instrument sat before the step that breaks it.** Every fixture measured
+through `RenderRepaintBoundary.toImage`, which re-rasterises the layer subtree
+offscreen and never runs the engine's composite of those layers onto the window.
+Measured both ways on the same ancestors: `toImage` reports a viewport cell
+byte-identical to a bare one, while a screen capture of the same running app
+reports 2556 interior pixels differing by up to 94 levels. No metric fixes that;
+the fixture cannot see the frame where the defect happens.
+
+What finally located it was a throwaway desktop app whose only output was a
+**screenshot**, compared offline: three ancestors × two origins, and the answer
+fell out in one frame — a compositing ancestor is harmless at a whole device
+pixel and resamples everything inside it at a fractional one.
+
+**The rule this earns:** before trusting a green fixture, ask which frame it
+measures and whether the defect happens in that frame. A harness that never ran
+in the condition cannot have cleared it — and `toImage` is a different frame from
+the screen, not a cheaper view of the same one. When a defect is only visible to
+a human looking at a window, the honest instrument is a screen capture, and the
+fixture built on the convenient API is worse than none, because its zeroes are
+read as coverage.
