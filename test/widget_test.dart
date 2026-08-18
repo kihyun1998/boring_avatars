@@ -888,6 +888,35 @@ void _pixelSnap() {
       }
     });
 
+    test('a non-finite global position corrects by nothing, not by NaN', () {
+      // `localToGlobal` walks the ancestor transforms, and a degenerate one
+      // hands back infinity or NaN. Carried into the destination rectangle that
+      // is a drawing nobody sees and an exception nobody can place. Flutter's
+      // own `RenderEditable._snapToPhysicalPixel` guards the identical
+      // expression the identical way; this is that guard, and this is what
+      // makes it a claim rather than a comment.
+      for (final bad in [double.nan, double.infinity, -double.infinity]) {
+        final rect = snappedAvatarRect(
+          global: Offset(bad, bad),
+          local: const Offset(12, 12),
+          box: const Size(45, 45),
+          devicePixelRatio: 1.5,
+        );
+        expect(
+          rect.isFinite,
+          isTrue,
+          reason: 'a global position of $bad produced $rect',
+        );
+        expect(
+          rect.topLeft,
+          const Offset(12, 12),
+          reason:
+              'with nothing to snap against, the drawing stays where layout '
+              'put it rather than moving by an unknown amount',
+        );
+      }
+    });
+
     test('a box the parent squeezed still governs the extent', () {
       // The other half of the same function: the rectangle is the *box*
       // rounded, never the buffer, so a squeezed box keeps squeezing.

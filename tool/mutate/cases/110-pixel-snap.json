@@ -30,7 +30,12 @@
     "`test: null` means the whole suite, and it is not narrowed here even",
     "though every assertion that kills these lives in `widget_test.dart`. The",
     "layer is new to this harness and a narrowed run would report a golden",
-    "regression as a survivor — the same judgement #58 records."
+    "regression as a survivor — the same judgement #58 records.",
+    "",
+    "B3 은 레퍼런스가 준 가드다. Flutter 의 RenderEditable._snapToPhysicalPixel",
+    "이 같은 식을 같은 자리에서 isFinite 로 막는다. 축퇴된 조상 변환이",
+    "localToGlobal 에서 NaN 을 돌려주면 그대로 drawImageRect 의 사각형에",
+    "실린다 — 파생만으로는 안 나왔고, 트래커를 읽고 나서 나왔다."
   ],
   "cases": [
     {
@@ -44,7 +49,7 @@
       "group": "A",
       "name": "A2 — the origin is not snapped",
       "file": "lib/src/widget/boring_avatar.dart",
-      "from": "    local.dx + (onGrid(global.dx) - global.dx),\n    local.dy + (onGrid(global.dy) - global.dy),",
+      "from": "    local.dx + correction(global.dx),\n    local.dy + correction(global.dy),",
       "to": "    local.dx,\n    local.dy,"
     },
     {
@@ -67,6 +72,13 @@
       "file": "lib/src/widget/boring_avatar.dart",
       "from": "bool hitTestSelf(Offset position) => true;",
       "to": "bool hitTestSelf(Offset position) => false;"
+    },
+    {
+      "group": "B",
+      "name": "B3 — 비유한 전역 좌표가 그대로 통과한다",
+      "file": "lib/src/widget/boring_avatar.dart",
+      "from": "at.isFinite ? onGrid(at) - at : 0",
+      "to": "onGrid(at) - at"
     }
   ]
 }

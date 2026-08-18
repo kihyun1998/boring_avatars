@@ -622,6 +622,25 @@ class _BoringAvatarState extends State<BoringAvatar> {
 /// than the layer tree, so it sees through all of them; the correction it
 /// yields is then applied to `local`, which is the space the canvas is in.
 ///
+/// **Prior art agrees, and it was found after the fact rather than copied.**
+/// Flutter snaps its own text caret the same way —
+/// `RenderEditable._snapToPhysicalPixel` (`rendering/editable.dart:2341`)
+/// computes `(global / (1 / dpr)).round() * (1 / dpr) - global`, which is this
+/// function's correction term rearranged, and takes `global` from
+/// `localToGlobal` for the same reason. Convergence, not derivation from it;
+/// what the reference did supply is the non-finite guard below.
+///
+/// **What it cannot do is survive a scroll, and that is not fixable here.**
+/// The correction is computed in `paint`, and a layer can move without its
+/// child repainting — which is exactly what a `ListView` does, since it offsets
+/// each child's repaint boundary instead of painting it again. Measured: after
+/// a 7.3-logical scroll at ratio 1.5 the recorded destination was **11.2 device
+/// pixels** stale and `paint` had not re-run. So a *stationary* avatar in a
+/// list is on the grid and a *scrolling* one is not. Flutter tracks this as
+/// flutter/flutter#111302 — *"no guarantee the render object will repaint if
+/// this changes"* — and its own caret has the same limitation; the engine used
+/// to pixel-snap layers and that was removed (flutter/flutter#111145).
+///
 /// **This is asserted directly rather than through a rendered pixel, and the
 /// reason is invariant 4.** Skia, with `isAntiAlias` off, already rounds a
 /// destination rectangle whose width is a whole number of device pixels — so a
@@ -640,9 +659,19 @@ Rect snappedAvatarRect({
   double onGrid(double value) =>
       (value * devicePixelRatio).roundToDouble() / devicePixelRatio;
 
+  // **A non-finite global position corrects by nothing rather than by `NaN`.**
+  // `localToGlobal` walks the ancestor transforms, and a degenerate one — a
+  // `Transform.scale(scale: 0)`, a collapsed matrix — hands back infinity or
+  // `NaN`. Carried into the rectangle that reaches `drawImageRect`, that is a
+  // drawing the caller never sees and an exception they cannot place. Flutter's
+  // own `RenderEditable._snapToPhysicalPixel` guards the identical expression
+  // the identical way, which is where this guard comes from rather than from a
+  // failure.
+  double correction(double at) => at.isFinite ? onGrid(at) - at : 0;
+
   return Rect.fromLTWH(
-    local.dx + (onGrid(global.dx) - global.dx),
-    local.dy + (onGrid(global.dy) - global.dy),
+    local.dx + correction(global.dx),
+    local.dy + correction(global.dy),
     onGrid(box.width),
     onGrid(box.height),
   );

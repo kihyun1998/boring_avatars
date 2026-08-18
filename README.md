@@ -173,8 +173,15 @@ avoids it entirely.
 The grid it rounds to is the **screen's**, not the enclosing layer's, which
 matters more than it sounds: `ListView` gives every child its own
 `RepaintBoundary`, and a boundary carries the fractional position itself while
-handing its child a whole-looking offset. An avatar scrolling in a list is the
+handing its child a whole-looking offset. An avatar sitting in a list is the
 ordinary case, not the exotic one.
+
+While a list is actually *scrolling*, though, the alignment goes stale — the
+position is computed when the avatar paints, and scrolling moves the layer
+without repainting what is inside it. It comes back the moment the row
+repaints. This is a Flutter-level limitation rather than one this package can
+close (flutter/flutter#111302); Flutter's own text caret snaps to physical
+pixels the same way and inherits the same gap.
 
 Layout that then squeezes the box smaller than the size you asked for is outside
 the package, and Flutter's sampler runs there like it would for any image.
