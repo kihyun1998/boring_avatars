@@ -15,6 +15,11 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # Runs `integration_test/` on a **real engine** rather than the test binding,
+  # which is the only way to check #110's placement claim on the backend that
+  # will actually draw it. See that directory's header.
+  integration_test:
+    sdk: flutter
   flutter_lints: ^6.0.0
 
 flutter:
