@@ -212,7 +212,7 @@ beside it.
 | `scene/` | **2 scene** | resolved drawing description — paths, transforms, fills, gradients, filters. Backend-neutral. |
 | `svg/` | **2 scene** | scene → SVG string (the byte-parity surface) |
 | `raster/` | **3 raster** | deterministic software rasterizer — scanline coverage AA, path flattening, 3-box blur, blend modes, gradients, filter-region clipping |
-| `widget/` | consumer seam | `BoringAvatar` widget; `ui.decodeImageFromPixels` hand-off, caching |
+| `widget/` | consumer seam | `BoringAvatar` widget; `ui.decodeImageFromPixels` hand-off, caching; and, as of #110, the placement — `snappedAvatarRect` / `PixelSnappedImage` put the buffer on the device pixel grid, which `RawImage` cannot be asked to do |
 
 Everything is inside the top-level `flutter test` workspace. **There are no
 out-of-workspace members today.** When `example/` is created it becomes a
@@ -1625,6 +1625,7 @@ only there.** Below is what each one has to *do* — the mapping is not repeated
 | `0.1.0` | everything: harness, primitives, scene, all six variants, the public SVG surface, **the rasteriser's arbitrary scale (#58), the `BoringAvatar` widget (#80), the banded rasteriser that keeps it off the frame on both platforms (#80), the example (#78), and the colour vocabulary the rasteriser reads (#71 → #62 → #63 → #64, plus #95 — the Color 4 remainder the #64 pass found unlearned; user ruling 2026-08-11, same criterion as the 08-10 ruling below: publishing first would put a release that refuses valid colours in people's hands)** |
 | `0.2.0` | the `<title>` gate (hidden-state #16) — **one change** |
 | `0.3.0` | `pixel`'s second colour-index path — **one change**, and the only one in scope where the drawing moves. **Plus the full Chrome pixel sweep (#50), which runs *inside* this release rather than before it** — see below |
+| `0.3.1` | #110 — the widget's buffer landing whole on the device pixel grid. **The first release that adds no selector and moves no byte**: it changes where an avatar is painted, not what it is, so `CLAUDE.md`'s principle-3 table is untouched. A patch earns a row here because the release exists, not because it is a state |
 
 **Why the Chrome sweep runs inside `0.3.0` rather than before it — user ruling,
 2026-08-13.** `#50` counts **seven** combinations: five variants that draw the
