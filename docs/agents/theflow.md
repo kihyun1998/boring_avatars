@@ -1175,13 +1175,46 @@ Three things about that file are load-bearing and each cost a red run first:
   reported 61x60 at (0, 1): the harness reproducing the known clip limitation
   and reading it as an engine defect.
 
-**Web is still unmeasured this way**, and the obstacle is named rather than
-skipped: `flutter test -d chrome` answers *"Web devices are not supported for
-integration tests yet"*, and the `flutter drive` route needs a `chromedriver`
-this machine does not have. What *was* done is the #78 bar — the example built,
-served, and **looked at in a real Chrome forced to `devicePixelRatio` 1.25**
-(the picker's `size: 30` is 37.5 device pixels there, squarely in the
-condition): every avatar round, no shaved edge. An observation, not a number.
+**Web takes a different route, and it is a measurement rather than a look.**
+The integration-test path is closed there — `flutter test -d chrome` answers
+*"Web devices are not supported for integration tests yet"*, and `flutter drive`
+needs a `chromedriver` this machine does not have. So: build the example for
+web, serve it, and drive it from a **Playwright browser context created with a
+real `deviceScaleFactor`**, then measure the device-resolution screenshot.
+
+```bash
+cd example && flutter build web --release      # then serve build/web
+# Playwright: browser.newContext({deviceScaleFactor: 1.25}), screenshot scale:'device'
+```
+
+**Measured 2026-08-18, Chrome 151 at a real scale factor of 1.25**: canvas
+backing 1375x1125 for a 1100x900 CSS viewport, and every avatar occupies
+**exactly `(size * dpr).round()` device pixels** — the picker's `size: 30` reads
+37x37 across all five unselected entries, the gallery's `size: 72` reads 90x90.
+
+**Do not fake the ratio by overriding `window.devicePixelRatio`.** The first
+attempt injected a getter returning 1.25 into `index.html`. Flutter believed it
+and sized its canvas at 1.25, but the *browser* was still at 1.0, so the canvas
+was then rescaled to the screen by 0.8 — every one-pixel artefact smoothed away
+before it could be seen. That run could not have detected the defect it was
+run to look for. A context with a real `deviceScaleFactor` has no such gap.
+
+**And the ratio is not the nominal number, which is the trap that nearly
+produced a false report.** Chrome hands Flutter `1.2499999701976776`, not 1.25 —
+a float32 round-trip. So `30 x dpr` is `37.49999910...`, which **rounds down to
+37**, where the nominal 1.25 predicts 37.5 rounding up to 38. Measuring 37 and
+expecting 38 reads as exactly one lost column: the reported symptom, from
+arithmetic rather than from the engine. Take `pixels` from the ratio the
+platform actually reports, never from the one the display settings are labelled
+with.
+
+**Two measurement traps beside it, both of which produced a wrong number
+first.** Selecting avatar pixels by colour *saturation* drops the
+half-covered edge column, which blends toward the white background and reads as
+desaturated — 37 where the true extent is 38. And the selected entry in the
+picker carries a selection ring, so it measures 48x48 and is not a case at
+all. Measure against the actual local background at zero tolerance, and read
+the per-column profile before believing an extent.
 
 - **The backend rounds for you, so a rendered pixel cannot price the snap.**
   Skia with `isAntiAlias` off already rounds a destination rectangle whose
