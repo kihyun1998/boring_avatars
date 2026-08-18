@@ -8,8 +8,9 @@ npm package produces — the same numbers, the same SVG, the same bytes. Two
 deliberate exceptions are documented under [Where it differs on purpose](#where-it-differs-on-purpose).
 
 Every supported upstream release is reachable at once — npm needs a downgrade to
-render an older version's avatar, here it is a parameter. `0.1.0` supports the
-first of them; the rest arrive as additional selector values.
+render an older version's avatar, here it is a parameter. As of `0.3.0` every
+release in scope has a selector, up to upstream's newest; later releases of this
+package add selector values and never change one.
 
 ## Install
 
@@ -82,7 +83,8 @@ That is the entire difference between the two selectors.
 | `BoringAvatarsVersion.v1_7_0` | `1.7.0`, `1.8.0`, `1.9.0`, `1.10.0` | `<title>` becomes optional, and defaults **off** |
 | `BoringAvatarsVersion.v1_10_1` | `1.10.1`, `1.10.2`, `1.11.1`, `1.11.2`, `2.0.0`, `2.0.1`, `2.0.2`, `2.0.3`, `2.0.4` | `pixel`'s colour index moves — every `pixel` avatar redraws |
 
-That is everything `0.3.0` supports — upstream's newest release included.
+That list was completed in `0.3.0` and is unchanged in `0.3.1` — upstream's
+newest release included.
 **Later releases of this package add selector values; they never change one.**
 A shipped selector's output is frozen — an avatar you render today renders
 identically on every future version of this package — so support grows by
@@ -332,12 +334,17 @@ degraded would be an image upstream has never produced.
 
 ## Status
 
-`0.3.0` reaches upstream's newest release: `v1_10_1` covers `1.10.1` through
+`0.3.0` reached upstream's newest release: `v1_10_1` covers `1.10.1` through
 `2.0.4` (nine releases, `1.11.0` excluded — see the support table), alongside
 `v1_7_0` (`1.7.0`–`1.10.0`) and `v1_6_1` (`1.6.1`–`1.6.3`). With that, the
 public API is settled: every upstream release worth reproducing has a selector,
 and what follows is keeping up with upstream's future releases, each as a new
 value.
+
+`0.3.1` is a patch on top of that and adds no selector. It moves no byte any
+avatar is made of — it fixes **where** the widget puts them, which was off the
+device pixel grid at fractional display scalings. The SVG surface is untouched
+by it entirely.
 
 Releases share a selector because a caller gets the same thing out of them, and
 that is **measured rather than asserted**. For `v1_10_1`, each of the other

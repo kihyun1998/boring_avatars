@@ -12,6 +12,15 @@ environment:
   # Dart constraint already dominates and a Flutter line would be decoration.
   # Valid **as long as nothing newer than 3.10 is reached for**; the template's
   # `>=1.17.0` was removed in #42 for being a floor that was simply false.
+  #
+  # **Re-checked at #110**, which was the first change since to add framework
+  # API rather than only arithmetic. It reaches for `LeafRenderObjectWidget`,
+  # `RenderBox` (`computeDryLayout`, `hitTestSelf`, `localToGlobal`),
+  # `PaintingContext`, `Canvas.drawImageRect` and `ui.Image.clone` /
+  # `isCloneOf`. The two whose age was not obvious were dated in the SDK's own
+  # history rather than recalled: `RenderObject.dispose` arrived in #82883
+  # (2021) and `Image.isCloneOf` in engine#21371 (2020). Both predate 3.10, so
+  # the condition still holds and `devicePixelRatioOf` is still the newest.
   sdk: ^3.11.5
 
 dependencies:
