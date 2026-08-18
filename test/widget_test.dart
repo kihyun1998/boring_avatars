@@ -40,6 +40,7 @@ void main() {
   _bytesOnScreen();
   _noLeak();
   _pixelSnap();
+  _resampleFallback();
 
   const palette = ['#92A1C6', '#146A7C', '#F0AB3D', '#C271B4', '#C20D90'];
 
@@ -1052,3 +1053,270 @@ void _pixelSnap() {
 Widget _itself(Widget child) => child;
 Widget _underRepaintBoundary(Widget child) => RepaintBoundary(child: child);
 Widget _underOpacity(Widget child) => Opacity(opacity: 0.5, child: child);
+
+/// `FilterQuality.none` is a promise about the *destination*, and #117 is what
+/// happens when the promise is made where it does not hold.
+///
+/// **The invariant behind the unfiltered hand-off.** This package rasterises at
+/// `(size × dpr).round()` physical pixels and draws with no filter at all,
+/// because any sampling would be the backend's and `CLAUDE.md`'s invariant 4
+/// refuses it. That is only *true* while the buffer and the rectangle it lands
+/// in are the same number of device pixels, in the same axes — one buffer pixel
+/// per device pixel. [snappedAvatarRect] buys the origin and the extent
+/// (ADR-0002 R1/R2); it cannot buy the two conditions this predicate adds.
+///
+/// **And when the invariant fails, `none` is the worst available choice, not the
+/// safest.** Nearest neighbour cannot spend a fraction of a pixel, so it drops
+/// or duplicates whole columns — the fold #117 reported across `marble`'s
+/// gradient. A filtered draw at the same misalignment is half a pixel of
+/// softness instead.
+///
+/// **This does not trade invariant 4 away, and that is the whole argument for
+/// the ruling.** In the misaligned case the output is *already* the backend's:
+/// which source column nearest neighbour keeps is the sampler's rounding, so
+/// Skia and Impeller need not agree and the bytes were never ours to promise.
+/// The fallback narrows the claim to the cases where it is true and stops the
+/// silent lie in the ones where it never was. Where the invariant does hold —
+/// the overwhelming majority — the bytes are **identical to before**.
+void _resampleFallback() {
+  const palette = ['#C9B8FD', '#3B7BF0', '#2E33A0'];
+
+  Matrix4 translated(double dx, double dy) =>
+      Matrix4.translationValues(dx, dy, 0);
+
+  group('the unfiltered hand-off is claimed only where it is true', () {
+    // The predicate is pure, so these are the enumeration and not a sample of
+    // it: identity, translation (whole and fractional), the two linear parts
+    // that defeat a snap, both directions of a buffer/box disagreement, and a
+    // transform that is not a number.
+
+    test('an identity transform with a matching buffer lands one-for-one', () {
+      expect(
+        avatarLandsOnePixelPerPixel(
+          toScreen: Matrix4.identity(),
+          box: const Size(44, 44),
+          buffer: const Size(66, 66),
+          devicePixelRatio: 1.5,
+        ),
+        isTrue,
+      );
+    });
+
+    test('a whole-pixel translation still lands one-for-one', () {
+      expect(
+        avatarLandsOnePixelPerPixel(
+          toScreen: translated(12, 34),
+          box: const Size(44, 44),
+          buffer: const Size(66, 66),
+          devicePixelRatio: 1.5,
+        ),
+        isTrue,
+      );
+    });
+
+    // **The one that is easy to get wrong.** A fractional *translation* is not a
+    // misalignment: `snappedAvatarRect` moves the drawing by the same fraction
+    // in the opposite direction, so the pixels still land whole. Reporting this
+    // as filtered would put a filter under every ordinary padding.
+    test(
+      'a fractional translation lands one-for-one, because the snap cancels it',
+      () {
+        expect(
+          avatarLandsOnePixelPerPixel(
+            toScreen: translated(35, 20),
+            box: const Size(44, 44),
+            buffer: const Size(66, 66),
+            devicePixelRatio: 1.5,
+          ),
+          isTrue,
+          reason:
+              '35 x 1.5 is 52.5 device pixels and the snap already corrects '
+              'the half; the drawing lands on 53',
+        );
+      },
+    );
+
+    test('a scale does not', () {
+      expect(
+        avatarLandsOnePixelPerPixel(
+          toScreen: Matrix4.diagonal3Values(1.1, 1.1, 1),
+          box: const Size(44, 44),
+          buffer: const Size(66, 66),
+          devicePixelRatio: 1.5,
+        ),
+        isFalse,
+      );
+    });
+
+    // A mirror is a scale of -1, and it is worth its own line because it is the
+    // one linear part that leaves the *extent* right — a predicate written
+    // against sizes rather than against the matrix would pass it.
+    test('nor does a mirror', () {
+      expect(
+        avatarLandsOnePixelPerPixel(
+          toScreen: Matrix4.diagonal3Values(-1, 1, 1),
+          box: const Size(44, 44),
+          buffer: const Size(66, 66),
+          devicePixelRatio: 1.5,
+        ),
+        isFalse,
+      );
+    });
+
+    test('nor does a rotation', () {
+      expect(
+        avatarLandsOnePixelPerPixel(
+          toScreen: Matrix4.rotationZ(0.2),
+          box: const Size(44, 44),
+          buffer: const Size(66, 66),
+          devicePixelRatio: 1.5,
+        ),
+        isFalse,
+      );
+    });
+
+    // ADR-0002 R2: the drawn extent comes from the box, so a parent that
+    // squeezes keeps squeezing the drawing. That is deliberate — and it is also
+    // a resample, which is exactly what this predicate is for.
+    test('a box the parent squeezed does not', () {
+      expect(
+        avatarLandsOnePixelPerPixel(
+          toScreen: Matrix4.identity(),
+          box: const Size(20, 20),
+          buffer: const Size(240, 240),
+          devicePixelRatio: 1,
+        ),
+        isFalse,
+      );
+    });
+
+    // The other direction, and it is not symmetric with the one above: this is
+    // the transitional state `_sync` deliberately allows, where a ratio change
+    // leaves an older buffer on screen until the new raster lands.
+    test('a buffer from a different ratio does not', () {
+      expect(
+        avatarLandsOnePixelPerPixel(
+          toScreen: Matrix4.identity(),
+          box: const Size(44, 44),
+          buffer: const Size(64, 64),
+          devicePixelRatio: 1.5,
+        ),
+        isFalse,
+        reason:
+            '44 x 1.5 rounds to a 66-pixel destination and the buffer is 64',
+      );
+    });
+
+    // `localToGlobal` walks the ancestor transforms and a degenerate one — a
+    // `Transform.scale(scale: 0)`, a collapsed matrix — hands back infinities.
+    // `snappedAvatarRect` already guards its own arithmetic against that; this
+    // is the same guard on the same input, and it fails *safe*: a drawing whose
+    // position cannot be computed is not one to promise anything about.
+    test('a non-finite transform does not', () {
+      expect(
+        avatarLandsOnePixelPerPixel(
+          toScreen: Matrix4.diagonal3Values(double.nan, 1, 1),
+          box: const Size(44, 44),
+          buffer: const Size(66, 66),
+          devicePixelRatio: 1.5,
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('and the predicate reaches the pixels', () {
+    // **The rendered half.** The tests above pin the decision; this one pins
+    // that `paint` asks. Under a scaled ancestor, nearest neighbour repeats
+    // whole columns of the buffer — byte-identical neighbours, which a gradient
+    // never produces on its own — so counting them is a test of the filter and
+    // of nothing else. Measured with the fallback removed: **7** repeated
+    // columns at this scale, and 0 with it.
+    testWidgets('a scaled ancestor no longer repeats whole columns', (
+      tester,
+    ) async {
+      addTearDown(tester.view.reset);
+      tester.view.devicePixelRatio = 1;
+
+      late final ui.Image image;
+      await tester.runAsync(() async {
+        image = await rasterAvatarImage(
+          name: 'Clara Barton',
+          colors: palette,
+          pixels: 66,
+          version: BoringAvatarsVersion.v1_7_0,
+          variant: BoringAvatarsVariant.marble,
+          // The extent is read off alpha, and a disc's topmost row can quantise
+          // to no coverage at all — `pixel_snap_test.dart` squares its avatar
+          // for the same reason.
+          square: true,
+        );
+      });
+      addTearDown(image.dispose);
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: RepaintBoundary(
+            key: const ValueKey('shot'),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Transform.scale(
+                scale: 1.1,
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: 66,
+                  height: 66,
+                  child: PixelSnappedImage(image: image, devicePixelRatio: 1),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      late Uint8List bytes;
+      late int stride;
+      await tester.runAsync(() async {
+        final shot = await tester
+            .renderObject<RenderRepaintBoundary>(
+              find.byKey(const ValueKey('shot')),
+            )
+            .toImage();
+        stride = shot.width;
+        bytes = (await shot.toByteData(
+          format: ui.ImageByteFormat.rawRgba,
+        ))!.buffer.asUint8List();
+        shot.dispose();
+      });
+
+      final rows = bytes.length ~/ (stride * 4);
+      var repeated = 0;
+      for (var x = 1; x < stride; x++) {
+        var same = true;
+        var opaque = false;
+        for (var y = 0; y < rows && same; y++) {
+          final here = (y * stride + x) * 4;
+          final left = (y * stride + x - 1) * 4;
+          if (bytes[here + 3] != 0) opaque = true;
+          for (var k = 0; k < 4; k++) {
+            if (bytes[here + k] != bytes[left + k]) {
+              same = false;
+              break;
+            }
+          }
+        }
+        if (same && opaque) repeated++;
+      }
+
+      expect(
+        repeated,
+        0,
+        reason:
+            'a filtered draw interpolates between source columns, so no two '
+            'columns of a gradient come out byte-identical; a repeat is '
+            'nearest neighbour landing twice on the same pixel (#117)',
+      );
+    });
+  });
+}

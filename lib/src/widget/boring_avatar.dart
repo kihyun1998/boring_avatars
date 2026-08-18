@@ -677,6 +677,64 @@ Rect snappedAvatarRect({
   );
 }
 
+/// Whether one pixel of the buffer covers exactly one device pixel — the
+/// condition `FilterQuality.none` is exact under, and a lie outside of (#117).
+///
+/// **Why a predicate rather than more snapping.** [snappedAvatarRect] puts the
+/// drawing's origin and extent on whole device pixels, which is everything
+/// ADR-0002 R1 and R2 promise and everything a *translation* can break. Two
+/// things remain that no placement can fix, and both are ordinary:
+///
+/// - **The ancestors are not a pure translation.** Under a `Transform.scale`,
+///   a rotation, or a `FittedBox`, "the device pixel grid" is not this box's
+///   grid at all and there is nothing to snap to.
+/// - **The buffer and the destination are different sizes.** A parent that
+///   squeezes the box keeps squeezing the drawing (R2), and a ratio change
+///   leaves an older buffer on screen until the new raster lands (`_sync`). In
+///   both the drawing is a scaled copy of the buffer, whatever its edges do.
+///
+/// A **fractional translation is deliberately not on that list**, and it is the
+/// case worth stating: the snap moves the drawing by the same fraction the
+/// ancestors moved it, so the pixels still land whole. Treating it as
+/// misaligned would put a filter under every ordinary padding.
+///
+/// **This narrows invariant 4's claim; it does not spend it.** Where the
+/// predicate is true the bytes are what they have always been. Where it is
+/// false the output was *already* the backend's — which source column nearest
+/// neighbour keeps is the sampler's rounding, so Skia and Impeller were never
+/// obliged to agree there. The choice the ruling made (2026-08-18, #117) is
+/// between a fold whose position is the backend's and a half-pixel softness
+/// whose position is the backend's; determinism was not on the table.
+///
+/// **Exact comparisons on doubles, on purpose.** The question is not "close to
+/// a translation" — a scale of `1.0000001` resamples exactly as much as `1.1`
+/// does, and a tolerance here would hand back `none` for a drawing that is
+/// being resampled. Non-finite matrix entries fail every comparison and so
+/// answer `false`, which is the safe direction: a drawing whose position cannot
+/// be computed is not one to make promises about.
+@visibleForTesting
+bool avatarLandsOnePixelPerPixel({
+  required Matrix4 toScreen,
+  required Size box,
+  required Size buffer,
+  required double devicePixelRatio,
+}) {
+  // Column-major: `m[0]`/`m[1]` are the first column's x and y, `m[4]`/`m[5]`
+  // the second's — together the 2-D linear part. `m[3]`/`m[7]` are the
+  // perspective terms and `m[15]` the homogeneous divisor; a projection leaves
+  // the others looking innocent.
+  final m = toScreen.storage;
+  if (m[0] != 1.0 || m[1] != 0.0 || m[4] != 0.0 || m[5] != 1.0) return false;
+  if (m[3] != 0.0 || m[7] != 0.0 || m[15] != 1.0) return false;
+  if (!m[12].isFinite || !m[13].isFinite) return false;
+
+  // The destination's own extent, from the box and not from the buffer — the
+  // same arithmetic [snappedAvatarRect] does, and it has to be, or this would
+  // answer about a rectangle nothing draws.
+  return (box.width * devicePixelRatio).roundToDouble() == buffer.width &&
+      (box.height * devicePixelRatio).roundToDouble() == buffer.height;
+}
+
 /// Draws [image] across exactly its own number of **device** pixels, on the
 /// device pixel grid.
 ///
@@ -872,7 +930,13 @@ class RenderPixelSnappedImage extends RenderBox {
   void paint(PaintingContext context, Offset offset) {
     final ratio = _devicePixelRatio;
 
-    final global = localToGlobal(Offset.zero);
+    // **`getTransformTo` rather than `localToGlobal`, and it costs nothing
+    // extra.** `localToGlobal` *is* this matrix applied to a point, so taking
+    // the matrix is the same ancestor walk — and it is the only place the
+    // linear part is visible. The origin below is what `localToGlobal` would
+    // have returned.
+    final toScreen = getTransformTo(null);
+    final global = MatrixUtils.transformPoint(toScreen, Offset.zero);
     final destination = snappedAvatarRect(
       global: global,
       local: offset,
@@ -884,15 +948,30 @@ class RenderPixelSnappedImage extends RenderBox {
       return true;
     }());
 
+    // **The unfiltered hand-off is claimed only where it is true (#117).**
+    // `FilterQuality.none` is exact while one buffer pixel covers one device
+    // pixel, and it is the *worst* available choice when that fails: nearest
+    // neighbour cannot spend a fraction of a pixel, so it drops or duplicates
+    // whole columns — a straight fold across a gradient rather than a blur.
+    final oneForOne = avatarLandsOnePixelPerPixel(
+      toScreen: toScreen,
+      box: size,
+      buffer: Size(_image.width.toDouble(), _image.height.toDouble()),
+      devicePixelRatio: ratio,
+    );
+
     context.canvas.drawImageRect(
       _image,
       Rect.fromLTWH(0, 0, _image.width.toDouble(), _image.height.toDouble()),
       destination,
       // `isAntiAlias` is `paintImage`'s value, not `Paint`'s default, so the
       // destination edge is treated exactly as the `RawImage` path treated it.
+      // It stays `false` in both branches: the filter decides how the *inside*
+      // is sampled and this decides how the edge is, and moving two things at
+      // once would make a measurement unattributable.
       Paint()
         ..isAntiAlias = false
-        ..filterQuality = FilterQuality.none,
+        ..filterQuality = oneForOne ? FilterQuality.none : FilterQuality.low,
     );
   }
 

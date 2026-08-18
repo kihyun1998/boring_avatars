@@ -1526,3 +1526,68 @@ of the file. Archive went 13 MB → **5 KB**.
 gate having checked the thing you care about. Read the dry-run's **file tree**
 and its **archive size**, not just its warning count. And a `.pubignore` is a
 replacement, never an addition.
+
+### A reported root is a hypothesis, and the engine is the only thing that can say no (#117)
+
+#117 arrived with better evidence than most reports ever carry: a probe printing
+the widget's own coordinates, two avatars rendered in **one frame** with only an
+anti-aliased rounded clip between them, and a table showing the clipped one
+folded and the unclipped one clean. The reporter had already ruled out size,
+version, seed, palette and window geometry, one rebuild at a time.
+
+It was still wrong. On a real engine at ratio 1.5, five cells — no ancestor; the
+clip on the canvas path; the same clip forced onto a real `ClipRRectLayer` by a
+compositing sibling; the same with a `RepaintBoundary` around the avatar; and
+that one at a whole-pixel origin — every one came back `66x66` with **zero**
+repeated columns and rows.
+
+**What made the fixture able to say that** was an axis the report did not have,
+and it came out of the fixture's own crash. A first version put the `ClipRRect`
+under a bare `Positioned`, which is unbounded, so it laid out at `Infinity` and
+painted `NaN`. In that stack trace the clip appeared **twice, on two different
+paths**: `PaintingContext.pushClipRRect` → `ClipContext.clipRRectAndPaint` for
+one cell, and `pushClipRRect` → `PaintingContext.pushLayer` for another. The
+split is `needsCompositing`: a clip with nothing compositing inside it never
+allocates an offscreen at all. A fixture that varied only *whether a clip was
+present* would have been green for the same reason the reporter's own standalone
+ladder was — six ancestors rebuilt, none of them forcing a layer — and green
+would have been read as "not reproducible here" rather than "this axis was never
+run".
+
+**The rule this earns:** when a report names a root, the fixture has to vary the
+mechanism that would *create* the condition, not the widget that was blamed for
+it. A differential that omits that axis cannot fail, and a differential that
+cannot fail is not a measurement. And read a crash's stack trace before fixing
+the crash — the frames say which path the framework actually took, which is the
+thing you were about to spend a run guessing at.
+
+### A comparison across rebuilds is not a measurement, even when every number in it is real (#117)
+
+While the app-side evidence was being gathered, the same defect was measured
+from the other end: pixel forensics on the screenshots. Two findings came out,
+and only one of them was worth anything.
+
+The good one was **within a single image** — the avatar's silhouette had
+duplicated *columns* and zero duplicated *rows*. One axis resampling and the
+other not is a fact about that frame, and it survived everything that came
+later.
+
+The bad one compared **two screenshots taken from two builds**: an earlier one
+at `size: 45` with one padding, and a later one at `size: 44` with another, plus
+whatever the paste pipeline did to each. It read as "68 device pixels containing
+only 64 distinct columns" — a clean 6.25% horizontal upscale, a number precise
+enough to build a theory on, and it was used to build one. Nothing in it was
+fabricated; the columns really were identical. But three variables had moved
+between the two frames, so the quantity being measured was not the one the
+theory needed.
+
+The reporter's own comment named the trap first, from the other side: one of
+their early comparisons had been made between two different displays without
+their realising it, and the measurement that broke their deadlock was rendering
+two avatars in the **same frame**.
+
+**The rule this earns:** a measurement's validity is a property of what was held
+constant, not of how carefully the pixels were counted. Within one frame,
+compare freely. Across rebuilds, screenshots or machines, the only honest move
+is to retract — and to retract *in writing where the number was published*, so
+the next reader does not pick it back up.
