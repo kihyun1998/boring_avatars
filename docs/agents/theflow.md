@@ -1142,6 +1142,27 @@ placement never was.
   intact under an inner boundary — 69 device pixels for a 68-pixel buffer, 272
   of them partly covered. Vary the ancestor, or the harness never ran in the
   condition (`lessons.md`, #83).
+**Two limits of the snap, both found by reading the reference's tracker rather
+than by measuring — and then measured.** Flutter solves this exact problem for
+its text caret in `RenderEditable._snapToPhysicalPixel`
+(`rendering/editable.dart:2341`), and the expression is this project's
+`snappedAvatarRect` correction term rearranged, `localToGlobal` included. Two
+things came out of that convergence that the derivation had not:
+
+- **A non-finite global position.** The reference guards `isFinite` and returns
+  a zero correction; a degenerate ancestor transform otherwise carries `NaN`
+  into the destination rectangle. Adopted.
+- **The snap does not survive a scroll**, and no widget can make it. The
+  correction is computed in `paint`, and a layer can move without its child
+  repainting — which is what a `ListView` does to every row. Measured: after a
+  7.3-logical scroll at ratio 1.5, `paint` had not re-run and the recorded
+  destination was **11.2 device pixels** stale. Stationary in a list: on the
+  grid. Being scrolled past: not, until it repaints. flutter/flutter#111302
+  names it (*"no guarantee the render object will repaint if this changes"*)
+  and #111145 records that the engine's own layer pixel-snapping was removed —
+  which is also why leaning on the backend to round would have been the wrong
+  bet.
+
 **And the backend claim is now checked on a backend, not argued.**
 `example/integration_test/pixel_snap_test.dart` runs the same placement
 assertion under `IntegrationTestWidgetsFlutterBinding`, so it draws on whatever

@@ -24,10 +24,18 @@ land on screen.
 * **In a list it was worse, and less obvious.** `ListView` wraps every child in
   a `RepaintBoundary`, and `Opacity`, `FadeTransition` and `Hero` push layers of
   their own; a layer carries the fractional position itself and paints its child
-  at a whole-looking offset. Any avatar scrolled in a list was therefore on the
-  wrong grid on most frames. The fix reads the widget's **screen** position
-  rather than its offset within the enclosing layer, so it sees through all of
-  them.
+  at a whole-looking offset, so an avatar inside one was on the wrong grid while
+  reading as correct. The fix takes the widget's **screen** position rather than
+  its offset within the enclosing layer, so it sees through all of them.
+* **A *scrolling* list is the one case this does not reach, and it is stated
+  rather than implied.** The alignment is computed while painting, and a layer
+  can move without its child repainting — which is precisely what scrolling a
+  `ListView` does. Measured: after a 7.3-logical scroll at ratio 1.5 the
+  destination was **11.2 device pixels** stale because `paint` never re-ran. So
+  an avatar sitting in a list is on the grid; one being scrolled past is not,
+  until it repaints. No widget can close that from the inside — Flutter tracks
+  it as flutter/flutter#111302, and its own text caret snaps with the same
+  limitation.
 * **The fix rounds the drawing onto the device pixel grid** and draws a whole
   number of device pixels. The avatar moves by at most half a physical pixel
   from where layout put it; a parent that squeezes the box below `size` still
