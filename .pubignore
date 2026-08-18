@@ -56,4 +56,16 @@ tool/
 # `git clone` away.
 test/
 
+# The same reasoning, one directory further out. `example/` itself **is**
+# published — pana scores it, and it is the answer to "show me this in an app".
+# Its integration test is not that: it is #110's harness, which drives a real
+# engine to assert that the buffer lands on whole device pixels. A consumer has
+# no reason to run it and pub.dev does not.
+#
+# It ships by default because the rule above stops at the root `test/`, and this
+# directory did not exist when that rule was written. Nothing catches it —
+# `pub publish --dry-run` reports **0 warnings** either way, because no gate
+# knows what belongs in an archive. Read the file list; that is the check.
+example/integration_test/
+
 CLAUDE.md
