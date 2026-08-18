@@ -36,13 +36,19 @@ landing on the grid changes at all — the bytes there are identical to `0.3.1`.
   scrolling `ListView` — is outside it exactly as it is outside `0.3.1`'s
   alignment (flutter/flutter#111302). It comes back the moment the row repaints.
 * **The anti-aliased rounded clip named in the report is not the cause**, and
-  that is measured rather than argued: on a real engine at ratio 1.5, five cells
-  — no ancestor, a clip on the canvas path, the same clip forced onto a real
-  layer by a compositing sibling, the same with a `RepaintBoundary` around the
-  avatar, and that one at a whole-pixel origin — all rendered `66x66` with zero
-  repeated columns or rows. The fixture is kept as the control that says so.
+  that is measured rather than argued: on a real engine at 150% scaling, a
+  clipped avatar is **byte-identical** to one with no ancestor at all.
+* **What the report was actually hitting is a different thing entirely, and this
+  release does not fix it.** An ancestor that *composites* — a scroll viewport,
+  an `Opacity`, a `RepaintBoundary` — draws the avatar into a layer, and the
+  engine puts that layer on screen afterwards; a layer landing on a fractional
+  device pixel is resampled whole. Measured: identical at a whole-pixel origin,
+  2556–3179 interior pixels differing by up to 94 levels at a half-pixel one.
+  That happens after painting, so nothing this package does while painting
+  reaches it. README's *One rule for callers* says what does.
 
-The rule and the ruling behind it are ADR-0002 (R5).
+The rule and the ruling behind it are ADR-0002 (R5); the layer finding and its
+limits are in the same record.
 
 ## 0.3.1
 

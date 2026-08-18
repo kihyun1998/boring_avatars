@@ -211,6 +211,32 @@ Layout that then squeezes the box smaller than the size you asked for is outside
 the package, and Flutter's sampler runs there like it would for any image — a
 filtered one, now that the drawing is knowingly a scaled copy.
 
+### One rule for callers, and it is about the ancestor rather than the avatar
+
+Everything above happens while the avatar is painted. **An ancestor that
+composites — a scroll viewport, an `Opacity` or `FadeTransition`, a
+`RepaintBoundary` — draws it into a layer first, and the engine puts that layer
+on screen afterwards.** If the layer lands on a fractional device pixel, the
+engine resamples the whole layer, avatar included, and no arithmetic available
+while painting can pre-empt it.
+
+Measured on a real engine at 150% scaling, comparing each case against the same
+avatar with no ancestor at all:
+
+| ancestor | its origin | result |
+|---|---|---|
+| none | whole *or* fractional | identical either way — the alignment above handles it |
+| scroll viewport | whole device pixel | **identical** |
+| scroll viewport | half a device pixel | 2556 interior pixels differ, by up to 94 levels |
+| `Opacity` | whole device pixel | identical but for the opacity itself |
+| `Opacity` | half a device pixel | 3179 interior pixels differ, by up to 94 levels |
+
+So the compositing ancestor is not the problem; **a compositing ancestor at a
+fractional origin is.** If an avatar inside a list or a fade looks folded, align
+*that ancestor* to whole device pixels, or keep the avatar out of it — and note
+that wrapping the avatar in a `RepaintBoundary` does not help, because a boundary
+is one more layer with an origin of its own.
+
 ### The avatar arrives a beat after the widget does
 
 Drawing happens off the frame — in a background isolate on native, and in
