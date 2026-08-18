@@ -33,6 +33,17 @@ land on screen.
   from where layout put it; a parent that squeezes the box below `size` still
   scales the drawing exactly as before. This is what README's determinism
   section now describes.
+* **One case is narrowed rather than closed, and it is stated rather than left
+  to be discovered.** Where `size × dpr` rounds *up*, the buffer is genuinely
+  wider than the box — 45 logical at 150% is 67.5 physical pixels holding a
+  68-pixel buffer — so an ancestor clipping to exactly the box takes the excess
+  back off, which is this bug's symptom again. No placement avoids it; 68 does
+  not fit inside 67.5. Measured across 105 combinations of ratio, inset and
+  clip: **21 were wrong before, 6 are wrong now, and the 6 are among the 21** —
+  narrowed, with nothing regressed. A clip even slightly larger than the avatar
+  avoids it. Closing the rest would mean rasterising at `floor` rather than
+  `round`, which moves both the buffer size and the smallest accepted `size`,
+  so it is deferred rather than decided quietly.
 
 ## 0.3.0
 
