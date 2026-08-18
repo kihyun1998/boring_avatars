@@ -672,6 +672,19 @@ Rect snappedAvatarRect({
 /// it buys is that the buffer arrives whole, which is the claim the package
 /// actually makes.
 ///
+/// **One case is narrowed rather than closed, and it cannot be closed here.**
+/// `(size * dpr).round()` sometimes rounds *up*, and then the buffer is
+/// genuinely wider than the box — 45 logical at 150% is 67.5 device pixels
+/// holding a 68-pixel buffer. An ancestor clipping to exactly the box then
+/// takes the excess back off, which is #110's symptom again. No placement
+/// avoids it: an integer rectangle of 68 does not fit inside 67.5, wherever it
+/// starts. Measured across 105 combinations of ratio, inset and clip: the
+/// `RawImage` this replaced was wrong in **21**, this is wrong in **6**, and
+/// the 6 are a subset of the 21 — so the clip case is narrowed and nothing
+/// regressed. Closing the rest means rasterising at `floor` rather than
+/// `round`, which moves the buffer size and the smallest accepted `size`, and
+/// that is a decision about the public surface rather than a rounding.
+///
 /// **What it does not fix.** Snapping reads [devicePixelRatio] against the
 /// paint offset, so it is exact while the chain of ancestors between this box
 /// and its enclosing layer is a pure translation — which is what paddings,
