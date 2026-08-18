@@ -160,6 +160,14 @@ physical pixel and it is what keeps `FilterQuality.none` honest: before `0.3.1`
 a fractional box on a fractional origin cost a whole pixel column, which on a
 disc that touches all four edges of its box reads as a flat, shaved edge.
 
+One case is narrowed rather than closed. Where `size × dpr` rounds *up*, the
+buffer is a hair wider than the box — 45 logical at 150% is 67.5 physical pixels
+holding a 68-pixel buffer — so an ancestor that clips to exactly the box takes
+that hair back off. Nothing can place a 68-pixel square inside 67.5. It is
+strictly better than before (21 of 105 measured combinations were wrong, now 6,
+and the 6 are among the 21), and a clip even a fraction larger than the avatar
+avoids it entirely.
+
 The grid it rounds to is the **screen's**, not the enclosing layer's, which
 matters more than it sounds: `ListView` gives every child its own
 `RepaintBoundary`, and a boundary carries the fractional position itself while
