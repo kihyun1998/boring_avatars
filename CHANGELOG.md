@@ -50,8 +50,11 @@ land on screen.
   clip: **21 were wrong before, 6 are wrong now, and the 6 are among the 21** —
   narrowed, with nothing regressed. A clip even slightly larger than the avatar
   avoids it. Closing the rest would mean rasterising at `floor` rather than
-  `round`, which moves both the buffer size and the smallest accepted `size`,
-  so it is deferred rather than decided quietly.
+  `round`, and that was weighed and **declined**: it closes only a third of the
+  cases while narrowing the smallest `size` this widget accepts, and the variant
+  that closes all of them stops the avatar touching the edges of its own box —
+  which is what every non-`square` variant is. Should you need the guarantee, it
+  will arrive as something you opt into rather than as a changed default.
 
 ## 0.3.0
 

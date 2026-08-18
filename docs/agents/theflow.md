@@ -1522,6 +1522,7 @@ enumeration-risk judgement.
   | Record | Status | Area it governs | Conformance items |
   |---|---|---|---|
   | [ADR-0001](../adr/0001-what-a-colour-declaration-means.md) — what a colour declaration means | **Accepted** 2026-08-10 (#71) | every colour-valued attribute the rasterizer reads: `fill`, `stroke`, `stop-color`, and any that follow | **all done**: #69, #62, #63, #64 |
+  | [ADR-0002](../adr/0002-when-the-box-and-the-pixel-grid-disagree.md) — when the box and the pixel grid disagree | **Accepted** 2026-08-18 (#110) | where the widget's buffer lands: grid alignment, containment, tangency, and what gives when `size × dpr` is fractional | **all done**: #110 |
 
   A **proposed** record counts for this check exactly as an accepted one does —
   it is already doing a spine's job (a hypothesis, a roster, an explicit
@@ -1532,8 +1533,15 @@ enumeration-risk judgement.
   pub.dev archive cannot be un-published.
 - **`example/`** — does not exist yet; becomes a gate the day it does.
 
-**Record-worthy here.** One area has been re-litigated and promoted: the
-rasterizer's colour vocabulary, now ADR-0001. It arrived the way the promotion
+**Record-worthy here.** Two areas have been re-litigated and promoted. The
+second is the widget's placement, now ADR-0002: `round` versus `floor` came out
+of #110's completeness pass rather than from a report, the reference cannot
+arbitrate it (upstream has no widget layer and Flutter records that it has *no
+public API* for physical-pixel alignment — flutter/flutter#111302), and two
+artifacts in this repo require opposite things — `CLAUDE.md`'s tangent-with-zero-margin
+disc against the residual's demand that the drawing never leave its box. Three
+triggers, so the rule went to `docs/adr/` rather than into another issue. The
+first is the rasterizer's colour vocabulary, ADR-0001. It arrived the way the promotion
 rule predicts — a 2-axis grid (property × declaration state) being decided one
 cell at a time across #69 and #64, plus two hidden-state rows (#20 and #44)
 requiring opposite things in the same file. The remaining candidate, by
