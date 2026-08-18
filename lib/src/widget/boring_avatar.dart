@@ -710,9 +710,13 @@ Rect snappedAvatarRect({
 /// starts. Measured across 105 combinations of ratio, inset and clip: the
 /// `RawImage` this replaced was wrong in **21**, this is wrong in **6**, and
 /// the 6 are a subset of the 21 — so the clip case is narrowed and nothing
-/// regressed. Closing the rest means rasterising at `floor` rather than
-/// `round`, which moves the buffer size and the smallest accepted `size`, and
-/// that is a decision about the public surface rather than a rounding.
+/// regressed. Closing the rest would mean rasterising at `floor` rather than
+/// `round` — and that was **decided rather than deferred**: ADR-0002 (user
+/// ruling 2026-08-18) keeps `round`, because `floor` closes only a third of the
+/// cases while narrowing the smallest accepted `size`, and the variant that
+/// closes all of them stops the avatar touching its own box. A caller who wants
+/// the guarantee gets an opt-in, never a moved default — so do not re-propose
+/// the change here.
 ///
 /// **What it does not fix.** Snapping reads [devicePixelRatio] against the
 /// paint offset, so it is exact while the chain of ancestors between this box
