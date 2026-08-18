@@ -1122,6 +1122,35 @@ unprovable under the current binding.** Opening it needs an injected decoder or
 a test-only hook in `lib/`, which is a judgement about public surface and has
 not been taken.
 
+**A second widget-level surface became provable at #110, and it did not need
+that seam.** Where the buffer *lands* is separable from how it is made: hand
+`PixelSnappedImage` an image built inside `runAsync` and screenshot the
+enclosing `RenderRepaintBoundary` at `pixelRatio: dpr`, and the painted extent,
+position and partial-coverage count are all readable in **device** pixels —
+which is the unit this class of defect lives in, and at the default
+`pixelRatio: 1.0` the artefact is resampled away before it can be counted. The
+four behaviours above are unreachable because they are *asynchronous*;
+placement never was.
+
+**Two traps that pass on that harness, both measured at #110.**
+
+- **The ancestor is a parameter, and a sweep that fixes it proves less than it
+  looks.** `paint`'s `offset` is relative to the enclosing **layer**, not the
+  screen: a `RepaintBoundary` paints its child at `Offset.zero` and carries the
+  real position on an `OffsetLayer`, and `ListView` gives every child one. A
+  twelve-row sweep over ratio and inset stayed green with the defect fully
+  intact under an inner boundary — 69 device pixels for a 68-pixel buffer, 272
+  of them partly covered. Vary the ancestor, or the harness never ran in the
+  condition (`lessons.md`, #83).
+- **The backend rounds for you, so a rendered pixel cannot price the snap.**
+  Skia with `isAntiAlias` off already rounds a destination rectangle whose
+  width is a whole number of device pixels, so deleting the origin snap
+  entirely left every rendered row green. Leaning on that is the
+  Skia-versus-Impeller dependence invariant 4 refuses, so the snap stays —
+  asserted where it is *made* (`snappedAvatarRect`, plus
+  `debugGlobalDestination` for the call site's choice of coordinate space)
+  rather than where it is drawn. A claim no mutant can kill is not a claim.
+
 **"Observed at the screen" — discharged 2026-08-10, on both paths.** The example
 (#78) is what carries it, and the two platforms are genuinely different code:
 `compute` is a real isolate on native and a main-thread call on web, so seeing

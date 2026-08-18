@@ -18,7 +18,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/foundation.dart' show compute, visibleForTesting;
 import 'package:flutter/widgets.dart';
 
 import '../avatar.dart';
@@ -578,22 +578,281 @@ class _BoringAvatarState extends State<BoringAvatar> {
       child: SizedBox(
         width: widget.size,
         height: widget.size,
-        // **`FilterQuality.none`.** `RawImage` defaults to `medium`, and
-        // `paintImage` has no identity fast path — it always goes through
-        // `drawImageRect`. Since the buffer is already the box's physical size,
-        // any sampling at all would be Skia's, which invariant 4 refuses.
-        //
-        // The remaining case is outside this widget: if layout puts the box's
-        // origin on a fractional device pixel, the sampler runs anyway.
+        // **The `SizedBox` is the layout and [PixelSnappedImage] is the
+        // drawing, and they are deliberately not the same rectangle.** Layout
+        // owes the caller the `size` they asked for; the drawing owes the
+        // buffer a whole number of device pixels to land on, and `size * dpr`
+        // is not whole at 125% or 150%. Painting the buffer at the box's own
+        // fractional size was #110: `FilterQuality.none` has no way to spend
+        // half a pixel, so it dropped or duplicated an entire column, and every
+        // non-`square` variant puts a *vertical* outline exactly where that
+        // shows — tangent to the box, with no margin to hide in.
         child: image == null
             ? null
-            : RawImage(
-                image: image,
-                width: widget.size,
-                height: widget.size,
-                filterQuality: FilterQuality.none,
-              ),
+            : PixelSnappedImage(image: image, devicePixelRatio: dpr),
       ),
     );
+  }
+}
+
+/// The device-pixel-aligned rectangle an avatar buffer is drawn into.
+///
+/// **Pure, and separated from `paint` because it is the whole of the fix.** Its
+/// two guarantees are that `left`, `top`, `width` and `height` are all whole
+/// numbers of device pixels, and that the result is within half a device pixel
+/// of where layout put the box. Everything #110 is about follows from the
+/// first, and the price of it is the second.
+///
+/// **Why the width is rounded rather than taken from the buffer.** Rounding the
+/// *box* to whole device pixels lands on exactly the `(size * dpr).round()` the
+/// buffer was rasterised at while the box is the size the caller asked for —
+/// the case the fix is about — and lets a parent that squeezes the box keep
+/// squeezing the drawing, which is what `RawImage` did and what README
+/// promises. Taking the buffer's own extent instead painted a 240-pixel avatar
+/// across a 20-logical box at full size, over whatever sat beside it.
+///
+/// **Why [global] and not [local].** `local` is relative to the enclosing
+/// *layer*, and a layer's origin is not on the grid just because this box's
+/// offset within it is: a repaint boundary paints its child at `Offset.zero`
+/// and carries the real position on an `OffsetLayer` that reaches the engine
+/// unrounded. `ListView` wraps **every child** in one, and `Opacity`,
+/// `FadeTransition` and `Hero` push layers of their own. Measured under an
+/// inner boundary at ratio 1.5: 69 device pixels across, 272 of them partly
+/// covered, for a 68-pixel buffer. `localToGlobal` walks the render tree rather
+/// than the layer tree, so it sees through all of them; the correction it
+/// yields is then applied to `local`, which is the space the canvas is in.
+///
+/// **This is asserted directly rather than through a rendered pixel, and the
+/// reason is invariant 4.** Skia, with `isAntiAlias` off, already rounds a
+/// destination rectangle whose width is a whole number of device pixels — so a
+/// screenshot cannot tell a snapped origin from an unsnapped one, and a test
+/// that only looked at pixels left this function's central claim un-killable.
+/// Leaning on that rounding would also be exactly the Skia-versus-Impeller
+/// dependence `CLAUDE.md` refuses; doing the rounding here is what makes the
+/// placement the package's own rather than the backend's.
+@visibleForTesting
+Rect snappedAvatarRect({
+  required Offset global,
+  required Offset local,
+  required Size box,
+  required double devicePixelRatio,
+}) {
+  double onGrid(double value) =>
+      (value * devicePixelRatio).roundToDouble() / devicePixelRatio;
+
+  return Rect.fromLTWH(
+    local.dx + (onGrid(global.dx) - global.dx),
+    local.dy + (onGrid(global.dy) - global.dy),
+    onGrid(box.width),
+    onGrid(box.height),
+  );
+}
+
+/// Draws [image] across exactly its own number of **device** pixels, on the
+/// device pixel grid.
+///
+/// **Why this exists rather than a [RawImage].** This package rasterises at
+/// `(size * dpr).round()` physical pixels and hands the buffer over with
+/// [FilterQuality.none], because any sampling at all would be Skia's and
+/// `CLAUDE.md`'s invariant 4 refuses it. That is only honest while the buffer
+/// and the rectangle it is painted into are the same number of device pixels,
+/// and a `RawImage` sized in *logical* units cannot promise that: `size * dpr`
+/// is fractional at every ratio that is not a whole number, and layout is free
+/// to put the box's origin on a fractional device pixel too.
+///
+/// When both are true, nearest neighbour resolves the mismatch by dropping or
+/// duplicating a whole column — measured in #110 at `size: 45`: 68 physical
+/// pixels painted across 67.5 lose a column, and 56 across 56.25 gain one.
+/// Neither condition is sufficient alone; a fractional origin under a whole
+/// ratio is absorbed, and so is a fractional size at a whole origin.
+///
+/// **What it costs.** The drawn square is up to one device pixel wider than the
+/// box and up to half a device pixel away from where layout put it — the two
+/// roundings, and both are below the threshold of a thing anyone can see. What
+/// it buys is that the buffer arrives whole, which is the claim the package
+/// actually makes.
+///
+/// **What it does not fix.** Snapping reads [devicePixelRatio] against the
+/// paint offset, so it is exact while the chain of ancestors between this box
+/// and its enclosing layer is a pure translation — which is what paddings,
+/// margins and insets are. Under an ancestor [Transform] that scales or
+/// rotates, "the device pixel grid" is not axis-aligned with this box at all
+/// and there is nothing to snap to; the drawing is then no worse than a
+/// `RawImage` would be, and no better.
+///
+/// **Not exported.** The barrel does not name it, for the same reason it does
+/// not name [rasterAvatarImage]: it is this package's own consumer layer, and
+/// the tests reach it by sibling import as `tool/` does.
+class PixelSnappedImage extends LeafRenderObjectWidget {
+  /// Creates a widget that draws [image] one device pixel per image pixel.
+  const PixelSnappedImage({
+    super.key,
+    required this.image,
+    required this.devicePixelRatio,
+  });
+
+  /// The buffer to draw. Its width and height are read as **physical** pixels.
+  ///
+  /// This widget does not take ownership: the render object holds a clone and
+  /// disposes that, exactly as [RawImage] does, so the caller's handle stays
+  /// theirs to release.
+  final ui.Image image;
+
+  /// The ratio the box is **currently displayed** at.
+  ///
+  /// **Passed in rather than read from the context**, because the caller has
+  /// already read it to decide how many pixels to rasterise, and two lookups
+  /// can disagree across a rebuild.
+  ///
+  /// It is deliberately the *current* ratio and not the one [image] was made
+  /// at, which are the same value except on the one path where they are not:
+  /// `_sync` keeps an already-drawn avatar on screen while a new resolution
+  /// rasterises, so between a ratio change and its raster landing this is a
+  /// current ratio beside an older buffer. The grid to snap to is a property of
+  /// the display, so the current one is the right input; the buffer simply
+  /// scales in the meantime, which is what that path already promises.
+  final double devicePixelRatio;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      RenderPixelSnappedImage(
+        image: image.clone(),
+        devicePixelRatio: devicePixelRatio,
+      );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    RenderPixelSnappedImage renderObject,
+  ) {
+    renderObject
+      ..image = image.clone()
+      ..devicePixelRatio = devicePixelRatio;
+  }
+}
+
+/// The render object behind [PixelSnappedImage].
+///
+/// Public for the reason `RenderImage` is: [PixelSnappedImage.updateRenderObject]
+/// names it in its signature. The barrel exports neither.
+class RenderPixelSnappedImage extends RenderBox {
+  /// Takes ownership of [image]; see [PixelSnappedImage.image].
+  RenderPixelSnappedImage({
+    required ui.Image image,
+    required double devicePixelRatio,
+  }) : _image = image,
+       _devicePixelRatio = devicePixelRatio;
+
+  ui.Image _image;
+
+  /// Takes ownership of [value] and releases the handle it replaces.
+  ///
+  /// **The clone check is not an optimisation.** [PixelSnappedImage] clones on
+  /// every rebuild, so without it an unchanged avatar would drop the handle it
+  /// is currently painting and adopt a fresh one every frame. `isCloneOf` asks
+  /// the question that matters — same underlying buffer — rather than identity,
+  /// which a clone never satisfies. Same arrangement as `RenderImage`.
+  set image(ui.Image value) {
+    if (value.isCloneOf(_image)) {
+      value.dispose();
+      return;
+    }
+    final resized =
+        value.width != _image.width || value.height != _image.height;
+    _image.dispose();
+    _image = value;
+    markNeedsPaint();
+    if (resized) markNeedsLayout();
+  }
+
+  double _devicePixelRatio;
+  set devicePixelRatio(double value) {
+    if (value == _devicePixelRatio) return;
+    _devicePixelRatio = value;
+    markNeedsPaint();
+    markNeedsLayout();
+  }
+
+  /// The buffer's own logical side — what the box would take if nothing
+  /// constrained it. The only call site wraps this in a `SizedBox` of the
+  /// caller's `size`, whose tight constraints win; this is what makes the
+  /// widget mean something on its own.
+  Size get _intrinsic =>
+      Size(_image.width / _devicePixelRatio, _image.height / _devicePixelRatio);
+
+  @override
+  double computeMinIntrinsicWidth(double height) => _intrinsic.width;
+
+  @override
+  double computeMaxIntrinsicWidth(double height) => _intrinsic.width;
+
+  @override
+  double computeMinIntrinsicHeight(double width) => _intrinsic.height;
+
+  @override
+  double computeMaxIntrinsicHeight(double width) => _intrinsic.height;
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) =>
+      constraints.constrain(_intrinsic);
+
+  @override
+  void performLayout() => size = constraints.constrain(_intrinsic);
+
+  /// **`RenderBox` says `false` and `RenderImage` says `true`, and the avatar
+  /// needs the second one.** A leaf that declines the hit test is invisible to
+  /// every ancestor that defers to its child — which is `GestureDetector`'s
+  /// default whenever it has one — so an avatar inside an `onTap` would stop
+  /// responding to taps. Measured: 0 taps against `RawImage`'s 1.
+  @override
+  bool hitTestSelf(Offset position) => true;
+
+  /// Where the last `paint` put the drawing, in **global** logical pixels.
+  ///
+  /// **The only observation point for the half of the fix a screenshot cannot
+  /// price.** Skia, with `isAntiAlias` off, already rounds a destination whose
+  /// width is a whole number of device pixels — so whether `paint` snapped
+  /// against the screen or against the enclosing layer makes no difference to
+  /// any pixel this suite can capture, while making all the difference inside a
+  /// `ListView`, where every child sits on a layer of its own. Without this a
+  /// revert to the layer offset is silent.
+  ///
+  /// Written inside an `assert`, so it costs nothing in release and no shipped
+  /// behaviour can come to depend on it.
+  @visibleForTesting
+  Rect? debugGlobalDestination;
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final ratio = _devicePixelRatio;
+
+    final global = localToGlobal(Offset.zero);
+    final destination = snappedAvatarRect(
+      global: global,
+      local: offset,
+      box: size,
+      devicePixelRatio: ratio,
+    );
+    assert(() {
+      debugGlobalDestination = destination.shift(global - offset);
+      return true;
+    }());
+
+    context.canvas.drawImageRect(
+      _image,
+      Rect.fromLTWH(0, 0, _image.width.toDouble(), _image.height.toDouble()),
+      destination,
+      // `isAntiAlias` is `paintImage`'s value, not `Paint`'s default, so the
+      // destination edge is treated exactly as the `RawImage` path treated it.
+      Paint()
+        ..isAntiAlias = false
+        ..filterQuality = FilterQuality.none,
+    );
+  }
+
+  @override
+  void dispose() {
+    _image.dispose();
+    super.dispose();
   }
 }

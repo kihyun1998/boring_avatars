@@ -1,0 +1,72 @@
+{
+  "issue": 110,
+  "what": "the widget's buffer landing whole on the device pixel grid",
+  "test": null,
+  "note": [
+    "The first case file for `lib/src/widget/`. Until #110 the layer had no",
+    "mutation coverage at all, which is why the two regressions the",
+    "completeness pass caught — a squeezed box overflowing, and a leaf that",
+    "declines the hit test — had nothing standing over them.",
+    "",
+    "Group A is the fix itself. A1 and A2 are the two roundings; A3 is the",
+    "coordinate space they are computed in.",
+    "",
+    "A3 is the one that earned this file, and it earned it twice. It is the",
+    "half a rendered pixel cannot price: Skia with `isAntiAlias` off already",
+    "rounds a destination rectangle whose width is a whole number of device",
+    "pixels, so with A1 in place both A2 and A3 leave every screenshot in the",
+    "suite green. They die against `snappedAvatarRect` and",
+    "`debugGlobalDestination` instead — the placement asserted where it is",
+    "made rather than where it is drawn. Keeping the snap despite the backend",
+    "already doing it is invariant 4: leaning on Skia's rounding is the",
+    "Skia-versus-Impeller dependence the package exists to refuse.",
+    "",
+    "Group B is what replacing a framework render object silently dropped.",
+    "Neither is a wrong number; both are a default that stopped being",
+    "supplied. B1 painted a 240-pixel avatar across a 20-logical box, over its",
+    "neighbours; B2 stopped taps reaching an enclosing `GestureDetector`, 0",
+    "against `RawImage`'s 1.",
+    "",
+    "`test: null` means the whole suite, and it is not narrowed here even",
+    "though every assertion that kills these lives in `widget_test.dart`. The",
+    "layer is new to this harness and a narrowed run would report a golden",
+    "regression as a survivor — the same judgement #58 records."
+  ],
+  "cases": [
+    {
+      "group": "A",
+      "name": "A1 — the extent is not rounded onto the grid",
+      "file": "lib/src/widget/boring_avatar.dart",
+      "from": "    onGrid(box.width),\n    onGrid(box.height),",
+      "to": "    box.width,\n    box.height,"
+    },
+    {
+      "group": "A",
+      "name": "A2 — the origin is not snapped",
+      "file": "lib/src/widget/boring_avatar.dart",
+      "from": "    local.dx + (onGrid(global.dx) - global.dx),\n    local.dy + (onGrid(global.dy) - global.dy),",
+      "to": "    local.dx,\n    local.dy,"
+    },
+    {
+      "group": "A",
+      "name": "A3 — the snap reads the enclosing layer instead of the screen",
+      "file": "lib/src/widget/boring_avatar.dart",
+      "from": "      global: global,",
+      "to": "      global: offset,"
+    },
+    {
+      "group": "B",
+      "name": "B1 — the drawn extent comes from the buffer, not the box",
+      "file": "lib/src/widget/boring_avatar.dart",
+      "from": "      box: size,",
+      "to": "      box: Size(_image.width / ratio, _image.height / ratio),"
+    },
+    {
+      "group": "B",
+      "name": "B2 — the leaf declines the hit test, as RenderBox does",
+      "file": "lib/src/widget/boring_avatar.dart",
+      "from": "bool hitTestSelf(Offset position) => true;",
+      "to": "bool hitTestSelf(Offset position) => false;"
+    }
+  ]
+}

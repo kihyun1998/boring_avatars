@@ -1,3 +1,39 @@
+## 0.3.1
+
+Fixes a **shaved edge** on `BoringAvatar` when the widget lands on fractional
+device pixels (#110). No avatar's *values* change: every selector renders the
+same bytes it did in `0.3.0`, and the fix is entirely about where those bytes
+land on screen.
+
+* **A whole pixel column was dropped or duplicated, and both read as a straight
+  cut.** The buffer is rasterised at `(size * dpr).round()` physical pixels and
+  used to be painted into a rectangle of `size * dpr` *unrounded* ones. A
+  rectangle whose width is fractional has its two edges rounded independently,
+  so where it starts decides how wide it ends up. Measured at `size: 45` — 150%
+  scaling paints a 68-pixel buffer across 67.5 and **loses** a column; 125%
+  paints 56 across 56.25 and **gains** one.
+* **Both conditions are necessary and neither is enough.** A fractional origin
+  under a whole ratio is absorbed, and so is a fractional size at a whole
+  origin; only together do they cost a column. Both cases are in the suite, so
+  the fix cannot be narrowed to one of them by accident.
+* **Every non-`square` variant is exposed to it with nothing to hide it in.**
+  The mask is a disc tangent to all four edges of its box with zero margin, and
+  a disc's outline is *vertical* at its leftmost and rightmost points — so the
+  lost column is a tall straight sliver rather than a nibbled corner. An icon
+  with any interior padding would absorb the identical loss.
+* **In a list it was worse, and less obvious.** `ListView` wraps every child in
+  a `RepaintBoundary`, and `Opacity`, `FadeTransition` and `Hero` push layers of
+  their own; a layer carries the fractional position itself and paints its child
+  at a whole-looking offset. Any avatar scrolled in a list was therefore on the
+  wrong grid on most frames. The fix reads the widget's **screen** position
+  rather than its offset within the enclosing layer, so it sees through all of
+  them.
+* **The fix rounds the drawing onto the device pixel grid** and draws a whole
+  number of device pixels. The avatar moves by at most half a physical pixel
+  from where layout put it; a parent that squeezes the box below `size` still
+  scales the drawing exactly as before. This is what README's determinism
+  section now describes.
+
 ## 0.3.0
 
 Adds upstream `boring-avatars` **1.10.1, 1.10.2, 1.11.1, 1.11.2 and
