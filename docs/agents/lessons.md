@@ -689,6 +689,38 @@ It was deferred at first and that was the wrong call, for the reason this entry
 is about: a cheap safeguard nobody schedules is the thing that rots. The
 backlog ticket would have been the fourth instance of the same shape.
 
+### A mutant the backend kills for you is a mutant your test cannot (#110)
+
+The widget painted its buffer into a rectangle whose width was a fractional
+number of device pixels, and a column was dropped or duplicated. The fix rounded
+two things: the rectangle's **extent** onto the pixel grid, and its **origin**.
+Thirteen rendered rows went green, and both halves were then mutated to check
+they were load-bearing.
+
+The extent died. **The origin survived** — deleting the snap entirely, and
+computing it against the wrong coordinate space, both left every rendered row
+green.
+
+The reason is that Skia, with `isAntiAlias` off, *already* rounds a destination
+rectangle whose width is a whole number of device pixels. Once the extent was
+fixed, the origin fraction was absorbed by the backend, so no screenshot this
+suite can take distinguishes "we snapped" from "Skia rounded". The tempting
+reading — the snap is dead code, delete it — is wrong for a reason that is
+written down: leaning on a backend's rounding is exactly the
+Skia-versus-Impeller dependence `CLAUDE.md`'s invariant 4 refuses, and the
+package would then be making a claim it does not control.
+
+So the claim moved to where it is *made* rather than where it is drawn: the
+placement became a pure function (`snappedAvatarRect`) asserted directly, and
+the call site's choice of coordinate space became an `assert`-guarded
+`debugGlobalDestination` read by a widget test. Both mutants die now.
+
+**The shape.** A surviving mutant means the code is unreachable *or* the oracle
+is blind, and this repo already knows the first reading (#34, #37). Here it was
+the second, and the blindfold was a correctness-preserving normalisation one
+layer below the assertion. When something downstream of your code repairs the
+defect you injected, the test is measuring the repair.
+
 ## Step 4 — real round-trip proof
 
 ### A bar can be recorded, believed, and never run (#33 → #37)
@@ -1390,6 +1422,60 @@ to a layer that never had it, re-ask every "structurally impossible" claim in
 that layer — they were all proved under the old signature. And a normalisation
 is a hole in the gate wherever the *new* mode flows, so the first thing a new
 mode owes is a raw assertion of whatever the normalisation erases.
+
+### The sweep varied everything except the backdrop (#110)
+
+The first fix came with a twelve-row sweep over device pixel ratio and layout
+inset — every ratio Windows offers, both directions of the rounding, the clean
+rows kept beside the broken ones so the guard could show it left working cases
+alone. It read as thorough, and the completeness pass killed it in one sentence:
+every row was pumped under the *same* ancestor.
+
+`paint`'s `offset` is relative to the enclosing **layer**, not the screen. A
+`RepaintBoundary` paints its child at `Offset.zero` and carries the real
+position on an `OffsetLayer` that reaches the engine unrounded — and `ListView`
+wraps **every child** in one, as do `Opacity`, `FadeTransition` and `Hero`.
+Measured with an inner boundary at ratio 1.5: **69 device pixels across and 272
+partly covered, for a 68-pixel buffer**, with all thirteen tests green. The
+single most ordinary way to show an avatar was the one arrangement the sweep
+could not see.
+
+**The shape is #83's, arriving from the other side.** There it was a harness
+that never ran in the condition; here the condition was a *structural* parameter
+rather than a numeric one, which is why sweeping harder along the two obvious
+axes felt like coverage. A parameter held at its benign value is not a constant,
+it is an untested assumption wearing a backdrop.
+
+### Replacing a framework render object inherits its whole checklist (#110)
+
+The fix swapped `RawImage` for a hand-written `LeafRenderObjectWidget`, because
+the drawn rectangle had to be computed rather than described. `RenderImage` has
+roughly twenty members; the replacement had eight, the suite was green at 1001,
+and the analyzer was clean. Two of the missing twelve were live:
+
+- **`width`/`height` and the effective `BoxFit.scaleDown`.** Deriving the drawn
+  rectangle from the *buffer* is right exactly while the buffer and the box
+  agree. Under a parent that squeezes — which this repo already had a test group
+  for — a 240-pixel avatar painted at **240 logical pixels across a 20-pixel
+  box**, over whatever sat beside it, with nothing to clip it. README promises
+  the opposite in as many words.
+- **`hitTestSelf`.** `RenderBox` answers `false` and `RenderImage` answers
+  `true`. A leaf that declines is invisible to every ancestor that defers to its
+  child, which is `GestureDetector`'s default whenever it has one. Measured: **0
+  taps where `RawImage` delivered 1.** The example could not show it — its
+  `InkWell` uses `HitTestBehavior.opaque` and is immune.
+
+Both were CHANGELOG-falsifying: the entry said the fix was "entirely about where
+those bytes land on screen", and one of them silently removed a gesture.
+
+**The shape.** Adopting a framework type is also adopting the defaults it
+supplies, and those defaults are invisible in a diff — nothing is deleted, so
+nothing shows up as removed. The enumeration that catches this is not "what did
+I write" but "what did the thing I replaced answer that mine does not", member
+by member, against the real source. The test group that pinned the squeeze
+survived the change and stayed green, because it had been rewritten to build a
+`RawImage` directly: it went on testing the SDK after it had stopped testing
+this package.
 
 ## Step 6 — surface sweep
 

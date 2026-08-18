@@ -148,11 +148,26 @@ the whole reason this package rasterises in software.
 
 So the determinism guarantee — the same bytes on every platform, GPU, Flutter
 version and rendering backend — covers the widget as well as the SVG string.
-That guarantee is about the image the widget **produces**: it is drawn at the
-box's own physical pixel size and handed over with `FilterQuality.none`, so
-nothing resamples it. Layout that then squeezes the box smaller than the size
-you asked for is outside the package, and Flutter's sampler runs there like it
-would for any image.
+That guarantee is about the image the widget **produces**: it is rasterised at
+the box's physical pixel size, painted onto **whole** device pixels, and handed
+over with `FilterQuality.none`, so nothing resamples it.
+
+Whole device pixels is the part that has to be arranged rather than assumed. A
+45-logical box at 150% display scaling is 67.5 physical pixels, and no buffer is
+67.5 pixels wide — so the widget rounds the drawing onto the pixel grid instead
+of letting the mismatch reach the sampler. It moves the avatar by at most half a
+physical pixel and it is what keeps `FilterQuality.none` honest: before `0.3.1`
+a fractional box on a fractional origin cost a whole pixel column, which on a
+disc that touches all four edges of its box reads as a flat, shaved edge.
+
+The grid it rounds to is the **screen's**, not the enclosing layer's, which
+matters more than it sounds: `ListView` gives every child its own
+`RepaintBoundary`, and a boundary carries the fractional position itself while
+handing its child a whole-looking offset. An avatar scrolling in a list is the
+ordinary case, not the exotic one.
+
+Layout that then squeezes the box smaller than the size you asked for is outside
+the package, and Flutter's sampler runs there like it would for any image.
 
 ### The avatar arrives a beat after the widget does
 
