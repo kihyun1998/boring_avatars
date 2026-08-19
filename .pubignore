@@ -68,4 +68,10 @@ test/
 # knows what belongs in an archive. Read the file list; that is the check.
 example/integration_test/
 
+# Same rule, same reason: a spike is an experiment, not a demonstration. This one
+# is #117's — it exists to find what a compositing layer at a fractional origin
+# resamples, and it is deleted once that is answered. Shipping it would put a
+# diagnostic screen in the archive that no consumer can act on.
+example/spike/
+
 CLAUDE.md

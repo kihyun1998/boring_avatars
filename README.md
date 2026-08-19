@@ -172,11 +172,11 @@ strictly better than before (21 of 105 measured combinations were wrong, now 6,
 and the 6 are among the 21), and a clip even a fraction larger than the avatar
 avoids it entirely.
 
-The grid it rounds to is the **screen's**, not the enclosing layer's, which
-matters more than it sounds: `ListView` gives every child its own
-`RepaintBoundary`, and a boundary carries the fractional position itself while
-handing its child a whole-looking offset. An avatar sitting in a list is the
-ordinary case, not the exotic one.
+The grid it rounds to is the one of **the space the widget paints into**, and
+the enclosing layer is left to the engine, which rounds it as it composites.
+`0.3.1` did the opposite and corrected against the screen, which double-counted
+that fraction; see *Inside a list, a fade or any other layer* below for the
+measurement that reversed it.
 
 While a list is actually *scrolling*, though, the alignment goes stale — the
 position is computed when the avatar paints, and scrolling moves the layer
@@ -206,6 +206,25 @@ it. Where the avatar lands one pixel per pixel — the overwhelming majority —
 bytes are exactly what they have always been. Where it does not, the output was
 already the backend's: which column nearest neighbour keeps is the sampler's
 rounding, so Skia and Impeller were never obliged to agree there either.
+
+Layout that then squeezes the box smaller than the size you asked for is outside
+the package, and Flutter's sampler runs there like it would for any image — a
+filtered one, now that the drawing is knowingly a scaled copy.
+
+### Inside a list, a fade or any other layer
+
+An ancestor that composites — a scroll viewport, an `Opacity` or
+`FadeTransition`, a `RepaintBoundary` — draws the avatar into a layer, and the
+engine puts that layer on screen afterwards, **rounding it onto the device grid
+as it goes**. So the alignment above is done in the space the widget paints
+into and the layer's own fraction is left to the engine; correcting for it here
+as well would apply it twice, which is what `0.3.1` did.
+
+Measured on a real engine at 150% scaling, against the same avatar with no
+ancestor at all: with the enclosing layer half a device pixel past an integer,
+`0.3.1` differed in 2921 of 4356 pixels by up to 94 levels, and `0.3.2` is
+**byte-identical**. An avatar in a `ListView` row, inside a page transition, or
+in a scrolling panel is the ordinary case, and it is the case that got quieter.
 
 Layout that then squeezes the box smaller than the size you asked for is outside
 the package, and Flutter's sampler runs there like it would for any image — a
