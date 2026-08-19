@@ -220,41 +220,22 @@ as it goes**. So the alignment above is done in the space the widget paints
 into and the layer's own fraction is left to the engine; correcting for it here
 as well would apply it twice, which is what `0.3.1` did.
 
-Measured on a real engine at 150% scaling, against the same avatar with no
-ancestor at all: with the enclosing layer half a device pixel past an integer,
-`0.3.1` differed in 2921 of 4356 pixels by up to 94 levels, and `0.3.2` is
-**byte-identical**. An avatar in a `ListView` row, inside a page transition, or
-in a scrolling panel is the ordinary case, and it is the case that got quieter.
+Measured on real engines against the same avatar with no ancestor at all, with
+the enclosing layer half a device pixel past an integer:
 
-Layout that then squeezes the box smaller than the size you asked for is outside
-the package, and Flutter's sampler runs there like it would for any image — a
-filtered one, now that the drawing is knowingly a scaled copy.
-
-### One rule for callers, and it is about the ancestor rather than the avatar
-
-Everything above happens while the avatar is painted. **An ancestor that
-composites — a scroll viewport, an `Opacity` or `FadeTransition`, a
-`RepaintBoundary` — draws it into a layer first, and the engine puts that layer
-on screen afterwards.** If the layer lands on a fractional device pixel, the
-engine resamples the whole layer, avatar included, and no arithmetic available
-while painting can pre-empt it.
-
-Measured on a real engine at 150% scaling, comparing each case against the same
-avatar with no ancestor at all:
-
-| ancestor | its origin | result |
+| | `0.3.1` | `0.3.2` |
 |---|---|---|
-| none | whole *or* fractional | identical either way — the alignment above handles it |
-| scroll viewport | whole device pixel | **identical** |
-| scroll viewport | half a device pixel | 2556 interior pixels differ, by up to 94 levels |
-| `Opacity` | whole device pixel | identical but for the opacity itself |
-| `Opacity` | half a device pixel | 3179 interior pixels differ, by up to 94 levels |
+| Windows, 150% | 2921 of 4356 pixels differ, up to 196 levels | **byte-identical** |
+| macOS, 200% | 1289 of 7744 differ, up to 136 levels | **byte-identical** |
+| web (CanvasKit), 150% | drawing spread over 67 device pixels | 66, its own width — neither lands whole |
 
-So the compositing ancestor is not the problem; **a compositing ancestor at a
-fractional origin is.** If an avatar inside a list or a fade looks folded, align
-*that ancestor* to whole device pixels, or keep the avatar out of it — and note
-that wrapping the avatar in a `RepaintBoundary` does not help, because a boundary
-is one more layer with an origin of its own.
+An avatar in a `ListView` row, inside a page transition, or in a scrolling panel
+is the ordinary case, and it is the case that got quieter. **Web is a
+non-regression rather than a fix**: Chrome does not round the enclosing layer —
+a plain vector circle in the same frame comes out a device pixel wider at a
+fractional origin, and the surface itself is a fractional number of physical
+pixels — so nothing there lands whole whatever this package does. iOS and
+Android are unmeasured.
 
 ### The avatar arrives a beat after the widget does
 
@@ -418,10 +399,12 @@ public API is settled: every upstream release worth reproducing has a selector,
 and what follows is keeping up with upstream's future releases, each as a new
 value.
 
-`0.3.1` is a patch on top of that and adds no selector. It moves no byte any
-avatar is made of — it fixes **where** the widget puts them, which was off the
-device pixel grid at fractional display scalings. The SVG surface is untouched
-by it entirely.
+`0.3.1` and `0.3.2` are patches on top of that and add no selector. Neither
+moves a byte any avatar is made of — both are about **where** the widget puts
+them, and the SVG surface is untouched by either. `0.3.1` rounded the drawing
+onto the device pixel grid; `0.3.2` corrects *which* grid that is when a
+compositing ancestor is in the way, and stops claiming an unfiltered draw where
+one buffer pixel cannot cover one device pixel.
 
 Releases share a selector because a caller gets the same thing out of them, and
 that is **measured rather than asserted**. For `v1_10_1`, each of the other
