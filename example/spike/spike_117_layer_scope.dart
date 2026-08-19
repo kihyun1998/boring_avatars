@@ -8,15 +8,30 @@
 // variant, and it is what the fix now does.
 //
 // **What keeps it in the tree is ADR-0002's validity condition for R6**: the
-// rule stands on "the engine rounds the enclosing layer", measured on Windows
-// at ratio 1.5 and **nowhere else**. If that is false on another backend, the
-// old behaviour was right there and this one is wrong. Running these three
-// columns on web (CanvasKit) or macOS is the check, and this file is it. Delete
-// it once those are measured.
+// rule stands on "the engine rounds the enclosing layer", and that is a claim
+// about a backend rather than about this package. Measured so far:
 //
-// Run (default window is big enough):
+//   Windows 150%  variant A byte-identical to the reference; `0.3.1` 2921/4356
+//   macOS   200%  variant A byte-identical;                   `0.3.1` 1289/7744
+//   web     150%  neither lands whole — Chrome does not round the layer, and its
+//                 surface is a fractional number of physical pixels
+//
+// **iOS and Android are unmeasured.** If the rounding is false on one of them,
+// the old behaviour was right there and this one is wrong — so run it before
+// assuming. Delete this file once those two are measured.
+//
+// Run, one per backend; the whole point is that they disagree:
 //   cd example
 //   flutter run -t spike/spike_117_layer_scope.dart -d windows
+//   flutter run -t spike/spike_117_layer_scope.dart -d macos       # maximise it
+//   flutter build web -t spike/spike_117_layer_scope.dart          # serve
+//                                                                  # build/web and
+//                                                                  # drive it at a
+//                                                                  # ratio above 1
+//
+// **Maximise on macOS.** Four columns of 420 device pixels do not fit an
+// 800-logical default window at ratio 2, and a column that falls off screen is a
+// measurement silently missing rather than a measurement that failed.
 //
 // **Screenshot the window and hand it over. That is the instrument** — see the
 // previous spike's finding: `RenderRepaintBoundary.toImage` re-rasterises the
@@ -24,8 +39,9 @@
 // is the step this is about. Twenty-eight fixture cells came back clean through
 // it while the screen showed 94-level differences.
 //
-// **The question this settles.** A scroll viewport at a half-device-pixel origin
-// resamples the avatar inside it. If it resamples *everything* in that layer —
+// **The question this settled**, kept because the reasoning is what makes the
+// columns legible. A scroll viewport at a half-device-pixel origin resamples the
+// avatar inside it. If it resamples *everything* in that layer —
 // a vector circle Flutter draws itself, a line of text — then this is not a
 // property of how this package hands over an image, it is what compositing a
 // layer at a fractional offset does, and **no rendering strategy available to
