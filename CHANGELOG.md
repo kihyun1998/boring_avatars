@@ -66,10 +66,10 @@ landing on the grid changes at all — the bytes there are identical to `0.3.1`.
   fractional origin, and the surface itself is 1897.5 physical pixels, so the
   page is off the grid before any widget sees it. Neither placement lands whole
   there; the new one at least keeps the drawing's extent exact (66 device pixels
-  against `0.3.1`'s 67). macOS, iOS and Android are unmeasured.
+  against `0.3.1`'s 67). iOS and Android are unmeasured.
 
-The rule and the ruling behind it are ADR-0002 (R5); the layer finding and its
-limits are in the same record.
+Both rules and the rulings behind them are ADR-0002 — R5 for the filter, R6 for
+the grid — along with what each was measured on and where it stops.
 
 ## 0.3.1
 
