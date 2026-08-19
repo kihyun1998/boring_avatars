@@ -83,7 +83,7 @@ class _ScopePage extends StatelessWidget {
       backgroundColor: _ground,
       body: Stack(
         children: [
-          for (var i = 0; i < 3; i++)
+          for (var i = 0; i < 4; i++)
             Positioned(
               // columns 0 and 2 sit half a device pixel past an integer;
               // column 1 sits on one and is the reference.
@@ -92,7 +92,11 @@ class _ScopePage extends StatelessWidget {
               child: SizedBox(
                 width: 360 / ratio,
                 height: 700 / ratio,
-                child: _Layered(ratio: ratio, localSnap: i == 2),
+                child: _Layered(
+                  ratio: ratio,
+                  localSnap: i == 2,
+                  globalSnap: i == 3,
+                ),
               ),
             ),
           Positioned(
@@ -115,7 +119,15 @@ class _ScopePage extends StatelessWidget {
             left: (left + 2 * columnWidth + 0.5) / ratio,
             top: 20 / ratio,
             child: const Text(
-              'layer @ half  ·  variant A: snapped against the layer',
+              'layer @ half  ·  A: snapped against the layer',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+          ),
+          Positioned(
+            left: (left + 3 * columnWidth + 0.5) / ratio,
+            top: 20 / ratio,
+            child: const Text(
+              'layer @ half  ·  B: snapped against the screen (0.3.1)',
               style: TextStyle(color: Colors.white54, fontSize: 12),
             ),
           ),
@@ -143,9 +155,18 @@ class _ScopePage extends StatelessWidget {
 /// of drawing. Everything inside is identical between the two columns; only the
 /// viewport's own origin differs.
 class _Layered extends StatelessWidget {
-  const _Layered({required this.ratio, this.localSnap = false});
+  const _Layered({
+    required this.ratio,
+    this.localSnap = false,
+    this.globalSnap = false,
+  });
 
   final double ratio;
+
+  /// Draw the avatar's buffer the way `0.3.1` did: corrected against the screen
+  /// position. On a backend that rounds the enclosing layer this over-corrects;
+  /// on one that does not, it is the placement that lands whole.
+  final bool globalSnap;
 
   /// Draw the avatar's buffer with **variant A**: the destination is put on the
   /// grid of the space this box paints into, with no screen-space correction —
@@ -169,8 +190,8 @@ class _Layered extends StatelessWidget {
             SizedBox(
               width: _size,
               height: _size,
-              child: localSnap
-                  ? _LocalSnapAvatar(ratio: ratio)
+              child: (localSnap || globalSnap)
+                  ? _LocalSnapAvatar(ratio: ratio, global: globalSnap)
                   : const BoringAvatar(
                       name: '박기현',
                       colors: _palette,
@@ -218,9 +239,10 @@ class _Layered extends StatelessWidget {
 /// itself, this is the placement that lands whole and the shipped one
 /// over-corrects by the layer's own fraction.
 class _LocalSnapAvatar extends StatefulWidget {
-  const _LocalSnapAvatar({required this.ratio});
+  const _LocalSnapAvatar({required this.ratio, this.global = false});
 
   final double ratio;
+  final bool global;
 
   @override
   State<_LocalSnapAvatar> createState() => _LocalSnapAvatarState();
@@ -255,20 +277,29 @@ class _LocalSnapAvatarState extends State<_LocalSnapAvatar> {
       height: _size,
       child: image == null
           ? null
-          : _LocalSnapImage(image: image, ratio: widget.ratio),
+          : _LocalSnapImage(
+              image: image,
+              ratio: widget.ratio,
+              global: widget.global,
+            ),
     );
   }
 }
 
 class _LocalSnapImage extends LeafRenderObjectWidget {
-  const _LocalSnapImage({required this.image, required this.ratio});
+  const _LocalSnapImage({
+    required this.image,
+    required this.ratio,
+    this.global = false,
+  });
 
   final ui.Image image;
   final double ratio;
+  final bool global;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      _RenderLocalSnapImage(image, ratio);
+      _RenderLocalSnapImage(image, ratio, global);
 
   @override
   void updateRenderObject(BuildContext context, _RenderLocalSnapImage r) {
@@ -277,10 +308,11 @@ class _LocalSnapImage extends LeafRenderObjectWidget {
 }
 
 class _RenderLocalSnapImage extends RenderBox {
-  _RenderLocalSnapImage(this._image, this._ratio);
+  _RenderLocalSnapImage(this._image, this._ratio, this._global);
 
   ui.Image _image;
   final double _ratio;
+  final bool _global;
 
   set image(ui.Image value) {
     _image = value;
@@ -296,9 +328,22 @@ class _RenderLocalSnapImage extends RenderBox {
   @override
   void paint(PaintingContext context, Offset offset) {
     double onGrid(double v) => (v * _ratio).roundToDouble() / _ratio;
+    late final Offset topLeft;
+    if (_global) {
+      // `0.3.1`: correct by what the *screen* position needs, applied in the
+      // space the canvas is in.
+      final g = localToGlobal(Offset.zero);
+      double correction(double at) => at.isFinite ? onGrid(at) - at : 0;
+      topLeft = Offset(
+        offset.dx + correction(g.dx),
+        offset.dy + correction(g.dy),
+      );
+    } else {
+      topLeft = Offset(onGrid(offset.dx), onGrid(offset.dy));
+    }
     final destination = Rect.fromLTWH(
-      onGrid(offset.dx),
-      onGrid(offset.dy),
+      topLeft.dx,
+      topLeft.dy,
       onGrid(size.width),
       onGrid(size.height),
     );

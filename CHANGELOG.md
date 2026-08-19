@@ -56,6 +56,13 @@ landing on the grid changes at all — the bytes there are identical to `0.3.1`.
   offscreen and never runs the engine's composite onto the window — the step
   where the rounding happens. The instrument that found it was a screen
   capture.
+* **On web it is a non-regression rather than a fix, and that is measured too.**
+  Chrome at a 1.5 device pixel ratio does not round the enclosing layer — a
+  plain vector circle in the same frame comes out a device pixel wider at a
+  fractional origin, and the surface itself is 1897.5 physical pixels, so the
+  page is off the grid before any widget sees it. Neither placement lands whole
+  there; the new one at least keeps the drawing's extent exact (66 device pixels
+  against `0.3.1`'s 67). macOS, iOS and Android are unmeasured.
 
 The rule and the ruling behind it are ADR-0002 (R5); the layer finding and its
 limits are in the same record.
