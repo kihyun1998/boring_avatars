@@ -773,7 +773,7 @@ void _pixelSnap() {
         final render = tester.renderObject<RenderPixelSnappedImage>(
           find.byType(PixelSnappedImage),
         );
-        final destination = render.debugGlobalDestination;
+        final destination = render.debugPaintedDestination;
         expect(
           destination,
           isNotNull,
@@ -791,10 +791,11 @@ void _pixelSnap() {
             (device - device.roundToDouble()).abs(),
             lessThan(1e-9),
             reason:
-                'the drawing\'s global $name is $device device pixels. The box '
-                'sits at (15.3, 22.7) logical, which is fractional here, and '
-                'the repaint boundary hands paint an offset of zero — so this '
-                'is only whole if the snap read the screen position',
+                'the $name is $device device pixels in the space this box '
+                'paints into. The box sits at (15.3, 22.7) logical, which is '
+                'fractional at this ratio, and the repaint boundary hands '
+                'paint an offset of zero: whole here means the snap left the '
+                'enclosing layer to the engine, which rounds it',
           );
         }
 
@@ -828,28 +829,20 @@ void _pixelSnap() {
       for (final ratio in ratios) {
         for (final origin in origins) {
           for (final box in boxes) {
-            // **`global` and `local` differ on purpose.** Under a repaint
-            // boundary the canvas is at the layer's origin and `local` is the
-            // offset within it, so a version that snapped `local` would pass a
-            // sweep where the two agree and fail on a scrolling list. Holding
-            // them apart is what makes that mutation visible.
+            // **Judged in the space the function answers in**, which is the
+            // one the canvas is in. #110 judged the *screen* position instead,
+            // adding the enclosing layer's fraction back before checking — and
+            // #117 measured that the engine has already removed that fraction
+            // by rounding the layer, so doing it here applied it twice.
             final rect = snappedAvatarRect(
-              global: Offset(origin, origin + 0.3),
               local: Offset(origin - 7, origin + 0.3 - 7),
               box: Size(box, box),
               devicePixelRatio: ratio,
             );
 
-            // **Translated back to global space before it is judged.** The
-            // function returns a rectangle in the canvas's own coordinates,
-            // and it is the *screen* position that has to land on the grid —
-            // the two differ by exactly the layer offset this whole correction
-            // exists to see through.
-            final global0 = Offset(origin, origin + 0.3);
-            final local0 = Offset(origin - 7, origin + 0.3 - 7);
             for (final (name, value) in [
-              ('left', global0.dx + (rect.left - local0.dx)),
-              ('top', global0.dy + (rect.top - local0.dy)),
+              ('left', rect.left),
+              ('top', rect.top),
               ('width', rect.width),
               ('height', rect.height),
             ]) {
@@ -872,7 +865,6 @@ void _pixelSnap() {
         for (final origin in origins) {
           const local = 7.0;
           final rect = snappedAvatarRect(
-            global: Offset(origin, origin),
             local: const Offset(local, local),
             box: const Size(45, 45),
             devicePixelRatio: ratio,
@@ -889,31 +881,25 @@ void _pixelSnap() {
       }
     });
 
-    test('a non-finite global position corrects by nothing, not by NaN', () {
-      // `localToGlobal` walks the ancestor transforms, and a degenerate one
-      // hands back infinity or NaN. Carried into the destination rectangle that
-      // is a drawing nobody sees and an exception nobody can place. Flutter's
-      // own `RenderEditable._snapToPhysicalPixel` guards the identical
-      // expression the identical way; this is that guard, and this is what
-      // makes it a claim rather than a comment.
+    test('a non-finite paint offset is left where it is, not rounded to NaN', () {
+      // A degenerate ancestor transform — `Transform.scale(scale: 0)`, a
+      // collapsed matrix — reaches paint with infinities. Rounding one produces
+      // a rectangle that is a drawing nobody sees and an exception nobody can
+      // place, so the guard leaves it alone. Flutter's own
+      // `RenderEditable._snapToPhysicalPixel` guards the same expression the
+      // same way; this is what makes it a claim rather than a comment.
       for (final bad in [double.nan, double.infinity, -double.infinity]) {
         final rect = snappedAvatarRect(
-          global: Offset(bad, bad),
-          local: const Offset(12, 12),
+          local: Offset(bad, bad),
           box: const Size(45, 45),
           devicePixelRatio: 1.5,
         );
         expect(
-          rect.isFinite,
-          isTrue,
-          reason: 'a global position of $bad produced $rect',
-        );
-        expect(
-          rect.topLeft,
-          const Offset(12, 12),
+          rect.left.isFinite,
+          isFalse,
           reason:
-              'with nothing to snap against, the drawing stays where layout '
-              'put it rather than moving by an unknown amount',
+              'an offset that is not a position must not be rounded into one '
+              'that looks like it; $bad produced $rect',
         );
       }
     });
@@ -922,7 +908,6 @@ void _pixelSnap() {
       // The other half of the same function: the rectangle is the *box*
       // rounded, never the buffer, so a squeezed box keeps squeezing.
       final rect = snappedAvatarRect(
-        global: Offset.zero,
         local: Offset.zero,
         box: const Size(20, 20),
         devicePixelRatio: 1,

@@ -35,7 +35,30 @@
     "B3 은 레퍼런스가 준 가드다. Flutter 의 RenderEditable._snapToPhysicalPixel",
     "이 같은 식을 같은 자리에서 isFinite 로 막는다. 축퇴된 조상 변환이",
     "localToGlobal 에서 NaN 을 돌려주면 그대로 drawImageRect 의 사각형에",
-    "실린다 — 파생만으로는 안 나왔고, 트래커를 읽고 나서 나왔다."
+    "실린다 — 파생만으로는 안 나왔고, 트래커를 읽고 나서 나왔다.",
+    "",
+    "**A3 was re-derived at #117, and its meaning inverted with it.** It used to",
+    "mutate the coordinate space from the screen to the enclosing layer, on the",
+    "belief that the screen was right. A screen capture measured the opposite —",
+    "the engine rounds the layer itself, so correcting for it here applies it",
+    "twice — and `snappedAvatarRect` now rounds the paint offset. There is no",
+    "`global` parameter left to swap, so the case moves half a device pixel",
+    "instead: the same defect the old mutation produced, expressed against the",
+    "rule that replaced it.",
+    "",
+    "The instrument note matters as much as the case. Everything behind #110 was",
+    "measured through `RenderRepaintBoundary.toImage`, which never runs the",
+    "engine's composite onto the window; these mutations die against",
+    "`debugPaintedDestination`, which is the render object's own record of what",
+    "it drew and is not subject to that blindness.",
+    "",
+    "**B3 was retired at #117, and the run that retired it is the reason.** It",
+    "mutated the non-finite guard in `snappedAvatarRect` — `at.isFinite ?`",
+    "— and after the placement changed it SURVIVED the whole suite. Not a missing",
+    "test: with the subtraction gone the branch decides nothing, since rounding",
+    "carries a non-finite value through unchanged. The guard was deleted and the",
+    "case with it, rather than leaving a mutation nobody can kill sitting in the",
+    "file looking like coverage."
   ],
   "cases": [
     {
@@ -49,15 +72,15 @@
       "group": "A",
       "name": "A2 — the origin is not snapped",
       "file": "lib/src/widget/boring_avatar.dart",
-      "from": "    local.dx + correction(global.dx),\n    local.dy + correction(global.dy),",
+      "from": "    onGrid(local.dx),\n    onGrid(local.dy),",
       "to": "    local.dx,\n    local.dy,"
     },
     {
       "group": "A",
-      "name": "A3 — the snap reads the enclosing layer instead of the screen",
+      "name": "A3 — the snap reads the screen instead of the space it paints into",
       "file": "lib/src/widget/boring_avatar.dart",
-      "from": "      global: global,",
-      "to": "      global: offset,"
+      "from": "    onGrid(local.dx),\n    onGrid(local.dy),\n    onGrid(box.width),",
+      "to": "    onGrid(local.dx) + 0.5 / devicePixelRatio,\n    onGrid(local.dy),\n    onGrid(box.width),"
     },
     {
       "group": "B",
@@ -72,13 +95,6 @@
       "file": "lib/src/widget/boring_avatar.dart",
       "from": "bool hitTestSelf(Offset position) => true;",
       "to": "bool hitTestSelf(Offset position) => false;"
-    },
-    {
-      "group": "B",
-      "name": "B3 — 비유한 전역 좌표가 그대로 통과한다",
-      "file": "lib/src/widget/boring_avatar.dart",
-      "from": "at.isFinite ? onGrid(at) - at : 0",
-      "to": "onGrid(at) - at"
     }
   ]
 }

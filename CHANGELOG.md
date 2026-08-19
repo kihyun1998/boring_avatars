@@ -38,14 +38,24 @@ landing on the grid changes at all — the bytes there are identical to `0.3.1`.
 * **The anti-aliased rounded clip named in the report is not the cause**, and
   that is measured rather than argued: on a real engine at 150% scaling, a
   clipped avatar is **byte-identical** to one with no ancestor at all.
-* **What the report was actually hitting is a different thing entirely, and this
-  release does not fix it.** An ancestor that *composites* — a scroll viewport,
-  an `Opacity`, a `RepaintBoundary` — draws the avatar into a layer, and the
-  engine puts that layer on screen afterwards; a layer landing on a fractional
-  device pixel is resampled whole. Measured: identical at a whole-pixel origin,
-  2556–3179 interior pixels differing by up to 94 levels at a half-pixel one.
-  That happens after painting, so nothing this package does while painting
-  reaches it. README's *One rule for callers* says what does.
+* **And it fixes the case the report was actually hitting, by reversing what
+  `0.3.1` decided about *which grid* to align to.** That release corrected
+  against the screen position, on the reasoning that a layer carries its
+  fraction to the engine unrounded. The engine rounds it. So inside any
+  compositing ancestor — a scroll viewport, an `Opacity` or `FadeTransition`, a
+  `RepaintBoundary` — the correction was applied twice and the drawing landed
+  half a pixel off. The alignment is now done in the space the widget paints
+  into, leaving the layer to the engine.
+* **Measured on a real engine at 150% scaling**, against the same avatar with no
+  ancestor, with the enclosing layer half a device pixel past an integer:
+  `0.3.1` differs in **2921 of 4356** pixels by up to **196** levels; `0.3.2` is
+  **byte-identical**. **Nothing changes where there is no layer** — the paint
+  offset is then the screen position and both rules compute the same rectangle.
+* **Why `0.3.1` could not have seen this.** Every measurement behind it went
+  through `RenderRepaintBoundary.toImage`, which re-rasterises a subtree
+  offscreen and never runs the engine's composite onto the window — the step
+  where the rounding happens. The instrument that found it was a screen
+  capture.
 
 The rule and the ruling behind it are ADR-0002 (R5); the layer finding and its
 limits are in the same record.

@@ -611,24 +611,33 @@ class _BoringAvatarState extends State<BoringAvatar> {
 /// promises. Taking the buffer's own extent instead painted a 240-pixel avatar
 /// across a 20-logical box at full size, over whatever sat beside it.
 ///
-/// **Why [global] and not [local].** `local` is relative to the enclosing
-/// *layer*, and a layer's origin is not on the grid just because this box's
-/// offset within it is: a repaint boundary paints its child at `Offset.zero`
-/// and carries the real position on an `OffsetLayer` that reaches the engine
-/// unrounded. `ListView` wraps **every child** in one, and `Opacity`,
-/// `FadeTransition` and `Hero` push layers of their own. Measured under an
-/// inner boundary at ratio 1.5: 69 device pixels across, 272 of them partly
-/// covered, for a 68-pixel buffer. `localToGlobal` walks the render tree rather
-/// than the layer tree, so it sees through all of them; the correction it
-/// yields is then applied to `local`, which is the space the canvas is in.
+/// **Why [local] and not the screen position, which is the reverse of what
+/// `0.3.1` did.** That release corrected against `localToGlobal`, reasoning
+/// that a repaint boundary paints its child at `Offset.zero` while carrying the
+/// real position on an `OffsetLayer` the engine never rounds. The engine does
+/// round it — and seeing that took an instrument `0.3.1` did not have.
+/// `RenderRepaintBoundary.toImage`, which every measurement behind #110 went
+/// through, re-rasterises a subtree offscreen and never runs the composite onto
+/// the window; the rounding happens in the step it skips.
 ///
-/// **Prior art agrees, and it was found after the fact rather than copied.**
-/// Flutter snaps its own text caret the same way —
-/// `RenderEditable._snapToPhysicalPixel` (`rendering/editable.dart:2341`)
-/// computes `(global / (1 / dpr)).round() * (1 / dpr) - global`, which is this
-/// function's correction term rearranged, and takes `global` from
-/// `localToGlobal` for the same reason. Convergence, not derivation from it;
-/// what the reference did supply is the non-finite guard below.
+/// Measured on a real engine at ratio 1.5 from a screen capture, with the
+/// enclosing layer half a device pixel past an integer (#117): the
+/// screen-corrected placement differs from an unresampled reference in **2921
+/// of 4356** pixels by up to **196** levels, and the same buffer placed on the
+/// grid of the space it paints into is **byte-identical** to that reference.
+/// Correcting for the layer's fraction here applies it twice.
+///
+/// **Nothing changes where there is no layer**, which is the ordinary case: the
+/// paint offset then *is* the screen position, and the two rules compute the
+/// same rectangle to the bit.
+///
+/// **Prior art was read again rather than left as support.** Flutter snaps its
+/// own text caret against `localToGlobal`
+/// (`RenderEditable._snapToPhysicalPixel`, `rendering/editable.dart:2341`) —
+/// which looks like a contradiction and is not: a caret is painted by the same
+/// render object that computes it and is not handed to a layer of its own, so
+/// there the two spaces coincide. What that code does supply, and this keeps,
+/// is the non-finite guard below.
 ///
 /// **What it cannot do is survive a scroll, and that is not fixable here.**
 /// The correction is computed in `paint`, and a layer can move without its
@@ -651,7 +660,6 @@ class _BoringAvatarState extends State<BoringAvatar> {
 /// placement the package's own rather than the backend's.
 @visibleForTesting
 Rect snappedAvatarRect({
-  required Offset global,
   required Offset local,
   required Size box,
   required double devicePixelRatio,
@@ -667,11 +675,17 @@ Rect snappedAvatarRect({
   // own `RenderEditable._snapToPhysicalPixel` guards the identical expression
   // the identical way, which is where this guard comes from rather than from a
   // failure.
-  double correction(double at) => at.isFinite ? onGrid(at) - at : 0;
-
+  // **`0.3.1` guarded this against a non-finite offset and the guard is gone,
+  // because it became a no-op the moment the subtraction did.** That version
+  // computed `onGrid(at) - at`, which is `NaN` for an infinite `at`, so the
+  // non-finite case had to be branched out. Rounding alone carries a non-finite
+  // value through unchanged — `onGrid(NaN)` is `NaN`, `onGrid(infinity)` is
+  // `infinity` — so the branch decided nothing. Measured rather than reasoned:
+  // the mutation that deletes it survives the whole suite (case B3, retired
+  // with this note), which is exactly what a branch nothing reads looks like.
   return Rect.fromLTWH(
-    local.dx + correction(global.dx),
-    local.dy + correction(global.dy),
+    onGrid(local.dx),
+    onGrid(local.dy),
     onGrid(box.width),
     onGrid(box.height),
   );
@@ -924,7 +938,7 @@ class RenderPixelSnappedImage extends RenderBox {
   /// Written inside an `assert`, so it costs nothing in release and no shipped
   /// behaviour can come to depend on it.
   @visibleForTesting
-  Rect? debugGlobalDestination;
+  Rect? debugPaintedDestination;
 
   @override
   void paint(PaintingContext context, Offset offset) {
@@ -936,15 +950,13 @@ class RenderPixelSnappedImage extends RenderBox {
     // linear part is visible. The origin below is what `localToGlobal` would
     // have returned.
     final toScreen = getTransformTo(null);
-    final global = MatrixUtils.transformPoint(toScreen, Offset.zero);
     final destination = snappedAvatarRect(
-      global: global,
       local: offset,
       box: size,
       devicePixelRatio: ratio,
     );
     assert(() {
-      debugGlobalDestination = destination.shift(global - offset);
+      debugPaintedDestination = destination;
       return true;
     }());
 
