@@ -56,6 +56,10 @@ landing on the grid changes at all — the bytes there are identical to `0.3.1`.
   offscreen and never runs the engine's composite onto the window — the step
   where the rounding happens. The instrument that found it was a screen
   capture.
+* **macOS agrees with Windows, and `0.3.1` was folding there too.** At a 2.0
+  ratio, against the same no-ancestor reference: this release is
+  **byte-identical**, `0.3.1` differs in 1289 of 7744 pixels by up to 136
+  levels. The report came from Windows; the defect was not confined to it.
 * **On web it is a non-regression rather than a fix, and that is measured too.**
   Chrome at a 1.5 device pixel ratio does not round the enclosing layer — a
   plain vector circle in the same frame comes out a device pixel wider at a
