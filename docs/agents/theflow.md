@@ -1505,7 +1505,24 @@ enumeration-risk judgement.
 - **`CHANGELOG.md`** — pub.dev snapshots it at publish. Never edit a published
   entry; open a new version.
 - **`README.md`** — the variant × upstream-state matrix lives here; it goes stale
-  the moment a state is added.
+  the moment a state is added. `release_metadata_test.dart` parses this table
+  and reddens when a selector or a covered version is missing from it, so the
+  matrix is the one part of the README a gate holds. **Every version is listed
+  by name, never as a range** — a `2.0.0 – 2.0.4` shorthand reads fine and fails
+  that test, which is how it was caught.
+- **`docs/rendering.md`, `docs/performance.md`, `docs/colors.md`,
+  `docs/fidelity.md`** — the reader-facing prose that used to be README body,
+  split out so the README is a landing page rather than a paper. Nothing gates
+  them. A change that moves a byte, a timing or a colour answer sweeps these
+  four as well as the README: **`performance.md` holds the measured timings**
+  (one machine's, so they are re-measured rather than adjusted), **`fidelity.md`
+  holds the parity counts and the three non-reproduced things**, and
+  **`colors.md` holds the grammar the rasterizer reads** — including the
+  deliberately-skipped list, which is scope and not accident.
+- **`docs/images/`** — generated, never hand-edited: `dart run
+  tool/readme/generate.dart` redraws them through this package's own
+  rasterizer. A rasterizer change that moves a visible pixel makes the README's
+  gallery a picture of the old code, and nothing will say so.
 - **Public doc-comments** — they ship verbatim as the pub.dev API reference.
   The `version` enum's doc-comments are the only place a user learns which
   upstream tags a selector value covers.
