@@ -1603,14 +1603,26 @@ letting the missing line read as coverage (the failure `flutter_table_plus` #55
 names from the other direction).
 
 **It runs before the dry-run for a reason, and the reason is a trap.** On
-Windows, analysing `example/` rewrites its three checked-in
-`windows/flutter/generated_plugin_registrant.*` files with the other line
-ending — **identical content**, `git diff` empty but for the CRLF warning — and
-`pub publish --dry-run` then reports "3 checked-in files are modified in git".
-A warning that is entirely about line endings, on a gate whose whole job is to
-be read literally. `git checkout -- example/windows/flutter/` restores them.
-Same root as `lessons.md`'s two CRLF incidents: the endings are a property of
-the checkout, not of the repo.
+Windows, analysing `example/` rewrites its checked-in generated registrants with
+the other line ending — **identical content**, `git diff` empty but for the CRLF
+warning — and `pub publish --dry-run` then reports "N checked-in files are
+modified in git". A warning that is entirely about line endings, on a gate whose
+whole job is to be read literally. Same root as `lessons.md`'s two CRLF
+incidents: the endings are a property of the checkout, not of the repo.
+
+**The set is every platform directory `example/` has, and it grows silently.**
+This note named only `windows/flutter/`'s three files until `0.3.3` hit a
+fourth — `example/macos/Flutter/GeneratedPluginRegistrant.swift`, which arrived
+with macOS support in `07afe0c`, months after the note was written and with
+nothing to connect the two. Restore them all rather than the file the warning
+happened to name:
+
+```
+git checkout -- example/windows/flutter/ example/macos/Flutter/
+```
+
+Adding a platform to `example/` adds a path here. Nothing enforces that, which
+is why the failure mode is a publish gate warning rather than a red test.
 
 Run each gate **bare, never piped** — a pipeline's exit status is the last
 command's, so `flutter test | tail -1 && commit` always commits.
