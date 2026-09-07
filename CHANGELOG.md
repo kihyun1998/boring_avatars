@@ -1,3 +1,32 @@
+## 0.3.3
+
+**Documentation only.** `lib/` is untouched since `0.3.2` — every selector
+renders the bytes it rendered then, and the widget paints them in the same
+place. Inside the published archive exactly three files differ: this one, the
+README and `pubspec.yaml`. The new documents and the generator that draws the
+images live under `docs/` and `tool/`, both of which `.pubignore` excludes, so
+the archive does not grow.
+
+* **The README is a landing page now rather than a paper.** It was 449 lines,
+  and more than 250 of them were the pixel grid, compositing layers, the timing
+  tables and the colour grammar — good material in the wrong document, sitting
+  between a reader and the thing they came for. It is 177 lines, and nothing was
+  deleted: the four documents it now links to hold all of it, and they are
+  reachable from pub.dev because relative links resolve against the repository.
+* **The package has pictures.** All six variants, drawn from `Clara Barton` and
+  upstream's own palette. They are **rendered by this package's own rasterizer**
+  rather than screenshotted from a browser, which is the only version of the
+  image that is evidence for the sentence beside it: a Chrome render would show
+  what upstream draws, and these show what `BoringAvatar` puts on screen. The
+  two agree — `tool/calibrate` is what measures that — but only one of them is
+  the widget's output. `dart run tool/readme/generate.dart` redraws them.
+* **The things this package does not reproduce are counted in one place, and
+  there are three of them.** The `sunset` blank and the `size` coercion were
+  under one heading; the document's `useId()`-derived internal ids, which no
+  release can reproduce even against itself, were two hundred lines away under
+  *Status*. A reader counting from the heading got two. All three are now listed
+  together, with the measurements in `docs/fidelity.md`.
+
 ## 0.3.2
 
 Stops claiming an **unfiltered draw** where one buffer pixel cannot cover one
