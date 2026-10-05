@@ -5,7 +5,7 @@ Project-specific data for the `theflow` skill. The skill holds the portable
 where the boundary falls, how to prove behavior, which surfaces to sweep, which
 gates to run. Per-incident evidence lives in [`lessons.md`](lessons.md).
 
-Identity & invariants live in `CLAUDE.md`. `CONTEXT.md` / `docs/adr/` do not
+Identity & invariants live in `CLAUDE.md`. `GLOSSARY.md` / `docs/adr/` do not
 exist yet — created lazily.
 
 **Environment:** Claude Code and the user share one machine, and **which one
@@ -1544,7 +1544,7 @@ enumeration-risk judgement.
   A **proposed** record counts for this check exactly as an accepted one does —
   it is already doing a spine's job (a hypothesis, a roster, an explicit
   not-yet-decided list), so a spine beside it would split the roster in two.
-- **`CONTEXT.md`** — does not exist; created lazily by `/domain-modeling`.
+- **`GLOSSARY.md`** — does not exist; created lazily by `/domain-modeling`.
 - **`.pubignore`** — must exclude `docs/`, `.github/`, `CLAUDE.md`, `tool/`,
   `test/fixtures/`. A root `.pubignore` disables git-based file listing. The
   pub.dev archive cannot be un-published.
