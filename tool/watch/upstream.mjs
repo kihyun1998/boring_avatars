@@ -35,7 +35,7 @@ import { UPSTREAM, diffTrees, renderIssue } from './diff.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const STATE_PATH = resolve(HERE, 'last-seen.json');
-/** The pinned reference tree — a sibling of this repo, per theflow Step 1. */
+/** The pinned reference tree — a sibling of this repo, per docs/agents/thegraph.md. */
 const REFS = resolve(HERE, '..', '..', '..', '.refs', 'boring-avatars');
 
 const REPO = 'kihyun1998/boring_avatars';
@@ -105,7 +105,7 @@ function observeFromGit(rev, watched) {
   if (!existsSync(REFS)) {
     throw new Error(
       `레퍼런스 트리가 없습니다: ${REFS}\n` +
-        'docs/agents/theflow.md 의 Step 1 에 만드는 방법이 있습니다.',
+        'docs/agents/thegraph.md 에 만드는 방법이 있습니다.',
     );
   }
   const files = Object.fromEntries(

@@ -1,9 +1,9 @@
 // Renders a scene in real Chrome and dumps the pixels, for the layer-3 parity
-// calibration described in docs/agents/theflow.md (Step 4).
+// calibration described in docs/map/territory/calibration.md.
 //
 // This is a TOOL, not a gate. `flutter test` never runs it. A zero-tolerance
 // gate against Chrome is a gate that fails when *Chrome* changes and our code
-// has not — and theflow forbids relaxing a threshold to clear a red run, so it
+// has not — and the gates forbid relaxing a threshold to clear a red run, so it
 // would deadlock. The committed goldens are the regression gate; this is the
 // outside opinion, run deliberately when the rasterizer changes.
 //

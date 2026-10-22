@@ -13,7 +13,7 @@
 // `bauhaus` about 2x, and `ring`, which has no axis-aligned rects, is flat
 // across the same sweep. That last one is the control that makes the
 // attribution a measurement rather than a story; the numbers and the method are
-// in `docs/agents/theflow.md`.
+// in `docs/map/territory/coverage.md`.
 //
 // So: structural assertions, not timings. A timing test would be flaky here —
 // the same cell measured 39.3 ms and 286.2 ms within a single process on this

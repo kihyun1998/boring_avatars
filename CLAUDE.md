@@ -1,14 +1,13 @@
 # CLAUDE.md
 
-## Working discipline — theflow
+## Working discipline — thegraph
 
 Substantive changes (a ported upstream state, a bug fix, a behavior change)
-follow the **`theflow`** skill — run `/theflow` at the start. This repo's
-bindings (module map, the upstream version ladder, reference routing, boundary
-rule, proof methods, surfaces, gate matrix) live in
-**`docs/agents/theflow.md`**; per-incident evidence in
-**`docs/agents/lessons.md`**. Read both before starting; add new war-stories to
-lessons.
+follow **`thegraph`**. This repo's build — the outside sources it is built
+against and how binding each is — lives in **`docs/agents/thegraph.md`**. What
+the code does, the rulings behind it and what moves together live in the
+territory map (below); per-incident evidence in **`docs/agents/lessons.md`**.
+Add new war-stories to lessons.
 
 ## Package philosophy
 
@@ -35,9 +34,10 @@ produces — the same numbers, the same SVG, the same pixels.
    still render byte-identically.
 
    **This table is the single source for the mapping.** Release, selector and
-   covered versions are one fact in three vocabularies; `docs/agents/theflow.md`
-   points here rather than restating it, so there is one place to edit when a
-   new upstream release lands.
+   covered versions are one fact in three vocabularies; the map points here
+   rather than restating it, so there is one place to edit when a new upstream
+   release lands (the copies that still exist are listed in
+   `docs/map/invariant/selector-coverage-copies.md`).
 
    | Release | Selector | Covers | The one thing that changes |
    |---|---|---|---|
@@ -50,8 +50,8 @@ produces — the same numbers, the same SVG, the same pixels.
    per release is the committed **fixture**, because a second copy of identical
    bytes is not a second measurement. The measurements behind the grouping, the
    reason `1.11.0` is excluded, the work each release earns, and the two
-   superseded plans are in `docs/agents/theflow.md` ("The states in scope",
-   "Release plan").
+   superseded plans are in `docs/map/territory/version-selectors.md` and
+   `docs/map/territory/release-and-publishing.md`.
 4. **Deterministic everywhere.** The same input yields the same bytes on every
    platform, GPU, Flutter version and rendering backend.
 
@@ -77,7 +77,8 @@ produces — the same numbers, the same SVG, the same pixels.
 - **A suspected upstream bug is never adjudicated by the agent.** Neither
   "replicate silently" nor "fix silently". It goes to the user with the
   reference `file:line`, both values, and the visual difference; their ruling is
-  recorded as an *event* in the divergence ledger in `docs/agents/theflow.md`.
+  recorded as an *event* in the divergence ledger,
+  `docs/map/aggregate/upstream-divergences.md`.
 
 ## Territory map
 
@@ -103,11 +104,12 @@ hold — move it first (`decant`).
 
 ## Environment
 
-Claude Code and the user share the same Windows machine. On `PATH`: Flutter
-3.41.9, Node v26.4.0, npm 11.17.0 — run `flutter test` / `analyze` /
+Claude Code and the user share one machine, which alternates between Windows
+and macOS across sessions — measure it (`flutter --version`, `node --version`,
+`uname -s`) rather than reading it here. Run `flutter test` / `analyze` /
 `dart format` and the Node parity harness directly. Ask the user only for
 anything that opens a window (`flutter run`). **There are no CI gates** — the
-gates in `docs/agents/theflow.md` (Step 7) are the only gates and run here. The
+gates in `docs/map/territory/gates.md` are the only gates and run here. The
 single GitHub Actions workflow is an upstream *watcher*, not a gate.
 
 ## Agent skills

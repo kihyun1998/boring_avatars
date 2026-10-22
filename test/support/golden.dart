@@ -1,7 +1,7 @@
 /// The layer-3 comparison contract.
 ///
 /// Two different bars, and the split is deliberate — see
-/// `docs/agents/theflow.md`, Step 4.
+/// `docs/map/aggregate/proof-harnesses.md`.
 ///
 /// * [expectGoldenIdentical] is the **regression** gate. It compares this
 ///   package's rasterizer against PNGs committed to this repo, and it allows

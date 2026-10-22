@@ -81,7 +81,7 @@ bool _breaksUrlToken(int rune) =>
 ///
 /// **This is the one place the port deliberately diverges from upstream**, and
 /// it is the user's ruling of 2026-07-29 — see the divergence ledger in
-/// `docs/agents/theflow.md`.
+/// `docs/map/aggregate/upstream-divergences.md`.
 ///
 /// Upstream writes the name straight into both the `id` and the reference. For
 /// a name containing `'`, `"`, `(`, `)` or `\` the reference is then not a

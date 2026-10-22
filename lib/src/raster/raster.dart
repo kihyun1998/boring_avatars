@@ -669,7 +669,7 @@ RasterColour _hslToRgb(double hue, double s, double l, int a) {
 ///
 /// That matters because the calibration bar is one level out of 255. A 16×16
 /// grid measured **4/255** against a 512× reference — it could not have met the
-/// bar, and theflow forbids moving a threshold to clear a red run.
+/// bar, and the gates forbid moving a threshold to clear a red run.
 class RoundedRectMask {
   RoundedRectMask({
     required this.x,

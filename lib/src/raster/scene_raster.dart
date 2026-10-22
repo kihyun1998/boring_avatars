@@ -335,7 +335,7 @@ class SceneRaster {
   ///
   /// So the fast path is pinned structurally, here, rather than by timing —
   /// a timing test would be flaky on a machine whose absolute numbers move by
-  /// 7x under load, which is measured too (see `docs/agents/theflow.md`).
+  /// 7x under load, which is measured too (see `docs/map/territory/coverage.md`).
   List<RasterShape> get shapes => List.unmodifiable(_shapes);
 
   /// The drawing, as bands. Drain it to finish; stop between any two.

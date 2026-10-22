@@ -143,7 +143,7 @@ export function renderIssue(diff, prev, next) {
     `1. 이 변경이 **출력에 닿는지** 판단합니다 — 닿지 않으면 새 릴리스가 아닙니다`,
     `   (\`CLAUDE.md\` 원칙 3: 릴리스는 *출력 상태* 하나당 하나).`,
     `2. 닿는다면 \`tool/versions\` 로 그룹을 다시 재고, 새 선택자 값을 검토합니다.`,
-    `3. 어느 쪽이든 \`docs/agents/theflow.md\` 의 버전 사다리를 갱신합니다.`,
+    `3. 어느 쪽이든 \`docs/map/territory/version-selectors.md\` 의 버전 사다리를 갱신합니다.`,
     ``,
     `<sub>\`tool/watch/upstream.mjs\` 가 자동 생성 (#51). 상태: \`tool/watch/last-seen.json\`</sub>`,
   ]

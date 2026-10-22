@@ -15,7 +15,7 @@ node tool/mutate/run.mjs cases/41-marble.json --check   # one file
 ## Why it is committed
 
 A claim like *"12 of 12 mutants died"* is a claim about a **measurement**, and
-this repo already applies one rule to those, in `docs/agents/theflow.md`:
+this repo already applies one rule to those, in `docs/map/territory/version-grouping.md`:
 
 > the release plan is a claim about measurement, and a claim whose evidence
 > cannot be re-run is one nobody can check.
