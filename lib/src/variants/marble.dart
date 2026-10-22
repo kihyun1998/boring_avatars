@@ -18,7 +18,7 @@
 ///   reproduced here because the reference is the specification; the value
 ///   differs from `properties[1].scale` on **11 of the 20 corpus names**, so it
 ///   is not a dormant curiosity. See the divergence ledger in
-///   `docs/agents/theflow.md`.
+///   `docs/map/aggregate/upstream-divergences.md`.
 /// * **The two paths do not share a filter, they share a filter *reference*.**
 ///   One `<filter id="prefix__filter0_f">` sits in `<defs>` and both paths point
 ///   at it, so each is blurred independently and each gets its own filter

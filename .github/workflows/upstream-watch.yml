@@ -1,6 +1,6 @@
 # The upstream watcher — the one GitHub Actions workflow this repo has, and a
 # deliberate exception to the house "no CI" convention (CLAUDE.md, and
-# docs/agents/theflow.md Step 7).
+# docs/map/territory/gates.md).
 #
 # **It is a watcher, not a gate.** It runs on a schedule and by hand, never on
 # push or pull_request, so it is not a check on any branch and cannot block a

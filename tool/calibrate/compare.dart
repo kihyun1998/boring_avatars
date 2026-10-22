@@ -542,8 +542,8 @@ void main(List<String> args) {
   }
 
   // The bar, in three parts, each scoped to what its statistic can measure —
-  // settled 2026-08-11 (the ruling event is in docs/agents/theflow.md, Step
-  // 4). The old single bar — "interior 0, edge <= 1" — was recorded in #33,
+  // settled 2026-08-11 (the ruling event is in
+  // docs/map/territory/calibration.md). The old single bar — "interior 0, edge <= 1" — was recorded in #33,
   // first executed in #37, and **never met by any run that ever existed**,
   // because for a curved or shallow rotated edge the reference's own error is
   // the larger term: hidden-state #27 measures Chrome's circles up to 0.13 px

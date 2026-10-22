@@ -61,7 +61,7 @@ void main() {
         isNot(contains('BoringAvatarsVersion version =')),
         reason: 'a default version would move under callers on upgrade',
       );
-      // `size` is the same class of promise, recorded in theflow.md: the
+      // `size` is the same class of promise, recorded in docs/map/territory/public-svg-surface.md: the
       // 2.0.3/2.0.4 default-size change stays out of the version state only
       // because the caller always supplies one.
       expect(source, contains('required Object size,'));

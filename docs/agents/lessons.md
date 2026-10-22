@@ -1,6 +1,6 @@
 # lessons — war stories, indexed by theflow step
 
-Per-incident evidence for the rules in [`theflow.md`](theflow.md). Each entry is
+Per-incident evidence for the rules in the [territory map](../map/README.md). Each entry is
 a *precedent*: a rule that caught (or failed to catch) a real defect, with the
 issue number that proves it happened.
 
@@ -8,8 +8,8 @@ issue number that proves it happened.
 oversight.
 
 Do not seed this file with anticipated problems. The enumerated JS/SVG semantics
-traps live in `theflow.md`'s **hidden-state list**, which is *pre-incident*
-enumeration. A row moves here — with its issue number — the first time it
+traps live in the map's territory notes (the former **hidden-state list**),
+which is *pre-incident* enumeration. A row moves here — with its issue number — the first time it
 actually catches something in this codebase.
 
 ## Step 1 — verify references against real source
