@@ -79,6 +79,28 @@ produces — the same numbers, the same SVG, the same pixels.
   reference `file:line`, both values, and the visual difference; their ruling is
   recorded as an *event* in the divergence ledger in `docs/agents/theflow.md`.
 
+## Territory map
+
+[`docs/map/`](docs/map/README.md) answers *if I touch this, what else moves?*
+and *what decision is this shape derived from?*
+
+- **Before designing a change**, open the territory note for the code it
+  touches. Walk its blast radius and its cross-cutting invariants.
+- **After the change lands**, update the notes it falsified, in the same change.
+- **When a fix reveals a fact**, ask whether it holds at every site that shares
+  the same assumption. If it does, the fix lands with an invariant note under
+  `docs/map/invariant/`.
+
+## Comments
+
+A comment says what the code is. Why it is this way, what it deliberately
+leaves out, the trap and the measured value go to the territory note under
+`docs/map/`. Where none seems to hold it, search the folder and the code symbol
+first; only then start a new note, named for what the system does there, not
+for the file. History goes to the commit message. Comments written before this
+rule still carry the rest: never delete one whose content the map does not yet
+hold — move it first (`decant`).
+
 ## Environment
 
 Claude Code and the user share the same Windows machine. On `PATH`: Flutter
