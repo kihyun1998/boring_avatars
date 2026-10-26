@@ -110,8 +110,8 @@ comes back `NO MATCH`.
 
 **Branch and merge convention:** branch → `feat|fix|refactor|test(<scope>): …`
 → PR (`Closes #issue`) → **rebase-merge** (linear history; `git log --merges
---oneline main` is empty at HEAD, re-verified). `flutter pub publish` is the
-maintainer's, never the agent's ([release-and-publishing](release-and-publishing.md)).
+--oneline main` is empty at HEAD, re-verified). Publishing is the
+maintainer's (`pub-ready`, [release-and-publishing](release-and-publishing.md)).
 
 **Reverting to test a test:** `git stash push -- <file>` / `git stash pop`,
 never `git checkout -- <file>` on work in progress

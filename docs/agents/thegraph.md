@@ -22,3 +22,7 @@ mkdir -p ../.refs && cd ../.refs
 git clone --filter=blob:none --sparse https://github.com/boringdesigners/boring-avatars boring-avatars
 cd boring-avatars && git sparse-checkout set src/lib && git fetch --tags
 ```
+
+## Release
+
+`pub-ready`

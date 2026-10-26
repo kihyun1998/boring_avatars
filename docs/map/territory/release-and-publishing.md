@@ -85,8 +85,8 @@ edge" — attributed.)
   separately.
 
 ### Behaviour-describing surfaces (the sweep list)
-- **`CHANGELOG.md`** — pub.dev snapshots it at publish. Never edit a published
-  entry; open a new version. `release_metadata_test.dart` (`'pubspec version
+- **`CHANGELOG.md`** — a published entry is frozen (`pub-ready`).
+  `release_metadata_test.dart` (`'pubspec version
   and the newest CHANGELOG heading agree'`) holds the top heading to
   `pubspec.yaml`'s `version`.
 - **`README.md`** — the selector × upstream-versions table. The one part a gate
@@ -152,11 +152,11 @@ warnings either way — no gate knows what belongs in an archive; read the file
 list.** The archive cannot be un-published.
 
 ### Publishing
-- `flutter pub publish` is irreversible (retract only) — **the agent does not
-  run it; the maintainer does.**
-- **Publish state is queried, not assumed**: `curl -s
-  https://pub.dev/api/packages/boring_avatars`; score: `…/score` (`0/0` with
-  only `is:recent` means "not yet scored", not "scored zero").
+- **The release bar — who publishes, the dry-run, querying what is
+  published — is `pub-ready`'s** ([thegraph.md](../../agents/thegraph.md) ›
+  Release).
+- **The score**: `curl -s https://pub.dev/api/packages/boring_avatars/score`
+  (`0/0` with only `is:recent` means "not yet scored", not "scored zero").
 - Milestones mirror `CLAUDE.md`'s table: [milestones-sync](milestones-sync.md).
 
 ### Downstream loop
