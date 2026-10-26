@@ -159,6 +159,29 @@ list.** The archive cannot be un-published.
   only `is:recent` means "not yet scored", not "scored zero").
 - Milestones mirror `CLAUDE.md`'s table: [milestones-sync](milestones-sync.md).
 
+### Dependency watch — Dependabot (#120)
+`.github/dependabot.yml` watches **pub only**, monthly, labelled
+`needs-triage` (a label the repository already had; none was created).
+- **Root `/`: `increase-if-necessary`, one PR per dependency.** The root has
+  no committed lockfile, so this strategy opens a PR only when a release falls
+  outside the caret — at `0.x`, every minor. Such a PR raises a **floor every
+  consumer inherits**, so it is a release decision, not a chore, and each one
+  stays a single decision. The only non-SDK dependency at HEAD is dev
+  `flutter_lints`.
+- **`/example`: grouped into one PR.** Nothing ships from `example/` as a
+  dependency, so its bumps carry no consumer decision.
+- **npm: not watched.** The `npm:boring-avatars@x.y.z` aliases in
+  `tool/*/package.json` are pinned parity fixtures; a bump would move a fixture
+  and drag `react` 18 → 19 under the harnesses. Upstream is watched by
+  [upstream-watch](upstream-watch.md) at `src/lib/` blob SHA, finer than
+  releases.
+- **GitHub Actions: not watched.** The single workflow is a watcher, not a
+  gate; the repository has no CI by convention (`CLAUDE.md`).
+- Validated against SchemaStore `dependabot-2.0.json` with ajv, with a broken
+  control rejected. A configuration error Dependabot itself finds is only
+  visible on its first run (repository Insights → Dependency graph →
+  Dependabot), not in any local check.
+
 ### Downstream loop
 **Live since `0.1.0` (2026-08-12).** Derive consumers on the spot and **never
 store the list** — a stored list is a derivable fact that rots:
@@ -195,6 +218,7 @@ consumers. Not a standing answer — re-derive.
 - `pubspec.yaml` — `version`, `environment.sdk`
 - `CHANGELOG.md` — one `## <version>` heading per release
 - `.pubignore`
+- `.github/dependabot.yml` — pub-only update watch
 - `test/release_metadata_test.dart` — groups `'the published version is one
   fact, not two'`, `'README names every upstream release this package claims'`
 - `lib/src/version.dart` — `BoringAvatarsVersion.upstreamVersions`, `latest`
